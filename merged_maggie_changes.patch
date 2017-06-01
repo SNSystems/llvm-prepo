@@ -1,0 +1,1603 @@
+commit f7f66bfd5aff10aca49c313a8a1d791d1e913b77
+Author: Ying (Maggie) Yi <ying.yi@sony.com>
+Date:   Wed May 31 14:30:22 2017 +0100
+
+    Add hash metadata into global variable and global function.
+
+diff --git a/include/llvm/IR/LLVMContext.h b/include/llvm/IR/LLVMContext.h
+index ad011fb72e6..613585aeae8 100644
+--- a/include/llvm/IR/LLVMContext.h
++++ b/include/llvm/IR/LLVMContext.h
+@@ -81,6 +81,7 @@ public:
+     MD_section_prefix = 20,           // "section_prefix"
+     MD_absolute_symbol = 21,          // "absolute_symbol"
+     MD_associated = 22,               // "associated"
++    MD_fragment = 23,                 // "fragment"
+   };
+ 
+   /// Known operand bundle tag IDs, which always have the same value.  All
+diff --git a/include/llvm/IR/MDBuilder.h b/include/llvm/IR/MDBuilder.h
+index 899976a87bc..bd5765e7e58 100644
+--- a/include/llvm/IR/MDBuilder.h
++++ b/include/llvm/IR/MDBuilder.h
+@@ -85,6 +85,13 @@ public:
+   MDNode *createRange(Constant *Lo, Constant *Hi);
+ 
+   //===------------------------------------------------------------------===//
++  // Fragment metadata.
++  //===------------------------------------------------------------------===//
++
++  /// \brief Return metadata containing a numbe of hash bytes.
++  MDNode *createHashBytes(ArrayRef<uint8_t> Bytes);
++
++  //===------------------------------------------------------------------===//
+   // AA metadata.
+   //===------------------------------------------------------------------===//
+ 
+diff --git a/include/llvm/InitializePasses.h b/include/llvm/InitializePasses.h
+index 3ca21c15577..0abd60f5ba0 100644
+--- a/include/llvm/InitializePasses.h
++++ b/include/llvm/InitializePasses.h
+@@ -257,6 +257,7 @@ void initializeMemorySSAPrinterLegacyPassPass(PassRegistry&);
+ void initializeMemorySSAWrapperPassPass(PassRegistry&);
+ void initializeMemorySanitizerPass(PassRegistry&);
+ void initializeMergeFunctionsPass(PassRegistry&);
++void initializeProgramRepositoryPass(PassRegistry&);
+ void initializeMergedLoadStoreMotionLegacyPassPass(PassRegistry&);
+ void initializeMetaRenamerPass(PassRegistry&);
+ void initializeModuleDebugInfoPrinterPass(PassRegistry&);
+diff --git a/include/llvm/LinkAllPasses.h b/include/llvm/LinkAllPasses.h
+index 5c398b2ab56..07b955673b8 100644
+--- a/include/llvm/LinkAllPasses.h
++++ b/include/llvm/LinkAllPasses.h
+@@ -179,6 +179,7 @@ namespace {
+       (void) llvm::createPostOrderFunctionAttrsLegacyPass();
+       (void) llvm::createReversePostOrderFunctionAttrsPass();
+       (void) llvm::createMergeFunctionsPass();
++      (void) llvm::createProgramRepositoryPass();
+       std::string buf;
+       llvm::raw_string_ostream os(buf);
+       (void) llvm::createPrintModulePass(os);
+diff --git a/include/llvm/Transforms/IPO.h b/include/llvm/Transforms/IPO.h
+index 39ceb19525b..ddf304553de 100644
+--- a/include/llvm/Transforms/IPO.h
++++ b/include/llvm/Transforms/IPO.h
+@@ -202,6 +202,11 @@ Pass *createReversePostOrderFunctionAttrsPass();
+ ModulePass *createMergeFunctionsPass();
+ 
+ //===----------------------------------------------------------------------===//
++/// createProgramRepositoryPass - This pass creates a program repository hash.
++///
++ModulePass *createProgramRepositoryPass();
++
++//===----------------------------------------------------------------------===//
+ /// createPartialInliningPass - This pass inlines parts of functions.
+ ///
+ ModulePass *createPartialInliningPass();
+diff --git a/include/llvm/Transforms/IPO/PassManagerBuilder.h b/include/llvm/Transforms/IPO/PassManagerBuilder.h
+index 247382c35ee..f994e4ec321 100644
+--- a/include/llvm/Transforms/IPO/PassManagerBuilder.h
++++ b/include/llvm/Transforms/IPO/PassManagerBuilder.h
+@@ -155,6 +155,7 @@ public:
+   bool VerifyInput;
+   bool VerifyOutput;
+   bool MergeFunctions;
++  bool ProgramRepository;
+   bool PrepareForLTO;
+   bool PrepareForThinLTO;
+   bool PerformThinLTO;
+diff --git a/include/llvm/Transforms/Utils/HashCalculator.h b/include/llvm/Transforms/Utils/HashCalculator.h
+new file mode 100644
+index 00000000000..6d435da1623
+--- /dev/null
++++ b/include/llvm/Transforms/Utils/HashCalculator.h
+@@ -0,0 +1,310 @@
++//===- FunctionHash.h - Function Hash Calculation ---------------*- C++ -*-===//
++//
++//                     The LLVM Compiler Infrastructure
++//
++// This file is distributed under the University of Illinois Open Source
++// License. See LICENSE.TXT for details.
++//
++//===----------------------------------------------------------------------===//
++//
++// This file defines the FunctionHash and GlobalNumberState classes which
++// are used by the ProgramRepository pass for comparing function hashes.
++//
++//===----------------------------------------------------------------------===//
++
++#ifndef LLVM_TRANSFORMS_UTILS_HASHCALCULATOR_H
++#define LLVM_TRANSFORMS_UTILS_HASHCALCULATOR_H
++
++#include "llvm/IR/Function.h"
++#include "llvm/IR/Operator.h"
++#include "llvm/IR/ValueMap.h"
++#include "llvm/Support/AtomicOrdering.h"
++#include "llvm/Transforms/Utils/FunctionComparator.h"
++
++namespace llvm {
++
++class GetElementPtrInst;
++
++/// Hash a function. Equivalent functions will have the same hash, and unequal
++/// functions will have different hashes with high probability.
++typedef std::pair<uint64_t, uint64_t> HashType;
++typedef std::array<uint8_t, 16> HashBytesType;
++
++enum HashKind {
++  TAG_Uint32,
++  TAG_Uint64,
++  TAG_StringRef,
++  TAG_APInt,
++  TAG_APFloat,
++  TAG_AtomicOrdering,
++  TAG_AttributeEnum,
++  TAG_AttributeInt,
++  TAG_AttributeString,
++  TAG_AttributeList,
++  TAG_InlineAsm,
++  TAG_InlineAsm_SideEffects,
++  TAG_InlineAsm_AlignStack,
++  TAG_InlineAsm_Dialect,
++  TAG_RangeMetadata,
++  TAG_Type,
++  TAG_Constant,
++  TAG_Value,
++  TAG_Signature,
++  TAG_Signature_GC,
++  TAG_Signature_Sec,
++  TAG_Signature_VarArg,
++  TAG_Signature_CC,
++  TAG_OperandBundles,
++  TAG_Instruction,
++  TAG_GetElementPtrInst,
++  TAG_AllocaInst,
++  TAG_LoadInst,
++  TAG_StoreInst,
++  TAG_CmpInst,
++  TAG_CallInst,
++  TAG_InvokeInst,
++  TAG_InsertValueInst,
++  TAG_ExtractValueInst,
++  TAG_FenceInst,
++  TAG_AtomicCmpXchgInst,
++  TAG_AtomicRMWInst,
++  TAG_PHINode,
++  TAG_BasicBlock,
++  TAG_GlobalFunction,
++  TAG_GlobalVarible,
++  TAG_GlobalAlias,
++  TAG_GVName,
++  // TAG_GVSourceFileName,
++  TAG_GVConstant,
++  TAG_GVVisibility,
++  TAG_GVThreadLocalMode,
++  TAG_GVAlignment,
++  TAG_GVUnnamedAddr,
++  TAG_GVDLLStorageClassType,
++  TAG_GVComdat,
++  TAG_GVInitValue,
++  TAG_Datalayout,
++  TAG_Triple,
++};
++
++class HashCalculator {
++public:
++  HashCalculator() {}
++
++  virtual ~HashCalculator() = default;
++
++  /// Start the calculation.
++  void beginCalculate() {
++    sn_map.clear();
++    global_numbers.clear();
++    reset();
++  }
++
++  void getHashResult(MD5::MD5Result &Result) {
++    // Now return the result.
++    Hash.final(Result);
++  }
++
++  void reset() { Hash = MD5(); }
++
++  void numberHash(uint32_t V);
++  void numberHash(uint64_t V);
++  void memHash(StringRef V);
++  void APIntHash(const APInt &V);
++  void APFloatHash(const APFloat &V);
++  void orderingHash(AtomicOrdering V);
++  void attributeHash(const Attribute &V);
++  void attributeListHash(const AttributeList &V);
++  void inlineAsmHash(const InlineAsm *V);
++  void rangeMetadataHash(const MDNode *V);
++
++  /// typeHash - accumulate a type hash,
++  ///
++  /// 1. If type is one of PrimitiveTypes (different type IDs), use the type ID
++  /// to calculate the hash.
++  ///    * Void
++  ///    * Float
++  ///    * Double
++  ///    * X86_FP80
++  ///    * FP128
++  ///    * PPC_FP128
++  ///    * Label
++  ///    * Metadata
++  /// 2. If types are integers, type and the width to calculate the hash.
++  /// 3. If they are vectors, use the vector type, count and subtype to
++  /// calculate the hash.
++  /// 4. If the type is pointer, use pointer address space hash to calculate the
++  /// hash.
++  /// 5. If types are complex, use type and  element type to calculate the hash.
++  /// 6. For all other cases put llvm_unreachable.
++  void typeHash(Type *Ty);
++
++  /// Constants Hash accumulate.
++  /// 1. Accumulate the type ID of V.
++  /// 2. Accumulate constant contents.
++  void constantHash(const Constant *V);
++
++  /// Assign or look up previously assigned number for the value. Numbers are
++  /// assigned in the order visited.
++  void valueHash(const Value *V);
++
++  /// Accumulate th global values by number. Uses the GlobalNumbersState to
++  /// identify the same gobals across function calls.
++  void globalValueHash(const GlobalValue *V);
++
++  // Accumulate the hash of basicblocks, instructions and variables etc in the
++  // function Fn.
++  // HashAccumulator64 H;
++  MD5 Hash;
++
++  /// Return the computed hash as a string.
++  std::string &get(MD5::MD5Result &HashRes);
++
++  /// Assign serial numbers to values from left function, and values from
++  /// right function.
++  /// Explanation:
++  /// Being comparing functions we need to compare values we meet at left and
++  /// right sides.
++  /// Its easy to sort things out for external values. It just should be
++  /// the same value at left and right.
++  /// But for local values (those were introduced inside function body)
++  /// we have to ensure they were introduced at exactly the same place,
++  /// and plays the same role.
++  /// Let's assign serial number to each value when we meet it first time.
++  /// Values that were met at same place will be with same serial numbers.
++  /// In this case it would be good to explain few points about values assigned
++  /// to BBs and other ways of implementation (see below).
++  ///
++  /// 1. Safety of BB reordering.
++  /// It's safe to change the order of BasicBlocks in function.
++  /// Relationship with other functions and serial numbering will not be
++  /// changed in this case.
++  /// As follows from FunctionComparator::compare(), we do CFG walk: we start
++  /// from the entry, and then take each terminator. So it doesn't matter how in
++  /// fact BBs are ordered in function. And since cmpValues are called during
++  /// this walk, the numbering depends only on how BBs located inside the CFG.
++  /// So the answer is - yes. We will get the same numbering.
++  ///
++  /// 2. Impossibility to use dominance properties of values.
++  /// If we compare two instruction operands: first is usage of local
++  /// variable AL from function FL, and second is usage of local variable AR
++  /// from FR, we could compare their origins and check whether they are
++  /// defined at the same place.
++  /// But, we are still not able to compare operands of PHI nodes, since those
++  /// could be operands from further BBs we didn't scan yet.
++  /// So it's impossible to use dominance properties in general.
++  DenseMap<const Value *, unsigned> sn_map;
++
++  // The global state we will use
++  DenseMap<const GlobalValue *, unsigned> global_numbers;
++
++private:
++  std::string TheHash;
++};
++
++/// FunctionHashCalculator - Calculate the function hash.
++class FunctionHashCalculator {
++public:
++  FunctionHashCalculator(const Function *F,
++                         std::map<GlobalVariable *, HashType> *HashedGVMap)
++      : Fn(F), HashedGVs(HashedGVMap) {}
++
++  /// Calculate the hash for the function.
++  void calculateFunctionHash(Module &M);
++
++  /// Return the function hash result.
++  void getHashResult(MD5::MD5Result &HashRes);
++
++protected:
++  /// Calculate the hash for the signature and other general attributes of the
++  /// function.
++  void signatureHash(const Function *Fn);
++
++  /// Accumulate the hash for the target datalayout and triple.
++  void moduleHash(Module &M);
++
++  /// Accumulate the hash for the basic block.
++  void basicBlockHash(const BasicBlock *BB);
++
++  void operandBundlesHash(const Instruction *V);
++
++  /// Calculate the Instruction hash.
++  ///
++  /// Stages:
++  /// 1. Operations opcodes. Calculate as a number.
++  /// 2. Number of operands.
++  /// 3. Operation types. Calculate with typeHash method.
++  /// 4. Calculate operation subclass optional data as stream of bytes:
++  /// just convert it to integers and call numberHash.
++  /// 5. Calculate in operation operand types with typeHash.
++  /// 6. Last stage. Calculate operations for some specific attributes.
++  /// For example, for Load it would be:
++  /// 6.1.Load: volatile (as boolean flag)
++  /// 6.2.Load: alignment (as integer numbers)
++  /// 6.3.Load: ordering (as underlying enum class value)
++  /// 6.4.Load: synch-scope (as integer numbers)
++  /// 6.5.Load: range metadata (as integer ranges)
++  /// On this stage its better to see the code, since its not more than 10-15
++  /// strings for particular instruction, and could change sometimes.
++  void instructionHash(const Instruction *V);
++
++  // The function undergoing calculation.
++  const Function *Fn;
++
++  // Hold the function hash value.
++  HashCalculator FnHash;
++
++  std::map<GlobalVariable *, HashType> *HashedGVs;
++};
++
++/// VaribleHashCalculator - Calculate the global variable hash.
++class VaribleHashCalculator {
++public:
++  VaribleHashCalculator(const GlobalVariable *V) : Gv(V) {}
++
++  /// Calculate the global varible Gv hash value.
++  void calculateVaribleHash(Module &M);
++
++  std::string &get(MD5::MD5Result &HashRes) { return GvHash.get(HashRes); }
++
++  void getHashResult(MD5::MD5Result &HashRes) {
++    return GvHash.getHashResult(HashRes);
++  }
++
++private:
++  /// Accumulate the comdat variable hash value.
++  void comdatHash();
++
++  /// Accumulate the hash for the target datalayout and triple.
++  void moduleHash(Module &M);
++
++  // The varible undergoing calculation.
++  const GlobalVariable *Gv;
++
++  // Hold the varible hash value.
++  HashCalculator GvHash;
++};
++
++/// AliasHashCalculator - Calculate the global alias hash.
++/// Aliases have a name and an aliasee that is either a global value or a
++/// constant expression. If it has an aliasee to a global value, it should have
++/// the same hash as the global value. Otherwise, the hash value need to be
++/// caculated.
++class AliasHashCalculator {
++public:
++  AliasHashCalculator(const GlobalAlias *V) : Ga(V) {}
++
++  /// Calculate the global varible Gv hash value.
++  HashType calculate();
++
++private:
++  // The alias undergoing calculation.
++  const GlobalAlias *Ga;
++
++  // Hold the varible hash value.
++  HashCalculator GaHash;
++};
++
++} // end namespace llvm
++
++#endif // LLVM_TRANSFORMS_UTILS_HASHCALCULATOR_H
+diff --git a/lib/IR/LLVMContext.cpp b/lib/IR/LLVMContext.cpp
+index 6c6383c2225..e0eab0bf2b3 100644
+--- a/lib/IR/LLVMContext.cpp
++++ b/lib/IR/LLVMContext.cpp
+@@ -59,6 +59,7 @@ LLVMContext::LLVMContext() : pImpl(new LLVMContextImpl(*this)) {
+     {MD_section_prefix, "section_prefix"},
+     {MD_absolute_symbol, "absolute_symbol"},
+     {MD_associated, "associated"},
++    {MD_fragment, "fragment" },
+   };
+ 
+   for (auto &MDKind : MDKinds) {
+diff --git a/lib/IR/MDBuilder.cpp b/lib/IR/MDBuilder.cpp
+index b9c4f482adf..b9f9c3a03b2 100644
+--- a/lib/IR/MDBuilder.cpp
++++ b/lib/IR/MDBuilder.cpp
+@@ -81,6 +81,24 @@ MDNode *MDBuilder::createRange(const APInt &Lo, const APInt &Hi) {
+   return createRange(ConstantInt::get(Ty, Lo), ConstantInt::get(Ty, Hi));
+ }
+ 
++MDNode *MDBuilder::createHashBytes(ArrayRef<uint8_t> Bytes) {
++  assert(Bytes.size() == 16 && "The hash of GlobalValue is 128-bits!");
++
++  Metadata *Vals[2];
++  Vals[0] = createString("Global_Value_Hashes");
++
++  llvm::Constant *Field[16];
++  Type *Int8Ty = Type::getInt8Ty(Context);
++  for (unsigned Idx = 0; Idx < 16; ++Idx) {
++    Field[Idx] = llvm::ConstantInt::get(Int8Ty, Bytes[Idx], false);
++  }
++  // Array implementation that the hash is outputed as char/string.
++  Vals[1] = createConstant(
++      ConstantArray::get(llvm::ArrayType::get(Int8Ty, 16), Field));
++
++  return MDNode::get(Context, Vals);
++}
++
+ MDNode *MDBuilder::createRange(Constant *Lo, Constant *Hi) {
+   // If the range is everything then it is useless.
+   if (Hi == Lo)
+diff --git a/lib/Transforms/IPO/CMakeLists.txt b/lib/Transforms/IPO/CMakeLists.txt
+index 67f18a307b9..3f3b6f36a16 100644
+--- a/lib/Transforms/IPO/CMakeLists.txt
++++ b/lib/Transforms/IPO/CMakeLists.txt
+@@ -24,6 +24,7 @@ add_llvm_library(LLVMipo
+   MergeFunctions.cpp
+   PartialInlining.cpp
+   PassManagerBuilder.cpp
++  ProgramRepository.cpp
+   PruneEH.cpp
+   SampleProfile.cpp
+   StripDeadPrototypes.cpp
+diff --git a/lib/Transforms/IPO/IPO.cpp b/lib/Transforms/IPO/IPO.cpp
+index 89518f3c5fa..5b9a91bb9f7 100644
+--- a/lib/Transforms/IPO/IPO.cpp
++++ b/lib/Transforms/IPO/IPO.cpp
+@@ -43,6 +43,7 @@ void llvm::initializeIPO(PassRegistry &Registry) {
+   initializeSingleLoopExtractorPass(Registry);
+   initializeLowerTypeTestsPass(Registry);
+   initializeMergeFunctionsPass(Registry);
++  initializeProgramRepositoryPass(Registry);
+   initializePartialInlinerLegacyPassPass(Registry);
+   initializePostOrderFunctionAttrsLegacyPassPass(Registry);
+   initializeReversePostOrderFunctionAttrsLegacyPassPass(Registry);
+diff --git a/lib/Transforms/IPO/PassManagerBuilder.cpp b/lib/Transforms/IPO/PassManagerBuilder.cpp
+index 9fd3a9021a2..2480a22166a 100644
+--- a/lib/Transforms/IPO/PassManagerBuilder.cpp
++++ b/lib/Transforms/IPO/PassManagerBuilder.cpp
+@@ -176,6 +176,7 @@ PassManagerBuilder::PassManagerBuilder() {
+     VerifyInput = false;
+     VerifyOutput = false;
+     MergeFunctions = false;
++	ProgramRepository = false;
+     PrepareForLTO = false;
+     EnablePGOInstrGen = RunPGOInstrGen;
+     PGOInstrGen = PGOOutputFile;
+@@ -442,6 +443,9 @@ void PassManagerBuilder::populateModulePassManager(
+     else if (!GlobalExtensions->empty() || !Extensions.empty())
+       MPM.add(createBarrierNoopPass());
+ 
++    if (ProgramRepository)
++      MPM.add(createProgramRepositoryPass());
++
+     addExtensionsToPM(EP_EnabledOnOptLevel0, MPM);
+ 
+     // Rename anon globals to be able to export them in the summary.
+@@ -697,6 +701,9 @@ void PassManagerBuilder::populateModulePassManager(
+   if (MergeFunctions)
+     MPM.add(createMergeFunctionsPass());
+ 
++  if (ProgramRepository)
++    MPM.add(createProgramRepositoryPass());
++
+   // LoopSink pass sinks instructions hoisted by LICM, which serves as a
+   // canonicalization pass that enables other optimizations. As a result,
+   // LoopSink pass needs to be a very late IR pass to avoid undoing LICM
+@@ -871,6 +878,9 @@ void PassManagerBuilder::addLateLTOOptimizationPasses(
+   // currently it damages debug info.
+   if (MergeFunctions)
+     PM.add(createMergeFunctionsPass());
++
++  if (ProgramRepository)
++    PM.add(createProgramRepositoryPass());
+ }
+ 
+ void PassManagerBuilder::populateThinLTOPassManager(
+diff --git a/lib/Transforms/IPO/ProgramRepository.cpp b/lib/Transforms/IPO/ProgramRepository.cpp
+new file mode 100644
+index 00000000000..d9d76238f98
+--- /dev/null
++++ b/lib/Transforms/IPO/ProgramRepository.cpp
+@@ -0,0 +1,175 @@
++//===- ProgramRepository.cpp - Create a program repository ----------------===//
++//
++//                     The LLVM Compiler Infrastructure
++//
++// This file is distributed under the University of Illinois Open Source
++// License. See LICENSE.TXT for details.
++//
++//===----------------------------------------------------------------------===//
++
++#include "llvm/ADT/Statistic.h"
++#include "llvm/IR/CallSite.h"
++#include "llvm/IR/MDBuilder.h"
++#include "llvm/IR/Metadata.h"
++#include "llvm/IR/Module.h"
++#include "llvm/Pass.h"
++#include "llvm/Support/CommandLine.h"
++#include "llvm/Support/Error.h"
++#include "llvm/Support/FileSystem.h"
++#include "llvm/Support/Format.h"
++#include "llvm/Transforms/IPO.h"
++#include "llvm/Transforms/Utils/HashCalculator.h"
++
++using namespace llvm;
++
++#define DEBUG_TYPE "prepo"
++
++STATISTIC(NumFunctionsHashed, "Number of functions hashed");
++STATISTIC(NumVariablesHashed, "Number of variables hashed");
++STATISTIC(NumAliasesHashed, "Number of aliases hashed");
++
++namespace {
++
++/// ProgramRepository finds functions, gloabal variables and calculate the hash
++/// values.
++class ProgramRepository : public ModulePass {
++public:
++  static char ID;
++  ProgramRepository() : ModulePass(ID), HasGlobalAliases(false) {
++    initializeProgramRepositoryPass(*PassRegistry::getPassRegistry());
++  }
++
++  bool runOnModule(Module &M) override;
++
++private:
++  /// Whether or not the target supports global aliases.
++  bool HasGlobalAliases;
++};
++
++} // end anonymous namespace
++
++char ProgramRepository::ID = 0;
++INITIALIZE_PASS(ProgramRepository, "prepo", "Create Program Repository", false,
++                false)
++
++ModulePass *llvm::createProgramRepositoryPass() {
++  return new ProgramRepository();
++}
++
++static void printHash(raw_fd_ostream &OS, StringRef Name,
++                      HashBytesType &Bytes) {
++  OS << '\t' << Name << ": HEX : 0x";
++  for (int i = 0; i < 16; ++i)
++    OS << format("%.2x", Bytes[i]);
++  OS << '\n';
++}
++
++bool ProgramRepository::runOnModule(Module &M) {
++  if (skipModule(M))
++    return false;
++
++#ifndef NDEBUG
++  const std::string &MId = M.getModuleIdentifier();
++  std::string hashFName(MId.begin(), find(MId, '.'));
++  hashFName += ".hash";
++  std::error_code EC;
++  raw_fd_ostream OS(hashFName, EC, sys::fs::F_Text);
++  if (EC) {
++    errs() << "Couldn't open " << M.getModuleIdentifier()
++           << " for generating hash.\nError:" << EC.message() << "\n";
++    exit(1);
++  }
++#endif
++
++  MDBuilder MDB(M.getContext());
++  std::map<GlobalVariable *, HashType> HashedGVs;
++  HashBytesType Bytes;
++
++#ifndef NDEBUG
++  OS << "The summary of global variables hash:\n";
++#endif
++
++  for (GlobalVariable &G : M.globals()) {
++    //    if (!G.hasName())
++    //      continue;
++    auto GVHC = VaribleHashCalculator(&G);
++    GVHC.calculateVaribleHash(M);
++    MD5::MD5Result Result;
++    GVHC.getHashResult(Result);
++    HashedGVs[&G] = Result.words();
++    Bytes = Result;
++    if (M.getDataLayout().isLittleEndian())
++      std::reverse(Bytes.begin(), Bytes.end());
++    G.setMetadata(LLVMContext::MD_fragment, MDB.createHashBytes(Bytes));
++
++    ++NumVariablesHashed;
++
++#ifndef NDEBUG
++    printHash(OS, G.getName(), Bytes);
++#endif
++  }
++
++  // All functions in the module, ordered by hash. Functions with a unique
++  // hash value are easily eliminated.
++
++  std::map<Function *, HashType> HashedFuncs;
++
++#ifndef NDEBUG
++  OS << "The summary of function hash:\n";
++#endif
++  for (Function &Func : M) {
++    if (Func.isDeclaration() || Func.hasAvailableExternallyLinkage())
++      continue;
++    auto GFHC = FunctionHashCalculator(&Func, &HashedGVs);
++    GFHC.calculateFunctionHash(M);
++    MD5::MD5Result Result;
++    GFHC.getHashResult(Result);
++    HashedFuncs[&Func] = Result.words();
++    Bytes = Result;
++    if (M.getDataLayout().isLittleEndian())
++      std::reverse(Bytes.begin(), Bytes.end());
++    Func.setMetadata(LLVMContext::MD_fragment, MDB.createHashBytes(Bytes));
++
++    ++NumFunctionsHashed;
++
++#ifndef NDEBUG
++    printHash(OS, Func.getName(), Bytes);
++#endif
++  }
++
++  DEBUG(dbgs() << "size of module: " << M.size() << '\n');
++  DEBUG(dbgs() << "size of HashedFuncs: " << HashedFuncs.size() << '\n');
++
++#ifndef NDEBUG
++  OS << "The summary of global alias hash:\n";
++#endif
++
++  for (GlobalAlias &A : M.aliases()) {
++    auto Aliasee = A.getAliasee();
++    assert(Aliasee && "Aliasee cannot be NULL!");
++
++    auto Target = Aliasee->stripPointerCasts();
++    assert(Target && "Target cannot be NULL!");
++    // After stripping pointer casts, the target type shoulf be only GlobalValue
++    // type.
++    assert(isa<GlobalValue>(Target) && "Aliasee should be only GlobalValue");
++
++#ifndef NDEBUG
++    OS << '\t' << A.getName() << ": Alias to ";
++    if (auto GVA = dyn_cast<GlobalVariable>(Target)) {
++      OS << "a global variable: " << GVA->getName() << ": 0x"
++         << utohexstr(HashedGVs[GVA].first) << utohexstr(HashedGVs[GVA].second)
++         << '\n';
++    } else if (auto GVF = dyn_cast<Function>(Target)) {
++      OS << "a function: " << GVF->getName() << ": 0x"
++         << utohexstr(HashedFuncs[GVF].first)
++         << utohexstr(HashedFuncs[GVF].second) << '\n';
++    } else {
++      assert(false && "alias to unknown GlobalValue type!");
++    }
++#endif
++    ++NumAliasesHashed;
++  }
++
++  return true;
++}
+diff --git a/lib/Transforms/Utils/CMakeLists.txt b/lib/Transforms/Utils/CMakeLists.txt
+index 7a21c03da22..a242d407c42 100644
+--- a/lib/Transforms/Utils/CMakeLists.txt
++++ b/lib/Transforms/Utils/CMakeLists.txt
+@@ -17,6 +17,7 @@ add_llvm_library(LLVMTransformUtils
+   FunctionComparator.cpp
+   FunctionImportUtils.cpp
+   GlobalStatus.cpp
++  HashCalculator.cpp
+   InlineFunction.cpp
+   ImportedFunctionsInliningStatistics.cpp
+   InstructionNamer.cpp
+diff --git a/lib/Transforms/Utils/HashCalculator.cpp b/lib/Transforms/Utils/HashCalculator.cpp
+new file mode 100644
+index 00000000000..c2e9808c995
+--- /dev/null
++++ b/lib/Transforms/Utils/HashCalculator.cpp
+@@ -0,0 +1,708 @@
++//===- FunctionHash.cpp - Function Hash Calculation ----------------------===//
++//
++//                     The LLVM Compiler Infrastructure
++//
++// This file is distributed under the University of Illinois Open Source
++// License. See LICENSE.TXT for details.
++//
++//===----------------------------------------------------------------------===//
++//
++// This file implements the FunctionHash and GlobalNumberState classes which
++// are used by the ProgramRepository pass for comparing functions hashes.
++//
++//===----------------------------------------------------------------------===//
++
++#include "llvm/Transforms/Utils/HashCalculator.h"
++#include "llvm/IR/CallSite.h"
++#include "llvm/IR/GetElementPtrTypeIterator.h"
++#include "llvm/IR/InlineAsm.h"
++#include "llvm/IR/Module.h"
++#include "llvm/Support/Debug.h"
++#include "llvm/Support/raw_ostream.h"
++
++using namespace llvm;
++
++#define DEBUG_TYPE "hashcaculator"
++
++/// \brief Adds \param V to the hash.
++
++void HashCalculator::numberHash(uint32_t V) {
++  Hash.update(HashKind::TAG_Uint32);
++  Hash.update(ArrayRef<uint8_t>((uint8_t *)&V, sizeof(uint32_t)));
++}
++
++void HashCalculator::numberHash(uint64_t V) {
++  Hash.update(HashKind::TAG_Uint64);
++  Hash.update(ArrayRef<uint8_t>((uint8_t *)&V, sizeof(uint64_t)));
++}
++
++void HashCalculator::memHash(StringRef V) {
++  Hash.update(ArrayRef<uint8_t>(HashKind::TAG_StringRef));
++  numberHash(V.size());
++  Hash.update(V);
++}
++
++void HashCalculator::APIntHash(const APInt &V) {
++  Hash.update(HashKind::TAG_APInt);
++  const uint64_t *Words = V.getRawData();
++  for (unsigned I = 0, E = V.getNumWords(); I != E; ++I) {
++    numberHash(Words[I]);
++  }
++}
++
++void HashCalculator::APFloatHash(const APFloat &V) {
++  Hash.update(HashKind::TAG_APFloat);
++  // Floats are ordered first by semantics (i.e. float, double, half, etc.),
++  // then by value interpreted as a bitstring (aka APInt).
++  const fltSemantics &SV = V.getSemantics();
++  //  unsigned int SPrec = APFloat::semanticsPrecision(SV);
++  //  Hash.update(ArrayRef<uint8_t>((uint8_t *)&SPrec, sizeof(unsigned int)));
++  numberHash(APFloat::semanticsPrecision(SV));
++  signed short SMax = APFloat::semanticsMaxExponent(SV);
++  Hash.update(ArrayRef<uint8_t>((uint8_t *)&SMax, sizeof(signed short)));
++  signed short SMin = APFloat::semanticsMinExponent(SV);
++  Hash.update(ArrayRef<uint8_t>((uint8_t *)&SMin, sizeof(signed short)));
++  //  unsigned int SSize = APFloat::semanticsSizeInBits(SV);
++  //  Hash.update(ArrayRef<uint8_t>((uint8_t *)&SSize, sizeof(unsigned int)));
++  numberHash(APFloat::semanticsSizeInBits(SV));
++  APIntHash(V.bitcastToAPInt());
++}
++
++void HashCalculator::orderingHash(AtomicOrdering V) {
++  Hash.update(HashKind::TAG_AtomicOrdering);
++  Hash.update(static_cast<uint8_t>(V));
++}
++
++void HashCalculator::attributeHash(const Attribute &V) {
++  if (V.isEnumAttribute()) {
++    // Enum attribute uses the attribute kind to calculate the hash.
++    Hash.update(HashKind::TAG_AttributeEnum);
++    auto EnunKind = V.getKindAsEnum();
++    Hash.update(
++        ArrayRef<uint8_t>((uint8_t *)&EnunKind, sizeof(Attribute::AttrKind)));
++  } else if (V.isIntAttribute()) {
++    // Int attribute uses the attribute kind and int value to calculate the
++    // hash.
++    Hash.update(HashKind::TAG_AttributeInt);
++    auto EnunKind = V.getKindAsEnum();
++    Hash.update(
++        ArrayRef<uint8_t>((uint8_t *)&EnunKind, sizeof(Attribute::AttrKind)));
++    numberHash(V.getValueAsInt());
++  } else {
++    // String attribute uses the attribute kind and string value to calculate
++    // the hash.
++    Hash.update(HashKind::TAG_AttributeString);
++    memHash(V.getKindAsString());
++    memHash(V.getValueAsString());
++  }
++}
++
++void HashCalculator::attributeListHash(const AttributeList &V) {
++  Hash.update(HashKind::TAG_AttributeList);
++  for (unsigned I = 0, E = V.getNumAttrSets(); I != E; ++I) {
++    for (unsigned I = V.index_begin(), E = V.index_end(); I != E; ++I) {
++      AttributeSet AS = V.getAttributes(I);
++      for (AttributeSet::iterator VI = AS.begin(), VE = AS.end(); VI != VE;
++           ++VI) {
++        attributeHash(*VI);
++      }
++    }
++  }
++}
++
++void HashCalculator::inlineAsmHash(const InlineAsm *V) {
++  Hash.update(HashKind::TAG_InlineAsm);
++  typeHash(V->getFunctionType());
++  memHash(V->getAsmString());
++  memHash(V->getConstraintString());
++  Hash.update(HashKind::TAG_InlineAsm_SideEffects);
++  Hash.update(V->hasSideEffects());
++  Hash.update(HashKind::TAG_InlineAsm_AlignStack);
++  Hash.update(V->isAlignStack());
++  Hash.update(HashKind::TAG_InlineAsm_Dialect);
++  Hash.update(V->getDialect());
++}
++
++void HashCalculator::rangeMetadataHash(const MDNode *V) {
++  if (!V)
++    return;
++  Hash.update(HashKind::TAG_RangeMetadata);
++  // Range metadata is a sequence of numbers.
++  for (size_t I = 0; I < V->getNumOperands(); ++I) {
++    ConstantInt *VLow = mdconst::extract<ConstantInt>(V->getOperand(I));
++    APIntHash(VLow->getValue());
++  }
++}
++
++/// typeHash - calculate a type hash.
++void HashCalculator::typeHash(Type *Ty) {
++  Hash.update(HashKind::TAG_Type);
++  Hash.update(Ty->getTypeID());
++
++  switch (Ty->getTypeID()) {
++  default:
++    llvm_unreachable("Unknown type!");
++    // Fall through in Release mode.
++    LLVM_FALLTHROUGH;
++  // PrimitiveTypes
++  case Type::VoidTyID:
++  case Type::FloatTyID:
++  case Type::DoubleTyID:
++  case Type::X86_FP80TyID:
++  case Type::FP128TyID:
++  case Type::PPC_FP128TyID:
++  case Type::LabelTyID:
++  case Type::MetadataTyID:
++  case Type::TokenTyID:
++    break;
++
++  // Derived types
++  case Type::IntegerTyID:
++    // unsigned int BWidth = cast<IntegerType>(Ty)->getBitWidth();
++    // Hash.update(ArrayRef<uint8_t>((uint8_t *)&BWidth, sizeof(unsigned int)));
++    numberHash(cast<IntegerType>(Ty)->getBitWidth());
++    break;
++  case Type::FunctionTyID: {
++    FunctionType *FTy = cast<FunctionType>(Ty);
++    for (Type *ParamTy : FTy->params()) {
++      typeHash(ParamTy);
++    }
++    Hash.update(FTy->isVarArg());
++    typeHash(FTy->getReturnType());
++    break;
++  }
++  case Type::PointerTyID: {
++    PointerType *PTy = dyn_cast<PointerType>(Ty);
++    assert(PTy && "Ty type must be pointers here.");
++    numberHash(PTy->getAddressSpace());
++    break;
++  }
++  case Type::StructTyID: {
++    StructType *STy = cast<StructType>(Ty);
++    for (Type *ElemTy : STy->elements()) {
++      typeHash(ElemTy);
++    }
++    if (STy->isPacked())
++      Hash.update(STy->isPacked());
++    break;
++  }
++  case Type::ArrayTyID:
++  case Type::VectorTyID: {
++    auto *STy = cast<SequentialType>(Ty);
++    numberHash(STy->getNumElements());
++    typeHash(STy->getElementType());
++    break;
++  }
++  }
++}
++
++/// Accumulate the constants hash.
++void HashCalculator::constantHash(const Constant *V) {
++  DEBUG(dbgs() << "Constant V name:  " << V->getName() << "\n");
++
++  Hash.update(HashKind::TAG_Constant);
++  Type *Ty = V->getType();
++  // Calculate type hash.
++  typeHash(Ty);
++
++  auto GlobalValueV = dyn_cast<GlobalValue>(V);
++  if (GlobalValueV) {
++    auto *GV = dyn_cast<GlobalVariable>(GlobalValueV);
++    if (GV && GV->hasDefinitiveInitializer()) {
++      DenseMap<const GlobalValue *, unsigned>::iterator GVI =
++          global_numbers.find(GV);
++      if (GVI != global_numbers.end())
++        globalValueHash(GlobalValueV);
++      else {
++        global_numbers.insert(std::make_pair(GV, global_numbers.size()));
++        constantHash(GV->getInitializer());
++      }
++    }
++    return;
++  }
++
++  unsigned int VID = V->getValueID();
++  // Hash.update(ArrayRef<uint8_t>((uint8_t *)&VID, sizeof(unsigned int)));
++  numberHash(VID);
++
++  if (const auto *SeqV = dyn_cast<ConstantDataSequential>(V)) {
++    // This handles ConstantDataArray and ConstantDataVector.
++    memHash(SeqV->getRawDataValues());
++    return;
++  }
++
++  switch (VID) {
++  case Value::UndefValueVal:
++  case Value::ConstantTokenNoneVal:
++  case Value::ConstantAggregateZeroVal:
++  case Value::ConstantPointerNullVal:
++    break;
++  case Value::ConstantIntVal: {
++    APIntHash(cast<ConstantInt>(V)->getValue());
++    break;
++  }
++  case Value::ConstantFPVal: {
++    APFloatHash(cast<ConstantFP>(V)->getValueAPF());
++    break;
++  }
++  case Value::ConstantArrayVal: {
++    const ConstantArray *VA = cast<ConstantArray>(V);
++    for (uint64_t I = 0; I < cast<ArrayType>(Ty)->getNumElements(); ++I) {
++      constantHash(cast<Constant>(VA->getOperand(I)));
++    }
++    break;
++  }
++  case Value::ConstantStructVal: {
++    const ConstantStruct *VS = cast<ConstantStruct>(V);
++    for (unsigned I = 0; I < cast<StructType>(Ty)->getNumElements(); ++I) {
++      constantHash(cast<Constant>(VS->getOperand(I)));
++    }
++    break;
++  }
++  case Value::ConstantVectorVal: {
++    const ConstantVector *VV = cast<ConstantVector>(V);
++    for (uint64_t I = 0; I < cast<VectorType>(Ty)->getNumElements(); ++I) {
++      constantHash(cast<Constant>(VV->getOperand(I)));
++    }
++    break;
++  }
++  case Value::ConstantExprVal: {
++    const ConstantExpr *VE = cast<ConstantExpr>(V);
++    for (unsigned i = 0; i < VE->getNumOperands(); ++i) {
++      constantHash(cast<Constant>(VE->getOperand(i)));
++    }
++    break;
++  }
++  case Value::BlockAddressVal: {
++    const BlockAddress *BA = cast<BlockAddress>(V);
++    valueHash(BA->getFunction());
++    // valueHash will tell us if these are equivalent BasicBlocks, in the
++    // context of their respective functions.
++    valueHash(BA->getBasicBlock());
++    break;
++  }
++  default: // Unknown constant, abort.
++    DEBUG(dbgs() << "Looking at valueID " << V->getValueID() << "\n");
++    llvm_unreachable("Constant ValueID not recognized.");
++  }
++}
++
++/// Calculate the value hash under pair-wise comparison. If this is the first
++/// time the values are seen, they're added to the mapping so that we will
++/// detect mismatches on next use. See comments in declaration for more details.
++void HashCalculator::valueHash(const Value *V) {
++  Hash.update(HashKind::TAG_Value);
++  const Constant *ConstV = dyn_cast<Constant>(V);
++  if (ConstV) {
++    constantHash(ConstV);
++    return;
++  }
++
++  const InlineAsm *InlineAsmV = dyn_cast<InlineAsm>(V);
++  if (InlineAsmV) {
++    inlineAsmHash(InlineAsmV);
++    return;
++  }
++
++  auto SN = sn_map.insert(std::make_pair(V, sn_map.size()));
++  numberHash(SN.first->second);
++}
++
++void HashCalculator::globalValueHash(const GlobalValue *V) {
++  numberHash(V->getGUID());
++  auto *GV = dyn_cast<GlobalVariable>(V);
++  if (GV && GV->hasDefinitiveInitializer()) {
++    DenseMap<const GlobalValue *, unsigned>::iterator GVI =
++        global_numbers.find(GV);
++    if (GVI == global_numbers.end()) {
++      global_numbers.insert(std::make_pair(GV, global_numbers.size()));
++      constantHash(GV->getInitializer());
++    } else {
++      numberHash(GVI->second);
++    }
++  }
++}
++
++std::string &HashCalculator::get(MD5::MD5Result &HashRes) {
++  SmallString<32> Result;
++  MD5::stringifyResult(HashRes, Result);
++  TheHash = Result.str();
++  return TheHash;
++}
++
++void FunctionHashCalculator::signatureHash(const Function *F) {
++  FnHash.Hash.update(HashKind::TAG_Signature);
++  // TODO: review all the attributes to find the stardard c++ attributes to
++  // affect the generated codes.
++  FnHash.attributeListHash(F->getAttributes());
++  if (F->hasGC()) {
++    FnHash.Hash.update(HashKind::TAG_Signature_GC);
++    FnHash.memHash(F->getGC());
++  }
++  if (F->hasSection()) {
++    FnHash.Hash.update(HashKind::TAG_Signature_Sec);
++    FnHash.memHash(F->getSection());
++  }
++  FnHash.Hash.update(HashKind::TAG_Signature_VarArg);
++  FnHash.Hash.update(F->isVarArg());
++
++  // Calling conventions may differ in where parameters, return values and
++  // return addresses are placed (in registers, on the call stack, a mix of
++  // both, or in other memory structures). If the function has input
++  // paramaters, the generated codes will be different, the calling conventions
++  // need to be consided in the hash calculation. If the function return type
++  // is not void type, the generated code would be changed. Again, the calling
++  // conventions need to be considered.
++  if (F->getFunctionType()->getNumParams() != 0 ||
++      F->getReturnType()->getTypeID() == Type::VoidTyID) {
++    FnHash.Hash.update(HashKind::TAG_Signature_CC);
++    CallingConv::ID CC = F->getCallingConv();
++    FnHash.Hash.update(
++        ArrayRef<uint8_t>((uint8_t *)&CC, sizeof(CallingConv::ID)));
++  }
++
++  FnHash.typeHash(F->getFunctionType());
++  // Visit the arguments so that they get enumerated in the order they're
++  // passed in.
++  for (Function::const_arg_iterator ArgI = F->arg_begin(), ArgE = F->arg_end();
++       ArgI != ArgE; ++ArgI) {
++    FnHash.valueHash(&*ArgI);
++  }
++}
++
++void FunctionHashCalculator::moduleHash(Module &M) {
++  FnHash.Hash.update(HashKind::TAG_Datalayout);
++  FnHash.memHash(M.getDataLayoutStr());
++  FnHash.Hash.update(HashKind::TAG_Triple);
++  FnHash.memHash(M.getTargetTriple());
++}
++
++// Calculate either CallInst or InvokeInst instruction hash.
++void FunctionHashCalculator::operandBundlesHash(const Instruction *V) {
++  FnHash.Hash.update(HashKind::TAG_OperandBundles);
++  ImmutableCallSite VCS(V);
++  assert(VCS && "Must not be empty!");
++  assert((VCS.isCall() || VCS.isInvoke()) && "Must be calls or invokes!");
++
++  for (unsigned i = 0, e = VCS.getNumOperandBundles(); i != e; ++i) {
++    auto VOB = VCS.getOperandBundleAt(i);
++    FnHash.memHash(VOB.getTagName());
++    // Since input values have been used to calculate the instruction hash for
++    // all instructions, we only consider the input sizes here.
++    FnHash.numberHash(VOB.Inputs.size());
++  }
++}
++
++/// Accumulate the instruction hash. The opcodes, type, operand types, operands
++/// value and any other factors affecting the operation must be considered.
++void FunctionHashCalculator::instructionHash(const Instruction *V) {
++  FnHash.Hash.update(HashKind::TAG_Instruction);
++  // Accumulate the hash of the instruction opcode.
++  FnHash.numberHash(V->getOpcode());
++  // Instruction return type.
++  FnHash.typeHash(V->getType());
++  FnHash.numberHash(V->getRawSubclassOptionalData());
++
++  // Accumulate the instruction operands type and value.
++  for (unsigned I = 0, E = V->getNumOperands(); I != E; ++I) {
++    FnHash.typeHash(V->getOperand(I)->getType());
++    auto *GV = dyn_cast<GlobalVariable>(V->getOperand(I));
++    if (!GV) {
++      auto GA = dyn_cast<GlobalAlias>(V->getOperand(I));
++      if (GA)
++        GV = dyn_cast<GlobalVariable>(GA->getAliasee()->stripPointerCasts());
++    }
++    if (HashedGVs && GV && (HashedGVs->find(GV) != HashedGVs->end())) {
++      auto it = HashedGVs->find(GV);
++      FnHash.numberHash(it->second.first);
++      FnHash.numberHash(it->second.second);
++    } else {
++      FnHash.valueHash(V->getOperand(I));
++    }
++  }
++
++  // special GetElementPtrInst instruction.
++  if (const GetElementPtrInst *GEP = dyn_cast<GetElementPtrInst>(V)) {
++    FnHash.Hash.update(HashKind::TAG_GetElementPtrInst);
++    FnHash.typeHash(GEP->getSourceElementType());
++    return;
++  }
++  // Check special state that is a part of some instructions.
++  if (const AllocaInst *AI = dyn_cast<AllocaInst>(V)) {
++    FnHash.Hash.update(HashKind::TAG_AllocaInst);
++    FnHash.typeHash(AI->getAllocatedType());
++    FnHash.numberHash(AI->getAlignment());
++    return;
++  }
++  if (const LoadInst *LI = dyn_cast<LoadInst>(V)) {
++    FnHash.Hash.update(HashKind::TAG_LoadInst);
++    FnHash.Hash.update(LI->isVolatile());
++    FnHash.numberHash(LI->getAlignment());
++    FnHash.orderingHash(LI->getOrdering());
++    FnHash.Hash.update(LI->getSynchScope());
++    // FIXME: Is there any other Metadata need to be considered??
++    FnHash.rangeMetadataHash(LI->getMetadata(LLVMContext::MD_range));
++    return;
++  }
++  if (const StoreInst *SI = dyn_cast<StoreInst>(V)) {
++    FnHash.Hash.update(HashKind::TAG_StoreInst);
++    FnHash.Hash.update(SI->isVolatile());
++    FnHash.numberHash(SI->getAlignment());
++    FnHash.orderingHash(SI->getOrdering());
++    FnHash.Hash.update(SI->getSynchScope());
++    return;
++  }
++  if (const CmpInst *CI = dyn_cast<CmpInst>(V)) {
++    FnHash.Hash.update(HashKind::TAG_CmpInst);
++    FnHash.Hash.update(CI->getPredicate());
++    return;
++  }
++  if (const CallInst *CI = dyn_cast<CallInst>(V)) {
++    FnHash.Hash.update(HashKind::TAG_CallInst);
++    FnHash.Hash.update(CI->isTailCall());
++    // FnHash.numberHash(CI->getCallingConv());
++    FnHash.attributeListHash(CI->getAttributes());
++    operandBundlesHash(CI);
++    FnHash.rangeMetadataHash(CI->getMetadata(LLVMContext::MD_range));
++    if (const Function *F = CI->getCalledFunction()) {
++      FnHash.memHash(F->getName());
++      signatureHash(F);
++    }
++    return;
++  }
++  if (const InvokeInst *II = dyn_cast<InvokeInst>(V)) {
++    FnHash.Hash.update(HashKind::TAG_InvokeInst);
++    FnHash.numberHash(II->getCallingConv());
++    FnHash.attributeListHash(II->getAttributes());
++    operandBundlesHash(II);
++    FnHash.rangeMetadataHash(II->getMetadata(LLVMContext::MD_range));
++    if (const Function *F = II->getCalledFunction()) {
++      FnHash.memHash(F->getName());
++      signatureHash(F);
++    }
++    return;
++  }
++  if (const InsertValueInst *IVI = dyn_cast<InsertValueInst>(V)) {
++    FnHash.Hash.update(HashKind::TAG_InsertValueInst);
++    ArrayRef<unsigned> Indices = IVI->getIndices();
++    // for (size_t I = 0, E = Indices.size(); I != E; ++I) {
++    //  FnHash.numberHash(Indices[I]);
++    //}
++    FnHash.Hash.update(ArrayRef<uint8_t>((uint8_t *)&Indices,
++                                         sizeof(unsigned) * Indices.size()));
++    return;
++  }
++  if (const ExtractValueInst *EVI = dyn_cast<ExtractValueInst>(V)) {
++    FnHash.Hash.update(HashKind::TAG_ExtractValueInst);
++    ArrayRef<unsigned> Indices = EVI->getIndices();
++    // for (size_t I = 0, E = Indices.size(); I != E; ++I) {
++    //  FnHash.numberHash(Indices[I]);
++    //}
++    FnHash.Hash.update(ArrayRef<uint8_t>((uint8_t *)&Indices,
++                                         sizeof(unsigned) * Indices.size()));
++    return;
++  }
++  if (const FenceInst *FI = dyn_cast<FenceInst>(V)) {
++    FnHash.Hash.update(HashKind::TAG_FenceInst);
++    FnHash.orderingHash(FI->getOrdering());
++    FnHash.Hash.update(FI->getSynchScope());
++    return;
++  }
++  if (const AtomicCmpXchgInst *CXI = dyn_cast<AtomicCmpXchgInst>(V)) {
++    FnHash.Hash.update(HashKind::TAG_AtomicCmpXchgInst);
++    FnHash.Hash.update(CXI->isVolatile());
++    FnHash.Hash.update(CXI->isWeak());
++    FnHash.orderingHash(CXI->getSuccessOrdering());
++    FnHash.orderingHash(CXI->getFailureOrdering());
++    FnHash.Hash.update(CXI->getSynchScope());
++    return;
++  }
++  if (const AtomicRMWInst *RMWI = dyn_cast<AtomicRMWInst>(V)) {
++    FnHash.Hash.update(HashKind::TAG_AtomicRMWInst);
++    FnHash.Hash.update(RMWI->getOperation());
++    FnHash.Hash.update(RMWI->isVolatile());
++    FnHash.orderingHash(RMWI->getOrdering());
++    FnHash.Hash.update(RMWI->getSynchScope());
++    return;
++  }
++  if (const PHINode *PN = dyn_cast<PHINode>(V)) {
++    FnHash.Hash.update(HashKind::TAG_PHINode);
++    // Ensure that in addition to the incoming values being identical
++    // (checked by the caller of this function), the incoming blocks
++    // are also identical.
++    for (unsigned I = 0, E = PN->getNumIncomingValues(); I != E; ++I) {
++      FnHash.valueHash(PN->getIncomingBlock(I));
++    }
++  }
++}
++
++void FunctionHashCalculator::basicBlockHash(const BasicBlock *BB) {
++  FnHash.Hash.update(HashKind::TAG_BasicBlock);
++  BasicBlock::const_iterator Inst = BB->begin(), InstE = BB->end();
++  do {
++    instructionHash(&*Inst);
++    ++Inst;
++  } while (Inst != InstE);
++}
++
++void FunctionHashCalculator::calculateFunctionHash(Module &M) {
++  FnHash.Hash.update(HashKind::TAG_GlobalFunction);
++  FnHash.beginCalculate();
++  moduleHash(M);
++  signatureHash(Fn);
++
++  // We do a CFG-ordered walk since the actual ordering of the blocks in the
++  // linked list is immaterial. Our walk starts at the entry block for both
++  // functions, then takes each block from each terminator in order. As an
++  // artifact, this also means that unreachable blocks are ignored.
++  SmallVector<const BasicBlock *, 8> FnBBs;
++  SmallPtrSet<const BasicBlock *, 32> VisitedBBs; // in terms of F1.
++
++  FnBBs.push_back(&Fn->getEntryBlock());
++
++  VisitedBBs.insert(FnBBs[0]);
++  while (!FnBBs.empty()) {
++    const BasicBlock *BB = FnBBs.pop_back_val();
++    FnHash.valueHash(BB);
++    basicBlockHash(BB);
++
++    const TerminatorInst *Term = BB->getTerminator();
++    for (unsigned I = 0, E = Term->getNumSuccessors(); I != E; ++I) {
++      if (!VisitedBBs.insert(Term->getSuccessor(I)).second)
++        continue;
++      FnBBs.push_back(Term->getSuccessor(I));
++    }
++  }
++}
++
++/// Calculate the function hash and return the result as the words.
++void FunctionHashCalculator::getHashResult(MD5::MD5Result &HashRes) {
++  return FnHash.getHashResult(HashRes);
++}
++
++void VaribleHashCalculator::comdatHash() {
++  GvHash.Hash.update(HashKind::TAG_GVComdat);
++  const Comdat *GvC = Gv->getComdat();
++  GvHash.Hash.update(GvC->getName());
++  GvHash.Hash.update(GvC->getSelectionKind());
++}
++
++void VaribleHashCalculator::moduleHash(Module &M) {
++  GvHash.Hash.update(HashKind::TAG_Datalayout);
++  GvHash.memHash(M.getDataLayoutStr());
++  GvHash.Hash.update(HashKind::TAG_Triple);
++  GvHash.memHash(M.getTargetTriple());
++}
++
++// Calculate the global varible hash value.
++void VaribleHashCalculator::calculateVaribleHash(Module &M) {
++  GvHash.Hash.update(HashKind::TAG_GlobalVarible);
++  GvHash.beginCalculate();
++  moduleHash(M);
++
++  // Accumulate the global variable name
++  // if (Gv->hasName()) {
++  //  GvHash.Hash.update(HashKind::TAG_GVName);
++  //  GvHash.memHash(Gv->getName());
++  //}
++  // Global variables which are defined in the different file have differetn
++  // hash values.
++  // GvHash.Hash.update(HashKind::TAG_GVSourceFileName);
++  // GvHash.memHash(Gv->getParent()->getSourceFileName());
++  // Value type.
++  GvHash.typeHash(Gv->getValueType());
++  //// Accumulate the linkage type.
++  // GvHash.Hash.update(Gv->getLinkage());
++  // If global variable is constant, accumulate the const attribute.
++  GvHash.Hash.update(HashKind::TAG_GVConstant);
++  GvHash.Hash.update(Gv->isConstant());
++  //// Accumulate meaningful attributes for global variable.
++  // GvHash.Hash.update(HashKind::TAG_GVVisibility);
++  // GvHash.Hash.update(Gv->getVisibility());
++  // Accumulate the thread local mode.
++  GvHash.Hash.update(HashKind::TAG_GVThreadLocalMode);
++  GvHash.Hash.update(Gv->getThreadLocalMode());
++  // Accumulate the alignment of global variable.
++  GvHash.Hash.update(HashKind::TAG_GVAlignment);
++  GvHash.numberHash(Gv->getAlignment());
++  // Accumulate an optional unnamed_addr or local_unnamed_addr attribute.
++  GvHash.Hash.update(HashKind::TAG_GVUnnamedAddr);
++  switch (Gv->getUnnamedAddr()) {
++  // FIXME! Call function once!!
++  case GlobalValue::UnnamedAddr::None:
++    GvHash.Hash.update(0);
++    break;
++  case GlobalValue::UnnamedAddr::Local:
++    GvHash.Hash.update(1);
++    break;
++  case GlobalValue::UnnamedAddr::Global:
++    GvHash.Hash.update(2);
++    break;
++  }
++  //// Accumulate the DLL storage class type.
++  // GvHash.Hash.update(HashKind::TAG_GVDLLStorageClassType);
++  // GvHash.Hash.update(Gv->getDLLStorageClass());
++  // Accumulate the Comdat section name.
++  if (Gv->hasComdat()) {
++    comdatHash();
++  }
++  if (Gv->hasName() && Gv->hasDefinitiveInitializer()) {
++    // Global variable is constant type. Accumulate the initial value.
++    // This accumulation also cover the "llvm.global_ctors",
++    // "llvm.global_dtors", "llvm.used" and "llvm.compiler.used" cases.
++    GvHash.Hash.update(HashKind::TAG_GVInitValue);
++    GvHash.constantHash(Gv->getInitializer());
++  }
++}
++
++// Calculate the global varible hash value.
++HashType AliasHashCalculator::calculate() {
++  GaHash.Hash.update(HashKind::TAG_GlobalAlias);
++  GaHash.beginCalculate();
++  // Accumulate the global variable name
++  // if (Ga->hasName()) {
++  //  GaHash.Hash.update(HashKind::TAG_GVName);
++  //  GaHash.memHash(Ga->getName());
++  //}
++  // Global variables which are defined in the different file have differetn
++  // hash values.
++  // GaHash.Hash.update(HashKind::TAG_GVSourceFileName);
++  // GaHash.memHash(Ga->getParent()->getSourceFileName());
++  // Value type.
++  GaHash.typeHash(Ga->getValueType());
++  // Accumulate the linkage type.
++  GaHash.Hash.update(Ga->getLinkage());
++  // Accumulate meaningful attributes for global variable.
++  GaHash.Hash.update(HashKind::TAG_GVVisibility);
++  GaHash.Hash.update(Ga->getVisibility());
++  // Accumulate the thread local mode.
++  GaHash.Hash.update(HashKind::TAG_GVThreadLocalMode);
++  GaHash.Hash.update(Ga->getThreadLocalMode());
++  // Accumulate the alignment of global variable.
++  GaHash.Hash.update(HashKind::TAG_GVAlignment);
++  GaHash.numberHash(Ga->getAlignment());
++  // Accumulate an optional unnamed_addr or local_unnamed_addr attribute.
++  GaHash.Hash.update(HashKind::TAG_GVUnnamedAddr);
++  switch (Ga->getUnnamedAddr()) {
++  case GlobalValue::UnnamedAddr::None:
++    GaHash.Hash.update(0);
++  case GlobalValue::UnnamedAddr::Local:
++    GaHash.Hash.update(1);
++  case GlobalValue::UnnamedAddr::Global:
++    GaHash.Hash.update(2);
++  }
++  // Accumulate the DLL storage class type.
++  GaHash.Hash.update(HashKind::TAG_GVDLLStorageClassType);
++  GaHash.Hash.update(Ga->getDLLStorageClass());
++
++  GaHash.constantHash(Ga->getAliasee());
++
++  // Now return the result.
++  MD5::MD5Result Result;
++  GaHash.Hash.final(Result);
++
++  // ... take the least significant 8 bytes and return those. Our MD5
++  // implementation always returns its results in little endian, so we actually
++  // need the "high" word.
++  return Result.words();
++}
+diff --git a/unittests/Transforms/Utils/CMakeLists.txt b/unittests/Transforms/Utils/CMakeLists.txt
+index 0fc19ef09fb..1ef33dbeabe 100644
+--- a/unittests/Transforms/Utils/CMakeLists.txt
++++ b/unittests/Transforms/Utils/CMakeLists.txt
+@@ -9,6 +9,7 @@ add_llvm_unittest(UtilsTests
+   ASanStackFrameLayoutTest.cpp
+   Cloning.cpp
+   FunctionComparator.cpp
++  HashCalculator.cpp
+   IntegerDivision.cpp
+   Local.cpp
+   ValueMapperTest.cpp
+diff --git a/unittests/Transforms/Utils/HashCalculator.cpp b/unittests/Transforms/Utils/HashCalculator.cpp
+new file mode 100644
+index 00000000000..3136fc12ecf
+--- /dev/null
++++ b/unittests/Transforms/Utils/HashCalculator.cpp
+@@ -0,0 +1,167 @@
++//===- HashCalculator.cpp - Unit tests for HashCalculator ---------===//
++//
++//                     The LLVM Compiler Infrastructure
++//
++// This file is distributed under the University of Illinois Open Source
++// License. See LICENSE.TXT for details.
++//
++//===----------------------------------------------------------------------===//
++#include "llvm/Transforms/Utils/HashCalculator.h"
++#include "llvm/IR/BasicBlock.h"
++#include "llvm/IR/IRBuilder.h"
++#include "llvm/IR/Instructions.h"
++#include "llvm/IR/LLVMContext.h"
++#include "llvm/IR/Module.h"
++#include "gtest/gtest.h"
++
++using namespace llvm;
++
++/// Generates a simple test function.
++struct TestFunction {
++  Function *F;
++  BasicBlock *BB;
++  Constant *C;
++  Instruction *I;
++  Type *T;
++
++  TestFunction(LLVMContext &Ctx, Module &M, int addVal) {
++    IRBuilder<> B(Ctx);
++    T = B.getInt8Ty();
++    F = Function::Create(FunctionType::get(T, {B.getInt8PtrTy()}, false),
++                         GlobalValue::ExternalLinkage, "F", &M);
++    BB = BasicBlock::Create(Ctx, "", F);
++    B.SetInsertPoint(BB);
++    Argument *PointerArg = &*F->arg_begin();
++    LoadInst *LoadInst = B.CreateLoad(PointerArg);
++    C = B.getInt8(addVal);
++    I = cast<Instruction>(B.CreateAdd(LoadInst, C));
++    B.CreateRet(I);
++  }
++};
++
++/// A class for testing the HashCalculator API.
++///
++/// The main purpose is to test if the required protected functions are
++/// accessible from a derived class of FunctionComparator.
++class TestHash : public FunctionHashCalculator {
++public:
++  TestHash(const Function *F1) : FunctionHashCalculator(F1, nullptr) {}
++
++  bool testFunctionAccess(const Function *F1) {
++    // Test if Fn is accessible.
++    return F1 == Fn;
++  }
++
++  HashType getHash() {
++    MD5::MD5Result Result;
++    getHashResult(Result);
++    return Result.words();
++  }
++
++//  HashType testCalculate() {
++//    calculateFunctionHash();
++//    return getHash();
++//  }
++
++  HashType testSignatureHash() {
++    FnHash.beginCalculate();
++    signatureHash(Fn);
++    return getHash();
++  }
++
++  HashType testBasicBlockHash(const BasicBlock *BB) {
++    FnHash.beginCalculate();
++    basicBlockHash(BB);
++    return getHash();
++  }
++
++  HashType testConstantHash(const Constant *V) {
++    FnHash.beginCalculate();
++    FnHash.constantHash(V);
++    return getHash();
++  }
++
++  HashType testGlobalValueHash(const GlobalValue *V) {
++    FnHash.beginCalculate();
++    FnHash.globalValueHash(V);
++    return getHash();
++  }
++
++  HashType testValueHash(const Value *V) {
++    FnHash.beginCalculate();
++    FnHash.valueHash(V);
++    return getHash();
++  }
++
++  HashType testInstructionHash(const Instruction *V) {
++    FnHash.beginCalculate();
++    instructionHash(V);
++    return getHash();
++  }
++
++  HashType testTypeHash(Type *Ty) {
++    FnHash.beginCalculate();
++    FnHash.typeHash(Ty);
++    return getHash();
++  }
++
++  HashType testNumberHash(uint64_t V) {
++    FnHash.beginCalculate();
++    FnHash.numberHash(V);
++    return getHash();
++  }
++
++  HashType testAPIntHash(const APInt &V) {
++    FnHash.beginCalculate();
++    FnHash.APIntHash(V);
++    return getHash();
++  }
++
++  HashType testAPFloatHash(const APFloat &V) {
++    FnHash.beginCalculate();
++    FnHash.APFloatHash(V);
++    return getHash();
++  }
++
++  HashType testMemHash(StringRef V) {
++    FnHash.beginCalculate();
++    FnHash.memHash(V);
++    return getHash();
++  }
++};
++
++/// A sanity check for the FunctionComparator API.
++TEST(HashCalculatorTest, TestAPI) {
++  LLVMContext C;
++  Module M("test", C);
++  TestFunction F1(C, M, 27);
++  TestFunction F2(C, M, 28);
++  TestFunction F3(C, M, 27);
++
++  TestHash F1H(F1.F);
++  TestHash F2H(F2.F);
++  TestHash F3H(F3.F);
++
++  EXPECT_TRUE(F1H.testFunctionAccess(F1.F));
++//  EXPECT_NE(F1H.testCalculate(), F2H.testCalculate());
++//  EXPECT_EQ(F1H.testCalculate(), F3H.testCalculate());
++  EXPECT_EQ(F1H.testSignatureHash(), F2H.testSignatureHash());
++  EXPECT_NE(F1H.testBasicBlockHash(F1.BB), F2H.testBasicBlockHash(F2.BB));
++  EXPECT_EQ(F1H.testBasicBlockHash(F1.BB), F3H.testBasicBlockHash(F3.BB));
++  EXPECT_NE(F1H.testConstantHash(F1.C), F2H.testConstantHash(F2.C));
++
++  EXPECT_NE(F1H.testGlobalValueHash(F1.F), F2H.testGlobalValueHash(F2.F));
++  EXPECT_NE(F1H.testInstructionHash(F1.I), F2H.testInstructionHash(F2.I));
++  EXPECT_EQ(F1H.testTypeHash(F1.T), F2H.testTypeHash(F2.T));
++
++  EXPECT_EQ(F1H.testNumberHash(5), F2H.testNumberHash(5));
++  EXPECT_NE(F1H.testNumberHash(5), F2H.testNumberHash(6));
++  EXPECT_EQ(F1H.testMemHash("Hello World"), F2H.testMemHash("Hello World"));
++  EXPECT_NE(F1H.testMemHash("Hello World"), F2H.testMemHash("Hello-World"));
++  EXPECT_EQ(F1H.testAPIntHash(APInt(32, 2)), F2H.testAPIntHash(APInt(32, 2)));
++  EXPECT_NE(F1H.testAPIntHash(APInt(32, 2)), F2H.testAPIntHash(APInt(32, 5)));
++  EXPECT_EQ(F1H.testAPFloatHash(APFloat(2.0)),
++            F2H.testAPFloatHash(APFloat(2.0)));
++  EXPECT_NE(F1H.testAPFloatHash(APFloat(2.0)),
++            F2H.testAPFloatHash(APFloat(5.0)));
++}

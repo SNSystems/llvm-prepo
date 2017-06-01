@@ -202,6 +202,11 @@ Pass *createReversePostOrderFunctionAttrsPass();
 ModulePass *createMergeFunctionsPass();
 
 //===----------------------------------------------------------------------===//
+/// createProgramRepositoryPass - This pass creates a program repository hash.
+///
+ModulePass *createProgramRepositoryPass();
+
+//===----------------------------------------------------------------------===//
 /// createPartialInliningPass - This pass inlines parts of functions.
 ///
 ModulePass *createPartialInliningPass();

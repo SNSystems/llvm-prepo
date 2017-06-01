@@ -166,6 +166,7 @@ PassManagerBuilder::PassManagerBuilder() {
     VerifyInput = false;
     VerifyOutput = false;
     MergeFunctions = false;
+	ProgramRepository = false;
     PrepareForLTO = false;
     EnablePGOInstrGen = RunPGOInstrGen;
     PGOInstrGen = PGOOutputFile;
@@ -442,6 +443,9 @@ void PassManagerBuilder::populateModulePassManager(
     else if (GlobalExtensionsNotEmpty() || !Extensions.empty())
       MPM.add(createBarrierNoopPass());
 
+    if (ProgramRepository)
+      MPM.add(createProgramRepositoryPass());
+
     if (PerformThinLTO) {
       // Drop available_externally and unreferenced globals. This is necessary
       // with ThinLTO in order to avoid leaving undefined references to dead
@@ -709,6 +713,9 @@ void PassManagerBuilder::populateModulePassManager(
   if (MergeFunctions)
     MPM.add(createMergeFunctionsPass());
 
+  if (ProgramRepository)
+    MPM.add(createProgramRepositoryPass());
+
   // LoopSink pass sinks instructions hoisted by LICM, which serves as a
   // canonicalization pass that enables other optimizations. As a result,
   // LoopSink pass needs to be a very late IR pass to avoid undoing LICM
@@ -898,6 +905,9 @@ void PassManagerBuilder::addLateLTOOptimizationPasses(
   // currently it damages debug info.
   if (MergeFunctions)
     PM.add(createMergeFunctionsPass());
+
+  if (ProgramRepository)
+    PM.add(createProgramRepositoryPass());
 }
 
 void PassManagerBuilder::populateThinLTOPassManager(

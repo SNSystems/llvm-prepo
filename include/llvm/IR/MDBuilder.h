@@ -95,6 +95,13 @@ public:
   MDNode *createCallees(ArrayRef<Function *> Callees);
 
   //===------------------------------------------------------------------===//
+  // Fragment metadata.
+  //===------------------------------------------------------------------===//
+
+  /// \brief Return metadata containing a numbe of hash bytes.
+  MDNode *createHashBytes(ArrayRef<uint8_t> Bytes);
+
+  //===------------------------------------------------------------------===//
   // AA metadata.
   //===------------------------------------------------------------------===//
 

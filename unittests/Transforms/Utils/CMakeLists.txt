@@ -12,6 +12,7 @@ add_llvm_unittest(UtilsTests
   Cloning.cpp
   CodeExtractor.cpp
   FunctionComparator.cpp
+  HashCalculator.cpp
   IntegerDivision.cpp
   Local.cpp
   OrderedInstructions.cpp

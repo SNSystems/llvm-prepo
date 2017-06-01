@@ -191,6 +191,7 @@ namespace {
       (void) llvm::createMergeFunctionsPass();
       (void) llvm::createMergeICmpsPass();
       (void) llvm::createExpandMemCmpPass();
+      (void) llvm::createProgramRepositoryPass();
       std::string buf;
       llvm::raw_string_ostream os(buf);
       (void) llvm::createPrintModulePass(os);

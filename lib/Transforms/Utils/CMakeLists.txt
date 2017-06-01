@@ -18,6 +18,7 @@ add_llvm_library(LLVMTransformUtils
   FunctionComparator.cpp
   FunctionImportUtils.cpp
   GlobalStatus.cpp
+  HashCalculator.cpp
   InlineFunction.cpp
   ImportedFunctionsInliningStatistics.cpp
   InstructionNamer.cpp
