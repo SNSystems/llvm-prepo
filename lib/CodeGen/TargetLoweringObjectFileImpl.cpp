@@ -43,6 +43,7 @@
 #include "llvm/MC/MCSectionCOFF.h"
 #include "llvm/MC/MCSectionELF.h"
 #include "llvm/MC/MCSectionMachO.h"
+#include "llvm/MC/MCSectionRepo.h"
 #include "llvm/MC/MCSectionWasm.h"
 #include "llvm/MC/MCStreamer.h"
 #include "llvm/MC/MCSymbol.h"
@@ -657,6 +658,104 @@ TargetLoweringObjectFileELF::InitializeELF(bool UseInitArray_) {
                                         ELF::SHF_WRITE | ELF::SHF_ALLOC);
   StaticDtorSection = Ctx.getELFSection(".fini_array", ELF::SHT_FINI_ARRAY,
                                         ELF::SHF_WRITE | ELF::SHF_ALLOC);
+}
+
+//===----------------------------------------------------------------------===//
+//                                 Program Repository
+//===----------------------------------------------------------------------===//
+
+TargetLoweringObjectFileRepo::~TargetLoweringObjectFileRepo() {
+}
+TargetLoweringObjectFileRepo::TargetLoweringObjectFileRepo() {
+}
+
+MCSection *TargetLoweringObjectFileRepo::getExplicitSectionGlobal(
+    const GlobalObject *GO, SectionKind Kind, const TargetMachine &TM) const {
+  StringRef SectionName = GO->getSection();
+  // TODO: map this named section to a section ID? What happens if there's no
+  // match?
+  return nullptr;
+}
+
+static MCSectionRepo *
+selectRepoSectionForGlobal(MCContext &Ctx, const GlobalObject *GO,
+                          SectionKind Kind,
+                          const TargetMachine &TM) {
+    //enum class RepoSection { TextSection, BSSSection };
+    //MCSectionRepo *getRepoSection(RepoSection K);
+std::string id = GO->getGlobalIdentifier (); // TODO: use the digest, not the identifier.
+
+//Repo: the repo sections are keyed off the gloval value. This gets us the associated hash. 
+    MCContext::RepoSection K;
+    if (Kind.isText ()) {
+        K = MCContext::RepoSection::TextSection;
+    } else if (Kind.isBSS ()) {
+        K = MCContext::RepoSection::BSSSection;
+    } else if (Kind.isData ()) {
+        K = MCContext::RepoSection::DataSection;
+    } else {
+        assert (0);
+    }
+
+#if 0
+  StringRef Group = "";
+  if (const Comdat *C = getELFComdat(GV)) {
+    Flags |= ELF::SHF_GROUP;
+    Group = C->getName();
+  }
+#endif
+
+#if 0
+  //bool UniqueSectionNames = TM.getUniqueSectionNames();
+  bool UniqueSectionNames = true;
+  SmallString<128> Name;
+  if (Kind.isMergeableCString()) {
+    // We also need alignment here.
+    // FIXME: this is getting the alignment of the character, not the
+    // alignment of the global!
+    unsigned Align = GV->getParent()->getDataLayout().getPreferredAlignment(
+        cast<GlobalVariable>(GV));
+
+    std::string SizeSpec = ".rodata.str" + utostr(EntrySize) + ".";
+    Name = SizeSpec + utostr(Align);
+  } else if (Kind.isMergeableConst()) {
+    Name = ".rodata.cst";
+    Name += utostr(EntrySize);
+  } else {
+    Name = getSectionPrefixForGlobal(Kind);
+  }
+  // FIXME: Extend the section prefix to include hotness catagories such as .hot
+  //  or .unlikely for functions.
+  if (EmitUniqueSection && UniqueSectionNames) {
+    Name.push_back('.');
+    TM.getNameWithPrefix(Name, GV, Mang, true);
+  }
+#endif
+
+#if 0
+  unsigned UniqueID = MCContext::GenericSectionID;
+  if (EmitUniqueSection && !UniqueSectionNames) {
+    UniqueID = *NextUniqueID;
+    (*NextUniqueID)++;
+  }
+#endif
+
+  return Ctx.getRepoSection(id, K);
+}
+
+MCSection *TargetLoweringObjectFileRepo::SelectSectionForGlobal(
+    const GlobalObject *GO, SectionKind Kind, const TargetMachine &TM) const {
+  // unsigned Flags = getELFSectionFlags(Kind);
+
+  // If we have -ffunction-section or -fdata-section then we should emit the
+  // global value to a uniqued section specifically for it.
+  bool EmitUniqueSection = true;
+  //        if (!Kind.isCommon()) {
+  //            EmitUniqueSection = true;
+  //        }
+  //        EmitUniqueSection |= GV->hasComdat();
+
+  return selectRepoSectionForGlobal(getContext(), GO, Kind, TM);
 }
 
 //===----------------------------------------------------------------------===//

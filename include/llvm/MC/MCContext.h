@@ -49,6 +49,7 @@ namespace llvm {
   class MCSectionCOFF;
   class MCSectionELF;
   class MCSectionMachO;
+  class MCSectionRepo;
   class MCSectionWasm;
   class MCStreamer;
   class MCSymbol;
@@ -250,6 +251,14 @@ namespace llvm {
     StringMap<MCSectionMachO *> MachOUniquingMap;
     std::map<ELFSectionKey, MCSectionELF *> ELFUniquingMap;
     std::map<COFFSectionKey, MCSectionCOFF *> COFFUniquingMap;
+
+  public:
+    enum class RepoSection { TextSection, BSSSection, DataSection };
+
+  private:
+    using RepoSectionKey = std::pair<std::string, RepoSection>;
+    // Repo: "RepoSectionKey" (a pair of digest/section ID?)
+    std::map<RepoSectionKey, MCSectionRepo *> RepoUniquingMap;
     std::map<WasmSectionKey, MCSectionWasm *> WasmUniquingMap;
     StringMap<bool> RelSecNames;
 
@@ -389,6 +398,9 @@ namespace llvm {
       return getMachOSection(Segment, Section, TypeAndAttributes, 0, K,
                              BeginSymName);
     }
+
+    MCSectionRepo *getRepoSection(std::string const & Id, RepoSection K);
+
 
     MCSectionELF *getELFSection(const Twine &Section, unsigned Type,
                                 unsigned Flags) {

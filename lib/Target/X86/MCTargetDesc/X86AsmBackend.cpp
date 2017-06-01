@@ -437,6 +437,25 @@ public:
   }
 };
 
+
+class RepoX86AsmBackend : public X86AsmBackend {
+public:
+  //uint8_t OSABI;
+  RepoX86AsmBackend(const Target &T, StringRef CPU)
+      : X86AsmBackend(T, CPU) {}
+};
+
+class RepoX86_64AsmBackend : public RepoX86AsmBackend {
+public:
+  RepoX86_64AsmBackend(const Target &T, StringRef CPU)
+    : RepoX86AsmBackend(T, CPU) {}
+
+  MCObjectWriter *createObjectWriter(raw_pwrite_stream &OS) const override {
+    return createX86RepoObjectWriter(OS, ELF::EM_X86_64);
+  }
+};
+
+
 class WindowsX86AsmBackend : public X86AsmBackend {
   bool Is64Bit;
 
@@ -856,6 +875,7 @@ MCAsmBackend *llvm::createX86_32AsmBackend(const Target &T,
                                            const MCSubtargetInfo &STI,
                                            const MCRegisterInfo &MRI,
                                            const MCTargetOptions &Options) {
+//Repo: not repo support here!
   const Triple &TheTriple = STI.getTargetTriple();
   if (TheTriple.isOSBinFormatMachO())
     return new DarwinX86_32AsmBackend(T, MRI, STI);
@@ -876,6 +896,10 @@ MCAsmBackend *llvm::createX86_64AsmBackend(const Target &T,
                                            const MCRegisterInfo &MRI,
                                            const MCTargetOptions &Options) {
   const Triple &TheTriple = STI.getTargetTriple();
+  if (TheTriple.isOSBinFormatRepo()) {
+    return new RepoX86_64AsmBackend(T, CPU);
+  }
+
   if (TheTriple.isOSBinFormatMachO()) {
     MachO::CPUSubTypeX86 CS =
         StringSwitch<MachO::CPUSubTypeX86>(TheTriple.getArchName())

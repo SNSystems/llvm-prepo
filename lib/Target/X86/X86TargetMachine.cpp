@@ -99,6 +99,8 @@ static std::unique_ptr<TargetLoweringObjectFile> createTLOF(const Triple &TT) {
     return llvm::make_unique<TargetLoweringObjectFileMachO>();
   }
 
+  if (TT.isOSBinFormatRepo())
+	  return make_unique<TargetLoweringObjectFileRepo>();
   if (TT.isOSFreeBSD())
     return llvm::make_unique<X86FreeBSDTargetObjectFile>();
   if (TT.isOSLinux() || TT.isOSNaCl() || TT.isOSIAMCU())

@@ -80,6 +80,40 @@ X86_64MCAsmInfoDarwin::X86_64MCAsmInfoDarwin(const Triple &Triple)
   : X86MCAsmInfoDarwin(Triple) {
 }
 
+
+
+void X86RepoMCAsmInfo::anchor() { }
+
+X86RepoMCAsmInfo::X86RepoMCAsmInfo(const Triple &T) {
+  bool is64Bit = T.getArch() == Triple::x86_64;
+  bool isX32 = T.getEnvironment() == Triple::GNUX32;
+
+  // For ELF, x86-64 pointer size depends on the ABI.
+  // For x86-64 without the x32 ABI, pointer size is 8. For x86 and for x86-64
+  // with the x32 ABI, pointer size remains the default 4.
+  CodePointerSize = (is64Bit && !isX32) ? 8 : 4;
+
+  // OTOH, stack slot size is always 8 for x86-64, even with the x32 ABI.
+  CalleeSaveStackSlotSize = is64Bit ? 8 : 4;
+
+  AssemblerDialect = AsmWriterFlavor;
+
+  TextAlignFillValue = 0x90;
+
+  // Debug Information
+  SupportsDebugInformation = false; // Just for the time being.
+
+  // Exceptions handling
+  ExceptionsType = ExceptionHandling::DwarfCFI;
+
+  // Always enable the integrated assembler by default.
+  // Clang also enabled it when the OS is Solaris but that is redundant here.
+  UseIntegratedAssembler = true;
+}
+
+
+
+
 void X86ELFMCAsmInfo::anchor() { }
 
 X86ELFMCAsmInfo::X86ELFMCAsmInfo(const Triple &T) {

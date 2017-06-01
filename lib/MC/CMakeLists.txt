@@ -1,3 +1,4 @@
+
 add_llvm_library(LLVMMC
   ConstantPools.cpp
   ELFObjectWriter.cpp
@@ -6,6 +7,7 @@ add_llvm_library(LLVMMC
   MCAsmInfoCOFF.cpp
   MCAsmInfoDarwin.cpp
   MCAsmInfoELF.cpp
+  MCAsmInfoRepo.cpp
   MCAsmInfoWasm.cpp
   MCAsmMacro.cpp
   MCAsmStreamer.cpp
@@ -32,11 +34,14 @@ add_llvm_library(LLVMMC
   MCObjectStreamer.cpp
   MCObjectWriter.cpp
   MCRegisterInfo.cpp
+  MCRepoStreamer.cpp
+  MCRepoObjectTargetWriter.cpp
   MCSchedule.cpp
   MCSection.cpp
   MCSectionCOFF.cpp
   MCSectionELF.cpp
   MCSectionMachO.cpp
+  MCSectionRepo.cpp
   MCSectionWasm.cpp
   MCStreamer.cpp
   MCSubtargetInfo.cpp
@@ -50,6 +55,7 @@ add_llvm_library(LLVMMC
   MCWinCOFFStreamer.cpp
   MCWinEH.cpp
   MachObjectWriter.cpp
+  RepoObjectWriter.cpp
   StringTableBuilder.cpp
   SubtargetFeature.cpp
   WasmObjectWriter.cpp

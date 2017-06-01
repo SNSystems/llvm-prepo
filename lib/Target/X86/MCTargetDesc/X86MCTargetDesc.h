@@ -105,6 +105,9 @@ MCStreamer *createX86WinCOFFStreamer(MCContext &C,
 std::unique_ptr<MCObjectTargetWriter>
 createX86MachObjectWriter(bool Is64Bit, uint32_t CPUType, uint32_t CPUSubtype);
 
+/// Construct an X86 Repository writer.
+MCObjectWriter *createX86RepoObjectWriter(raw_pwrite_stream &OS, uint16_t EMachine);
+
 /// Construct an X86 ELF object writer.
 std::unique_ptr<MCObjectTargetWriter>
 createX86ELFObjectWriter(bool IsELF64, uint8_t OSABI, uint16_t EMachine);

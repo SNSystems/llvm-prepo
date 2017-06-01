@@ -26,12 +26,14 @@
 #include "llvm/MC/MCSectionCOFF.h"
 #include "llvm/MC/MCSectionELF.h"
 #include "llvm/MC/MCSectionMachO.h"
+#include "llvm/MC/MCSectionRepo.h"
 #include "llvm/MC/MCSectionWasm.h"
 #include "llvm/MC/MCStreamer.h"
 #include "llvm/MC/MCSymbol.h"
 #include "llvm/MC/MCSymbolCOFF.h"
 #include "llvm/MC/MCSymbolELF.h"
 #include "llvm/MC/MCSymbolMachO.h"
+#include "llvm/MC/MCSymbolRepo.h"
 #include "llvm/MC/MCSymbolWasm.h"
 #include "llvm/MC/SectionKind.h"
 #include "llvm/Support/Casting.h"
@@ -159,6 +161,8 @@ MCSymbol *MCContext::createSymbolImpl(const StringMapEntry<bool> *Name,
       return new (Name, *this) MCSymbolELF(Name, IsTemporary);
     case MCObjectFileInfo::IsMachO:
       return new (Name, *this) MCSymbolMachO(Name, IsTemporary);
+    case MCObjectFileInfo::IsRepo:
+      return new (Name, *this) MCSymbolRepo(Name, IsTemporary);
     case MCObjectFileInfo::IsWasm:
       return new (Name, *this) MCSymbolWasm(Name, IsTemporary);
     }
@@ -449,6 +453,34 @@ MCSectionCOFF *MCContext::getCOFFSection(StringRef Section,
 
   Iter->second = Result;
   return Result;
+}
+
+
+
+
+
+MCSectionRepo *MCContext::getRepoSection (std::string const & Id, RepoSection K) {
+
+    // Do the lookup, if we have a hit, return it.
+    RepoSectionKey key = std::make_pair (Id, K);
+    auto IterBool = RepoUniquingMap.insert(std::make_pair (key, nullptr));
+    auto Iter = IterBool.first;
+    if (!IterBool.second) {
+        return Iter->second;
+    }
+
+
+    SectionKind Kind;
+    switch (K) {
+    case RepoSection::TextSection: Kind = SectionKind::getText (); break;
+    case RepoSection::BSSSection: Kind = SectionKind::getBSS (); break;
+    case RepoSection::DataSection: Kind = SectionKind::getData (); break;
+    default: assert (0); break;
+    }
+
+    auto Result = new MCSectionRepo (Kind, nullptr/*symbol*/, Id);
+    Iter->second = Result;
+    return Result;
 }
 
 MCSectionCOFF *MCContext::getCOFFSection(StringRef Section,

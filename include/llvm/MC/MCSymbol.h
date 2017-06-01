@@ -1,3 +1,4 @@
+#include <iostream>
 //===- MCSymbol.h - Machine Code Symbols ------------------------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
@@ -48,6 +49,7 @@ protected:
     SymbolKindCOFF,
     SymbolKindELF,
     SymbolKindMachO,
+    SymbolKindRepo,
     SymbolKindWasm,
   };
 
@@ -101,6 +103,7 @@ protected:
 
   /// LLVM RTTI discriminator. This is actually a SymbolKind enumerator, but is
   /// unsigned to avoid sign extension and achieve better bitpacking with MSVC.
+  // FIXME: really, a bitfield?
   unsigned Kind : 3;
 
   /// True if we have created a relocation that uses this symbol.
@@ -155,6 +158,7 @@ protected:
         IsRegistered(false), IsExternal(false), IsPrivateExtern(false),
         Kind(Kind), IsUsedInReloc(false), SymbolContents(SymContentsUnset),
         CommonAlignLog2(0), Flags(0) {
+
     Offset = 0;
     FragmentAndHasName.setInt(!!Name);
     if (Name)
@@ -283,6 +287,8 @@ public:
   bool isCOFF() const { return Kind == SymbolKindCOFF; }
 
   bool isMachO() const { return Kind == SymbolKindMachO; }
+
+  bool isRepo() const { return Kind == SymbolKindRepo; }
 
   bool isWasm() const { return Kind == SymbolKindWasm; }
 
