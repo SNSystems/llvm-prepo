@@ -26,16 +26,6 @@ using namespace llvm;
 
 /// \brief Adds \param V to the hash.
 
-void HashCalculator::numberHash(uint32_t V) {
-  Hash.update(HashKind::TAG_Uint32);
-  Hash.update(ArrayRef<uint8_t>((uint8_t *)&V, sizeof(uint32_t)));
-}
-
-void HashCalculator::numberHash(uint64_t V) {
-  Hash.update(HashKind::TAG_Uint64);
-  Hash.update(ArrayRef<uint8_t>((uint8_t *)&V, sizeof(uint64_t)));
-}
-
 void HashCalculator::memHash(StringRef V) {
   Hash.update(ArrayRef<uint8_t>(HashKind::TAG_StringRef));
   numberHash(V.size());
@@ -627,18 +617,7 @@ void VaribleHashCalculator::calculateVaribleHash(Module &M) {
   GvHash.numberHash(Gv->getAlignment());
   // Accumulate an optional unnamed_addr or local_unnamed_addr attribute.
   GvHash.Hash.update(HashKind::TAG_GVUnnamedAddr);
-  switch (Gv->getUnnamedAddr()) {
-  // FIXME! Call function once!!
-  case GlobalValue::UnnamedAddr::None:
-    GvHash.Hash.update(0);
-    break;
-  case GlobalValue::UnnamedAddr::Local:
-    GvHash.Hash.update(1);
-    break;
-  case GlobalValue::UnnamedAddr::Global:
-    GvHash.Hash.update(2);
-    break;
-  }
+  GvHash.Hash.update (static_cast <uint8_t> (Gv->getUnnamedAddr()));
   //// Accumulate the DLL storage class type.
   // GvHash.Hash.update(HashKind::TAG_GVDLLStorageClassType);
   // GvHash.Hash.update(Gv->getDLLStorageClass());
@@ -683,14 +662,7 @@ HashType AliasHashCalculator::calculate() {
   GaHash.numberHash(Ga->getAlignment());
   // Accumulate an optional unnamed_addr or local_unnamed_addr attribute.
   GaHash.Hash.update(HashKind::TAG_GVUnnamedAddr);
-  switch (Ga->getUnnamedAddr()) {
-  case GlobalValue::UnnamedAddr::None:
-    GaHash.Hash.update(0);
-  case GlobalValue::UnnamedAddr::Local:
-    GaHash.Hash.update(1);
-  case GlobalValue::UnnamedAddr::Global:
-    GaHash.Hash.update(2);
-  }
+  GaHash.Hash.update (static_cast <uint8_t> (Ga->getUnnamedAddr()));
   // Accumulate the DLL storage class type.
   GaHash.Hash.update(HashKind::TAG_GVDLLStorageClassType);
   GaHash.Hash.update(Ga->getDLLStorageClass());

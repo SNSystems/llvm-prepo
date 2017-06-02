@@ -107,8 +107,11 @@ public:
 
   void reset() { Hash = MD5(); }
 
-  void numberHash(uint32_t V);
-  void numberHash(uint64_t V);
+  template <typename Ty>
+  void numberHash (Ty V) {
+    Hash.update(ArrayRef<uint8_t>((uint8_t *)&V, sizeof(V)));
+  }
+
   void memHash(StringRef V);
   void APIntHash(const APInt &V);
   void APFloatHash(const APFloat &V);
