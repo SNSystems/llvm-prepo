@@ -714,24 +714,24 @@ void MCELFStreamer::BeginCOFFSymbolDef(const MCSymbol *Symbol) {
 }
 
 void MCELFStreamer::EmitCOFFSymbolStorageClass(int StorageClass) {
-  llvm_unreachable("ELF doesn't support this directive");
+  llvm_unreachable("Program Repository doesn't support this directive");
 }
 
 void MCELFStreamer::EmitCOFFSymbolType(int Type) {
-  llvm_unreachable("ELF doesn't support this directive");
+  llvm_unreachable("Program Repository doesn't support this directive");
 }
 
 void MCELFStreamer::EndCOFFSymbolDef() {
-  llvm_unreachable("ELF doesn't support this directive");
+  llvm_unreachable("Program Repository doesn't support this directive");
 }
 
 void MCELFStreamer::EmitZerofill(MCSection *Section, MCSymbol *Symbol,
                                  uint64_t Size, unsigned ByteAlignment) {
-  llvm_unreachable("ELF doesn't support this directive");
+  llvm_unreachable("Program Repository doesn't support this directive");
 }
 
 void MCELFStreamer::EmitTBSSSymbol(MCSection *Section, MCSymbol *Symbol,
                                    uint64_t Size, unsigned ByteAlignment) {
-  llvm_unreachable("ELF doesn't support this directive");
+  llvm_unreachable("Program Repository doesn't support this directive");
 }
 #endif

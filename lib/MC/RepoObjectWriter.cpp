@@ -1,63 +1,3 @@
-#include <iostream>
-#include <iomanip>
-
-/// \brief A class used to save an iostream's formatting flags on construction
-/// and restore them on destruction.
-/// Normally used to manage the restoration of the flags on exit from a scope.
-class ios_flags_saver {
-public:
-    explicit ios_flags_saver (std::ios_base & stream)
-        : ios_flags_saver (stream, stream.flags ()) {
-    }
-    ios_flags_saver (std::ios_base & stream,
-                     std::ios_base::fmtflags const & flags)
-        : stream_ (stream)
-        , flags_ (flags) {
-    }
-
-    // No copying or assignment.
-    ios_flags_saver (ios_flags_saver const &) = delete;
-    ios_flags_saver & operator= (ios_flags_saver const &) = delete;
-
-    ~ios_flags_saver () {
-        stream_.flags (flags_);
-    }
-
-private:
-    std::ios_base & stream_;
-    std::ios_base::fmtflags const flags_;
-};
-
-
-template <typename T>
-struct hex_proxy {
-    static_assert (std::is_unsigned<T>::value, "hex_proxy type must be unsigned");
-    hex_proxy (T const & v, unsigned d)
-            : value (v)
-            , digits (d) {}
-    T const value;
-    unsigned const digits;
-};
-
-template <typename T>
-std::ostream & operator<< (std::ostream & os, hex_proxy<T> const & h) {
-    ios_flags_saver ifs (os);
-    return os << std::setw (h.digits) << std::setfill ('0') << std::right << std::hex << h.value;
-}
-
-template <typename T>
-inline hex_proxy<T> as_hex (T const & t) {
-    return hex_proxy<T> (t, sizeof (T) * 2);
-}
-
-inline hex_proxy<unsigned> as_hex (std::uint8_t t) {
-    return {t, 2U};
-}
-
-
-
-
-#include <iomanip>
 //===- lib/MC/RepoObjectWriter.cpp - Program Repository Writer-------------===//
 //
 //                     The LLVM Compiler Infrastructure
@@ -72,6 +12,7 @@ inline hex_proxy<unsigned> as_hex (std::uint8_t t) {
 //===----------------------------------------------------------------------===//
 
 #include "llvm/MC/MCRepoObjectWriter.h"
+
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallString.h"
@@ -84,6 +25,7 @@ inline hex_proxy<unsigned> as_hex (std::uint8_t t) {
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCFixupKindInfo.h"
 #include "llvm/MC/MCObjectWriter.h"
+#include "llvm/MC/MCRepoFragment/MCRepoFragment.h"
 #include "llvm/MC/MCSectionRepo.h"
 #include "llvm/MC/MCSymbolRepo.h"
 #include "llvm/MC/MCValue.h"
@@ -94,28 +36,35 @@ inline hex_proxy<unsigned> as_hex (std::uint8_t t) {
 #include "llvm/Support/Endian.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/StringSaver.h"
+#include <set>
+#include <string>
 #include <vector>
 
 using namespace llvm;
 
-#undef  DEBUG_TYPE
+#undef DEBUG_TYPE
 #define DEBUG_TYPE "reloc-info"
 
 namespace {
 typedef DenseMap<const MCSectionRepo *, uint32_t> SectionIndexMapTy;
 
-
 class RepoObjectWriter : public MCObjectWriter {
-//  static uint64_t SymbolValue(const MCSymbol &Sym, const MCAsmLayout &Layout);
-//  static bool isInSymtab(const MCAsmLayout &Layout, const MCSymbolELF &Symbol,
-//                         bool Used, bool Renamed);
+  //  static uint64_t SymbolValue(const MCSymbol &Sym, const MCAsmLayout
+  //  &Layout);
+  //  static bool isInSymtab(const MCAsmLayout &Layout, const MCSymbolELF
+  //  &Symbol,
+  //                         bool Used, bool Renamed);
+
+  // TODO: will be a set of strings in the repository.
+  std::set<std::string> Names;
 
   /// The target specific repository writer instance.
   std::unique_ptr<MCRepoObjectTargetWriter> TargetObjectWriter;
 
   DenseMap<const MCSymbolRepo *, const MCSymbolRepo *> Renames;
 
-  llvm::DenseMap<const MCSectionRepo *, std::vector<RepoRelocationEntry>> Relocations;
+  llvm::DenseMap<const MCSectionRepo *, std::vector<RepoRelocationEntry>>
+      Relocations;
 
   /// @}
   /// @name Symbol Table Data
@@ -123,26 +72,24 @@ class RepoObjectWriter : public MCObjectWriter {
 
   BumpPtrAllocator Alloc;
   StringSaver VersionSymSaver{Alloc};
-  //StringTableBuilder StrTabBuilder{StringTableBuilder::ELF};
+  // StringTableBuilder StrTabBuilder{StringTableBuilder::ELF};
 
   /// @}
 
   // This holds the symbol table index of the last local symbol.
   unsigned LastLocalSymbolIndex;
   // This holds the .strtab section index.
-  //unsigned StringTableIndex;
+  // unsigned StringTableIndex;
   // This holds the .symtab section index.
-  //unsigned SymbolTableIndex;
+  // unsigned SymbolTableIndex;
 
   // Sections in the order they are to be output in the section table.
   std::vector<const MCSectionRepo *> SectionTable;
   unsigned addToSectionTable(const MCSectionRepo *Sec);
 
   // TargetObjectWriter wrappers.
-//  bool is64Bit() const { return TargetObjectWriter->is64Bit(); }
-  bool hasRelocationAddend() const {
-    return true;
-  }
+  //  bool is64Bit() const { return TargetObjectWriter->is64Bit(); }
+  bool hasRelocationAddend() const { return true; }
   unsigned getRelocType(MCContext &Ctx, const MCValue &Target,
                         const MCFixup &Fixup, bool IsPCRel) const {
     return TargetObjectWriter->getRelocType(Ctx, Target, Fixup, IsPCRel);
@@ -150,33 +97,31 @@ class RepoObjectWriter : public MCObjectWriter {
 
   void align(unsigned Alignment);
 
-    void writeRepoSectionData(const MCAssembler &Asm, MCSectionRepo &Sec, const MCAsmLayout &Layout);
+  void writeRepoSectionData(const MCAssembler &Asm, MCSectionRepo &Sec,
+                            const MCAsmLayout &Layout);
 
-    bool shouldRelocateWithSymbol (const MCAssembler &Asm,
-                                   const MCSymbolRefExpr *RefA,
-                                   const MCSymbol *S, uint64_t C,
-                                   unsigned Type) const {
-        return true;
-    }
+  bool shouldRelocateWithSymbol(const MCAssembler &Asm,
+                                const MCSymbolRefExpr *RefA, const MCSymbol *S,
+                                uint64_t C, unsigned Type) const {
+    return true;
+  }
 
 public:
-  RepoObjectWriter(MCRepoObjectTargetWriter *MOTW, raw_pwrite_stream &OS, bool IsLittleEndian)
-      : MCObjectWriter(OS, IsLittleEndian)
-      , TargetObjectWriter(MOTW) {}
+  RepoObjectWriter(MCRepoObjectTargetWriter *MOTW, raw_pwrite_stream &OS,
+                   bool IsLittleEndian)
+      : MCObjectWriter(OS, IsLittleEndian), TargetObjectWriter(MOTW) {}
 
   void reset() override {
     Renames.clear();
     Relocations.clear();
-    //StrTabBuilder.clear();
+    // StrTabBuilder.clear();
     SectionTable.clear();
     MCObjectWriter::reset();
   }
 
   ~RepoObjectWriter() override;
 
-  void WriteWord(uint64_t W) {
-      write64(W);
-  }
+  void WriteWord(uint64_t W) { write64(W); }
 
   template <typename T> void write(T Val) {
     if (IsLittleEndian)
@@ -187,7 +132,8 @@ public:
 
   void writeHeader(const MCAssembler &Asm);
 
-  //void writeSymbol(SymbolTableWriter &Writer, uint32_t StringIndex, ELFSymbolData &MSD, const MCAsmLayout &Layout);
+  // void writeSymbol(SymbolTableWriter &Writer, uint32_t StringIndex,
+  // ELFSymbolData &MSD, const MCAsmLayout &Layout);
 
   // Start and end offset of each section
   typedef std::map<const MCSectionELF *, std::pair<uint64_t, uint64_t>>
@@ -202,9 +148,9 @@ public:
   typedef DenseMap<const MCSymbol *, unsigned> RevGroupMapTy;
 
   MCSectionRepo *createRelocationSection(MCContext &Ctx,
-                                        const MCSectionRepo &Sec);
+                                         const MCSectionRepo &Sec);
 
-  //const MCSectionELF *createStringTable(MCContext &Ctx);
+  // const MCSectionELF *createStringTable(MCContext &Ctx);
 
   void executePostLayoutBinding(MCAssembler &Asm,
                                 const MCAsmLayout &Layout) override;
@@ -212,7 +158,8 @@ public:
 #if 0
   void writeSectionHeader(const MCAsmLayout &Layout, const SectionIndexMapTy &SectionIndexMap, const SectionOffsetsTy &SectionOffsets);
 #endif
-  void writeSectionData(const MCAssembler &Asm, MCSection &Sec, const MCAsmLayout &Layout);
+  void writeSectionData(const MCAssembler &Asm, MCSection &Sec,
+                        const MCAsmLayout &Layout);
 
 #if 0
   void WriteSecHdrEntry(uint32_t Name, uint32_t Type, uint64_t Flags,
@@ -227,7 +174,7 @@ public:
                                               const MCFragment &FB, bool InSet,
                                               bool IsPCRel) const override;
 
-  //bool isWeak(const MCSymbol &Sym) const override;
+  // bool isWeak(const MCSymbol &Sym) const override;
 
   void writeObject(MCAssembler &Asm, const MCAsmLayout &Layout) override;
   void writeSection(const SectionIndexMapTy &SectionIndexMap,
@@ -243,12 +190,11 @@ void RepoObjectWriter::align(unsigned Alignment) {
 
 unsigned RepoObjectWriter::addToSectionTable(const MCSectionRepo *Sec) {
   SectionTable.push_back(Sec);
-  //StrTabBuilder.add(Sec->getSectionName());
+  // StrTabBuilder.add(Sec->getSectionName());
   return SectionTable.size();
 }
 
-RepoObjectWriter::~RepoObjectWriter()
-{}
+RepoObjectWriter::~RepoObjectWriter() {}
 
 // Emit the ELF header.
 void RepoObjectWriter::writeHeader(const MCAssembler &Asm) {
@@ -280,7 +226,7 @@ uint64_t RepoObjectWriter::SymbolValue(const MCSymbol &Sym, const MCAsmLayout &L
 #endif
 
 void RepoObjectWriter::executePostLayoutBinding(MCAssembler &Asm,
-                                               const MCAsmLayout &Layout) {
+                                                const MCAsmLayout &Layout) {
   // Section symbols are used as definitions for undefined symbols with matching
   // names. If there are multiple sections with the same name, the first one is
   // used.
@@ -293,7 +239,8 @@ void RepoObjectWriter::executePostLayoutBinding(MCAssembler &Asm,
     if (!Alias || !Alias->isUndefined())
       continue;
 
-    Renames.insert(std::make_pair(cast<MCSymbolRepo>(Alias), cast<MCSymbolRepo>(Begin)));
+    Renames.insert(
+        std::make_pair(cast<MCSymbolRepo>(Alias), cast<MCSymbolRepo>(Begin)));
   }
 }
 
@@ -357,107 +304,116 @@ static bool isWeak(const MCSymbolELF &Sym) {
 #endif
 
 void RepoObjectWriter::recordRelocation(MCAssembler &Asm,
-                                       const MCAsmLayout &Layout,
-                                       const MCFragment *Fragment,
-                                       const MCFixup &Fixup, MCValue Target,
-                                       bool &IsPCRel, uint64_t &FixedValue) {
-    auto const & FixupSection = cast<MCSectionRepo>(*Fragment->getParent());
-    uint64_t C = Target.getConstant();
-    uint64_t FixupOffset = Layout.getFragmentOffset(Fragment) + Fixup.getOffset();
-    MCContext &Ctx = Asm.getContext();
+                                        const MCAsmLayout &Layout,
+                                        const MCFragment *Fragment,
+                                        const MCFixup &Fixup, MCValue Target,
+                                        bool &IsPCRel, uint64_t &FixedValue) {
+  auto const &FixupSection = cast<MCSectionRepo>(*Fragment->getParent());
+  uint64_t C = Target.getConstant();
+  uint64_t FixupOffset = Layout.getFragmentOffset(Fragment) + Fixup.getOffset();
+  MCContext &Ctx = Asm.getContext();
 
-    if (const MCSymbolRefExpr *RefB = Target.getSymB()) {
-        assert(RefB->getKind() == MCSymbolRefExpr::VK_None && "Should not have constructed this");
+  if (const MCSymbolRefExpr *RefB = Target.getSymB()) {
+    assert(RefB->getKind() == MCSymbolRefExpr::VK_None &&
+           "Should not have constructed this");
 
-        // Let A, B and C being the components of Target and R be the location of
-        // the fixup. If the fixup is not pcrel, we want to compute (A - B + C).
-        // If it is pcrel, we want to compute (A - B + C - R).
+    // Let A, B and C being the components of Target and R be the location of
+    // the fixup. If the fixup is not pcrel, we want to compute (A - B + C).
+    // If it is pcrel, we want to compute (A - B + C - R).
 
-        // In general, ELF has no relocations for -B. It can only represent (A + C)
-        // or (A + C - R). If B = R + K and the relocation is not pcrel, we can
-        // replace B to implement it: (A - R - K + C)
-        if (IsPCRel) {
-            Ctx.reportError (Fixup.getLoc(), "No fixup available to represent this relative expression");
-            return;
-        }
-
-        const auto & SymB = cast<MCSymbolRepo>(RefB->getSymbol());
-
-        if (SymB.isUndefined()) {
-            Ctx.reportError(Fixup.getLoc(), Twine("symbol '") + SymB.getName() + "' can not be undefined in a subtraction expression");
-            return;
-        }
-
-        assert(!SymB.isAbsolute() && "Should have been folded");
-        const MCSection &SecB = SymB.getSection();
-        if (&SecB != &FixupSection) {
-            Ctx.reportError(Fixup.getLoc(), "Cannot represent a difference across sections");
-            return;
-        }
-
-        uint64_t SymBOffset = Layout.getSymbolOffset(SymB);
-        uint64_t K = SymBOffset - FixupOffset;
-        IsPCRel = true;
-        C -= K;
+    // In general, ELF has no relocations for -B. It can only represent (A + C)
+    // or (A + C - R). If B = R + K and the relocation is not pcrel, we can
+    // replace B to implement it: (A - R - K + C)
+    if (IsPCRel) {
+      Ctx.reportError(
+          Fixup.getLoc(),
+          "No fixup available to represent this relative expression");
+      return;
     }
 
-    // We either rejected the fixup or folded B into C at this point.
-    const MCSymbolRefExpr *RefA = Target.getSymA();
-    const auto *SymA = RefA ? cast<MCSymbolRepo>(&RefA->getSymbol()) : nullptr;
+    const auto &SymB = cast<MCSymbolRepo>(RefB->getSymbol());
 
-    bool ViaWeakRef = false;
-    if (SymA && SymA->isVariable()) {
-        const MCExpr *Expr = SymA->getVariableValue();
-        if (const auto *Inner = dyn_cast<MCSymbolRefExpr>(Expr)) {
-            if (Inner->getKind() == MCSymbolRefExpr::VK_WEAKREF) {
-                SymA = cast<MCSymbolRepo>(&Inner->getSymbol());
-                ViaWeakRef = true;
-            }
-        }
+    if (SymB.isUndefined()) {
+      Ctx.reportError(Fixup.getLoc(),
+                      Twine("symbol '") + SymB.getName() +
+                          "' can not be undefined in a subtraction expression");
+      return;
     }
 
-    unsigned Type = getRelocType(Ctx, Target, Fixup, IsPCRel);
-    uint64_t OriginalC = C;
-    bool RelocateWithSymbol = shouldRelocateWithSymbol(Asm, RefA, SymA, C, Type);
-    if (!RelocateWithSymbol && SymA && !SymA->isUndefined()) {
-        C += Layout.getSymbolOffset(*SymA);
+    assert(!SymB.isAbsolute() && "Should have been folded");
+    const MCSection &SecB = SymB.getSection();
+    if (&SecB != &FixupSection) {
+      Ctx.reportError(Fixup.getLoc(),
+                      "Cannot represent a difference across sections");
+      return;
     }
 
-    uint64_t Addend = 0;
-    if (hasRelocationAddend()) {
-        Addend = C;
-        C = 0;
+    uint64_t SymBOffset = Layout.getSymbolOffset(SymB);
+    uint64_t K = SymBOffset - FixupOffset;
+    IsPCRel = true;
+    C -= K;
+  }
+
+  // We either rejected the fixup or folded B into C at this point.
+  const MCSymbolRefExpr *RefA = Target.getSymA();
+  const auto *SymA = RefA ? cast<MCSymbolRepo>(&RefA->getSymbol()) : nullptr;
+
+  bool ViaWeakRef = false;
+  if (SymA && SymA->isVariable()) {
+    const MCExpr *Expr = SymA->getVariableValue();
+    if (const auto *Inner = dyn_cast<MCSymbolRefExpr>(Expr)) {
+      if (Inner->getKind() == MCSymbolRefExpr::VK_WEAKREF) {
+        SymA = cast<MCSymbolRepo>(&Inner->getSymbol());
+        ViaWeakRef = true;
+      }
+    }
+  }
+
+  unsigned Type = getRelocType(Ctx, Target, Fixup, IsPCRel);
+  uint64_t OriginalC = C;
+  bool RelocateWithSymbol = shouldRelocateWithSymbol(Asm, RefA, SymA, C, Type);
+  if (!RelocateWithSymbol && SymA && !SymA->isUndefined()) {
+    C += Layout.getSymbolOffset(*SymA);
+  }
+
+  uint64_t Addend = 0;
+  if (hasRelocationAddend()) {
+    Addend = C;
+    C = 0;
+  }
+
+  FixedValue = C;
+
+  if (!RelocateWithSymbol) {
+    const MCSection *SecA =
+        (SymA && !SymA->isUndefined()) ? &SymA->getSection() : nullptr;
+    auto *ELFSec = cast_or_null<MCSectionRepo>(SecA);
+    const MCSymbolRepo *SectionSymbol =
+        nullptr; // ELFSec ? cast<MCSymbolRepo>(ELFSec->getBeginSymbol()) :
+                 // nullptr;
+    if (SectionSymbol) {
+      SectionSymbol->setUsedInReloc();
+    }
+    Relocations[&FixupSection].emplace_back(FixupOffset, SectionSymbol, Type,
+                                            Addend, SymA, OriginalC);
+    return;
+  }
+
+  const auto *RenamedSymA = SymA;
+  if (SymA) {
+    if (const MCSymbolRepo *R = Renames.lookup(SymA)) {
+      RenamedSymA = R;
     }
 
-    FixedValue = C;
-
-    if (!RelocateWithSymbol) {
-        const MCSection *SecA = (SymA && !SymA->isUndefined()) ? &SymA->getSection() : nullptr;
-        auto *ELFSec = cast_or_null<MCSectionRepo>(SecA);
-        const MCSymbolRepo *SectionSymbol = nullptr; //ELFSec ? cast<MCSymbolRepo>(ELFSec->getBeginSymbol()) : nullptr;
-        if (SectionSymbol) {
-            SectionSymbol->setUsedInReloc();
-        }
-        Relocations[&FixupSection].emplace_back (FixupOffset, SectionSymbol, Type, Addend, SymA, OriginalC);
-        return;
-    }
-
-    const auto *RenamedSymA = SymA;
-    if (SymA) {
-        if (const MCSymbolRepo *R = Renames.lookup(SymA)) {
-            RenamedSymA = R;
-        }
-
-        //if (ViaWeakRef) {
-        //    RenamedSymA->setIsWeakrefUsedInReloc();
-        //} else {
-            RenamedSymA->setUsedInReloc();
-        //}
-    }
-    Relocations [&FixupSection].emplace_back (FixupOffset, RenamedSymA, Type, Addend, SymA, OriginalC);
+    // if (ViaWeakRef) {
+    //    RenamedSymA->setIsWeakrefUsedInReloc();
+    //} else {
+    RenamedSymA->setUsedInReloc();
+    //}
+  }
+  Relocations[&FixupSection].emplace_back(FixupOffset, RenamedSymA, Type,
+                                          Addend, SymA, OriginalC);
 }
-
-
 
 #if 0
 bool RepoObjectWriter::isInSymtab(const MCAsmLayout &Layout,
@@ -501,7 +457,7 @@ bool RepoObjectWriter::isInSymtab(const MCAsmLayout &Layout,
 MCSectionRepo *
 RepoObjectWriter::createRelocationSection(MCContext &Ctx,
                                           const MCSectionRepo &Sec) {
-    return nullptr;
+  return nullptr;
 
 #if 0
   if (Relocations[&Sec].empty())
@@ -527,7 +483,8 @@ RepoObjectWriter::createRelocationSection(MCContext &Ctx,
 #endif
 }
 
-void RepoObjectWriter::writeRepoSectionData(const MCAssembler &Asm, MCSectionRepo &Section,
+void RepoObjectWriter::writeRepoSectionData(const MCAssembler &Asm,
+                                            MCSectionRepo &Section,
                                             const MCAsmLayout &Layout) {
 
 #if 0
@@ -546,82 +503,74 @@ void RepoObjectWriter::writeRepoSectionData(const MCAssembler &Asm, MCSectionRep
     }
 #endif
 
+  llvm::repo::SectionType St = llvm::repo::SectionType::Data;
 
-
-  std::cout << "ID: " << Section.id() << "\n    ";
+  std::cout << "ID: " << Section.id() << '\n';
   auto const kind = Section.getKind();
   if (kind.isBSS()) {
-    std::cout << "BSS";
+    St = llvm::repo::SectionType::BSS;
   } else if (kind.isCommon()) {
-    std::cout << "common";
-  } else if (kind.isData ()) {
-    std::cout << "data";
-  } else if (kind.isReadOnlyWithRel ()) {
-    std::cout << "relro";
-  } else if (kind.isText ()) {
-    std::cout << "text";
-  } else if (kind.isMergeable1ByteCString ()) {
-    std::cout << "Mergeable1ByteCString";
-  } else if (kind.isMergeable2ByteCString ()) {
-    std::cout << "Mergeable2ByteCString";
-  } else if (kind.isMergeable4ByteCString ()) {
-    std::cout << "Mergeable4ByteCString";
-  } else if (kind.isMergeableConst4 ()) {
-    std::cout << "MergeableConst4";
-  } else if (kind.isMergeableConst8 ()) {
-    std::cout << "MergeableConst8";
-  } else if (kind.isMergeableConst16 ()) {
-    std::cout << "MergeableConst16";
-  } else if (kind.isMergeableConst32 ()) {
-    std::cout << "MergeableConst32";
-  } else if (kind.isMergeableConst ()) {
-    std::cout << "MergeableConst";
-  } else if (kind.isReadOnly ()) {
-    std::cout << "ReadOnly";
+    St = llvm::repo::SectionType::Common;
+  } else if (kind.isData()) {
+    St = llvm::repo::SectionType::Data;
+  } else if (kind.isReadOnlyWithRel()) {
+    St = llvm::repo::SectionType::RelRo;
+  } else if (kind.isText()) {
+    St = llvm::repo::SectionType::Text;
+  } else if (kind.isMergeable1ByteCString()) {
+    St = llvm::repo::SectionType::Mergeable1ByteCString;
+  } else if (kind.isMergeable2ByteCString()) {
+    St = llvm::repo::SectionType::Mergeable2ByteCString;
+  } else if (kind.isMergeable4ByteCString()) {
+    St = llvm::repo::SectionType::Mergeable4ByteCString;
+  } else if (kind.isMergeableConst4()) {
+    St = llvm::repo::SectionType::MergeableConst4;
+  } else if (kind.isMergeableConst8()) {
+    St = llvm::repo::SectionType::MergeableConst8;
+  } else if (kind.isMergeableConst16()) {
+    St = llvm::repo::SectionType::MergeableConst16;
+  } else if (kind.isMergeableConst32()) {
+    St = llvm::repo::SectionType::MergeableConst32;
+  } else if (kind.isMergeableConst()) {
+    St = llvm::repo::SectionType::MergeableConst;
+  } else if (kind.isReadOnly()) {
+    St = llvm::repo::SectionType::ReadOnly;
   } else if (kind.isThreadBSS()) {
-    std::cout << "ThreadBSS";
-  } else if (kind.isThreadData ()) {
-    std::cout << "ThreadData";
-  } else if (kind.isThreadLocal ()) {
-    std::cout << "ThreadLocal";
-  } else if (kind.isMetadata ()) {
-    std::cout << "metadata";
+    St = llvm::repo::SectionType::ThreadBSS;
+  } else if (kind.isThreadData()) {
+    St = llvm::repo::SectionType::ThreadData;
+  } else if (kind.isThreadLocal()) {
+    St = llvm::repo::SectionType::ThreadLocal;
+  } else if (kind.isMetadata()) {
+    St = llvm::repo::SectionType::Metadata;
   } else {
-    assert (false);
+    llvm_unreachable("Unknown section type in writeRepoSectionData");
   }
-  std::cout << ": ";
 
-  SmallVector<char, 128> RawData;
-  raw_svector_ostream VecOS(RawData);
+  llvm::repo::SectionContent Content{St};
+
+  // Add the section content to the fragment.
+  raw_svector_ostream VecOS{Content.Data};
   raw_pwrite_stream &OldStream = getStream();
-  setStream(VecOS);
+  this->setStream(VecOS);
   Asm.writeSectionData(&Section, Layout);
-  setStream(OldStream);
+  this->setStream(OldStream);
 
-    char const * separator = "";
-    for (unsigned c : RawData) {
-        std::cout << separator << as_hex (static_cast <std::uint8_t> (c & 0xFF));
-        separator = " ";
-    }
-    std::cout << '\n';
+  auto const &Relocs = Relocations[&Section];
+  Content.Xfixups.reserve(Relocs.size());
+  for (auto const &Relocation : Relocations[&Section]) {
+    // Insert the target symbol name into the set of known names.
+    auto It = Names.emplace(Relocation.Symbol->getName()).first;
+    // Attach a suitable external fixup to this section.
+    Content.Xfixups.push_back(repo::ExternalFixup{
+        It->c_str(), static_cast<std::uint8_t>(Relocation.Type),
+        Relocation.Offset, Relocation.Addend});
+  }
 
-auto const & fixups = Relocations [&Section];
-char const * indent = "        ";
-std::cout << indent << "External fixups:\n";
-for (auto const & fixup: fixups) {
-    std::cout << indent
-              << "offset: 0x" << as_hex (fixup.Offset) // Where is the relocation.
-              << ", symbol: \"" << std::string {fixup.Symbol->getName ()} << '\"' // The symbol to relocate with.
-              << ", type: 0x" << as_hex (fixup.Type)
-              << ", addend: 0x" << as_hex (fixup.Addend)
-              << '\n';
-    //const MCSymbolRepo *OriginalSymbol; // The original value of Symbol if we changed it.
-    //uint64_t OriginalAddend; // The original value of addend.
-
-}
+  auto Fragment = llvm::repo::Fragment::make_unique(&Content, &Content + 1);
+  dbgs() << *Fragment;
 
 #if 0
-
   // Compressing debug_frame requires handling alignment fragments which is
   // more work (possibly generalizing MCAssembler.cpp:writeFragment to allow
   // for writing to arbitrary buffers) for little benefit.
@@ -669,11 +618,11 @@ for (auto const & fixup: fixups) {
 #endif
 }
 
+void RepoObjectWriter::writeSectionData(const MCAssembler &Asm, MCSection &Sec,
+                                        const MCAsmLayout &Layout) {
 
-void RepoObjectWriter::writeSectionData(const MCAssembler &Asm, MCSection &Sec, const MCAsmLayout &Layout) {
-
-    auto & Section = static_cast<MCSectionRepo &>(Sec);
-    this->writeRepoSectionData(Asm, Section, Layout);
+  auto &Section = static_cast<MCSectionRepo &>(Sec);
+  this->writeRepoSectionData(Asm, Section, Layout);
 }
 
 #if 0
@@ -696,7 +645,7 @@ void RepoObjectWriter::WriteSecHdrEntry(uint32_t Name, uint32_t Type,
 }
 #endif
 void RepoObjectWriter::writeRelocations(const MCAssembler &Asm,
-                                       const MCSectionRepo &Sec) {
+                                        const MCSectionRepo &Sec) {
   std::vector<RepoRelocationEntry> &Relocs = Relocations[&Sec];
 
 #if 0
@@ -752,8 +701,9 @@ const MCSectionELF *RepoObjectWriter::createStringTable(MCContext &Ctx) {
 #endif
 
 void RepoObjectWriter::writeSection(const SectionIndexMapTy &SectionIndexMap,
-                                   uint32_t GroupSymbolIndex, uint64_t Offset,
-                                   uint64_t Size, const MCSectionRepo &Section) {
+                                    uint32_t GroupSymbolIndex, uint64_t Offset,
+                                    uint64_t Size,
+                                    const MCSectionRepo &Section) {
 #if 0
   uint64_t sh_link = 0;
   uint64_t sh_info = 0;
@@ -836,24 +786,24 @@ void RepoObjectWriter::writeSectionHeader(
 #endif
 
 void RepoObjectWriter::writeObject(MCAssembler &Asm,
-                                  const MCAsmLayout &Layout) {
+                                   const MCAsmLayout &Layout) {
   MCContext &Ctx = Asm.getContext();
 
   writeHeader(Asm);
 
   // ... then the sections ...
   SectionOffsetsTy SectionOffsets;
-  //std::vector<MCSectionELF *> Groups;
+  // std::vector<MCSectionELF *> Groups;
   std::vector<MCSectionRepo *> Relocations;
-  for (MCSection & Sec : Asm) {
-    auto & Section = static_cast<MCSectionRepo &>(Sec);
+  for (MCSection &Sec : Asm) {
+    auto &Section = static_cast<MCSectionRepo &>(Sec);
 
-    //align(Section.getAlignment());
+    // align(Section.getAlignment());
 
     // Remember the offset into the file for this section.
     uint64_t SecStart = getStream().tell();
 
-    //const MCSymbolELF *SignatureSymbol = Section.getGroup();
+    // const MCSymbolELF *SignatureSymbol = Section.getGroup();
     writeSectionData(Asm, Section, Layout);
   }
 }
@@ -862,14 +812,15 @@ bool RepoObjectWriter::isSymbolRefDifferenceFullyResolvedImpl(
     const MCAssembler &Asm, const MCSymbol &SA, const MCFragment &FB,
     bool InSet, bool IsPCRel) const {
 
-    const auto &SymA = cast<MCSymbolRepo>(SA);
-    if (IsPCRel) {
-        assert(!InSet);
-        //if (::isWeak(SymA)) {
-        //    return false;
-        //}
-    }
-    return MCObjectWriter::isSymbolRefDifferenceFullyResolvedImpl(Asm, SymA, FB, InSet, IsPCRel);
+  const auto &SymA = cast<MCSymbolRepo>(SA);
+  if (IsPCRel) {
+    assert(!InSet);
+    // if (::isWeak(SymA)) {
+    //    return false;
+    //}
+  }
+  return MCObjectWriter::isSymbolRefDifferenceFullyResolvedImpl(Asm, SymA, FB,
+                                                                InSet, IsPCRel);
 }
 
 #if 0
@@ -896,7 +847,7 @@ bool RepoObjectWriter::isWeak(const MCSymbol &S) const {
 #endif
 
 MCObjectWriter *llvm::createRepoObjectWriter(MCRepoObjectTargetWriter *MOTW,
-                                            raw_pwrite_stream &OS,
-                                            bool IsLittleEndian) {
+                                             raw_pwrite_stream &OS,
+                                             bool IsLittleEndian) {
   return new RepoObjectWriter(MOTW, OS, IsLittleEndian);
 }

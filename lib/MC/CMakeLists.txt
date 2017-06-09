@@ -61,8 +61,11 @@ add_llvm_library(LLVMMC
   WasmObjectWriter.cpp
   WinCOFFObjectWriter.cpp
 
+  MCRepoFragment/MCRepoFragment.cpp
+
   ADDITIONAL_HEADER_DIRS
   ${LLVM_MAIN_INCLUDE_DIR}/llvm/MC
+  ${LLVM_MAIN_INCLUDE_DIR}/llvm/MC/MCRepoFragment
   )
 
 add_subdirectory(MCParser)
