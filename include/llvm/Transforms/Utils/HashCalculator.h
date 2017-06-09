@@ -54,6 +54,7 @@ enum HashKind {
   TAG_Signature_Sec,
   TAG_Signature_VarArg,
   TAG_Signature_CC,
+  TAG_Signature_Arg,
   TAG_OperandBundles,
   TAG_Instruction,
   TAG_GetElementPtrInst,

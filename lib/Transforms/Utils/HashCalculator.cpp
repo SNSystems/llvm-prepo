@@ -294,6 +294,17 @@ void HashCalculator::valueHash(const Value *V) {
     return;
   }
 
+  auto *GV = dyn_cast<GlobalVariable>(V);
+  if (!GV) {
+    auto GA = dyn_cast<GlobalAlias>(V);
+    if (GA)
+      GV = dyn_cast<GlobalVariable>(GA->getAliasee()->stripPointerCasts());
+  }
+  if (GV && !GV->getName().empty()) {
+    memHash(GV->getName());
+    return;
+  }
+
   auto SN = sn_map.insert(std::make_pair(V, sn_map.size()));
   numberHash(SN.first->second);
 }
@@ -354,6 +365,7 @@ void FunctionHashCalculator::signatureHash(const Function *F) {
   FnHash.typeHash(F->getFunctionType());
   // Visit the arguments so that they get enumerated in the order they're
   // passed in.
+  FnHash.Hash.update(HashKind::TAG_Signature_Arg);
   for (Function::const_arg_iterator ArgI = F->arg_begin(), ArgE = F->arg_end();
        ArgI != ArgE; ++ArgI) {
     FnHash.valueHash(&*ArgI);
@@ -396,19 +408,7 @@ void FunctionHashCalculator::instructionHash(const Instruction *V) {
   // Accumulate the instruction operands type and value.
   for (unsigned I = 0, E = V->getNumOperands(); I != E; ++I) {
     FnHash.typeHash(V->getOperand(I)->getType());
-    auto *GV = dyn_cast<GlobalVariable>(V->getOperand(I));
-    if (!GV) {
-      auto GA = dyn_cast<GlobalAlias>(V->getOperand(I));
-      if (GA)
-        GV = dyn_cast<GlobalVariable>(GA->getAliasee()->stripPointerCasts());
-    }
-    if (HashedGVs && GV && (HashedGVs->find(GV) != HashedGVs->end())) {
-      auto it = HashedGVs->find(GV);
-      FnHash.numberHash(it->second.first);
-      FnHash.numberHash(it->second.second);
-    } else {
-      FnHash.valueHash(V->getOperand(I));
-    }
+    FnHash.valueHash(V->getOperand(I));
   }
 
   // special GetElementPtrInst instruction.
@@ -456,7 +456,6 @@ void FunctionHashCalculator::instructionHash(const Instruction *V) {
     FnHash.rangeMetadataHash(CI->getMetadata(LLVMContext::MD_range));
     if (const Function *F = CI->getCalledFunction()) {
       FnHash.memHash(F->getName());
-      signatureHash(F);
     }
     return;
   }
@@ -468,7 +467,6 @@ void FunctionHashCalculator::instructionHash(const Instruction *V) {
     FnHash.rangeMetadataHash(II->getMetadata(LLVMContext::MD_range));
     if (const Function *F = II->getCalledFunction()) {
       FnHash.memHash(F->getName());
-      signatureHash(F);
     }
     return;
   }
@@ -536,8 +534,8 @@ void FunctionHashCalculator::basicBlockHash(const BasicBlock *BB) {
 }
 
 void FunctionHashCalculator::calculateFunctionHash(Module &M) {
-  FnHash.Hash.update(HashKind::TAG_GlobalFunction);
   FnHash.beginCalculate();
+  FnHash.Hash.update(HashKind::TAG_GlobalFunction);
   moduleHash(M);
   signatureHash(Fn);
 
