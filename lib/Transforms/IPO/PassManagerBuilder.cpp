@@ -906,8 +906,6 @@ void PassManagerBuilder::addLateLTOOptimizationPasses(
   if (MergeFunctions)
     PM.add(createMergeFunctionsPass());
 
-  if (ProgramRepository)
-    PM.add(createProgramRepositoryPass());
 }
 
 void PassManagerBuilder::populateThinLTOPassManager(
