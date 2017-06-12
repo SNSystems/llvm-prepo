@@ -1,4 +1,5 @@
 #include "llvm/MC/MCRepoFragment/MCRepoFragment.h"
+#include "llvm/Support/Format.h"
 
 using namespace llvm::repo;
 
@@ -74,8 +75,8 @@ raw_ostream &operator<<(raw_ostream &OS, ExternalFixup const &Xfx) {
 raw_ostream &operator<<(raw_ostream &OS, Section const &Scn) {
   char const *Indent = "\n  ";
   OS << '{' << Indent << "data: ";
-  for (auto V : Scn.data()) {
-    OS.write_hex(V);
+  for (uint8_t V : Scn.data()) {
+    OS << format_hex(V, 4U/*width*/) << ',';
   }
   OS << Indent << "ifixups: [ ";
   for (auto const &Ifixup : Scn.ifixups()) {
