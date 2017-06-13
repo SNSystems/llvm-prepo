@@ -35,6 +35,7 @@
 #include "llvm/Support/ELF.h"
 #include "llvm/Support/Endian.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/Format.h"
 #include "llvm/Support/StringSaver.h"
 #include <set>
 #include <string>
@@ -505,7 +506,7 @@ void RepoObjectWriter::writeRepoSectionData(const MCAssembler &Asm,
 
   llvm::repo::SectionType St = llvm::repo::SectionType::Data;
 
-  std::cout << "ID: " << Section.id() << '\n';
+  dbgs() << "Digest: " << Section.hash().digest() << '\n';
   auto const kind = Section.getKind();
   if (kind.isBSS()) {
     St = llvm::repo::SectionType::BSS;

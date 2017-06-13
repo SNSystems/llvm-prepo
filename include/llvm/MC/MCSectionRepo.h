@@ -19,6 +19,7 @@
 //#include "llvm/MC/MCSymbolELF.h"
 //#include "llvm/Support/Debug.h"
 //#include "llvm/Support/ELF.h"
+#include "llvm/Support/MD5.h"
 //#include "llvm/Support/raw_ostream.h"
 
 namespace llvm {
@@ -26,14 +27,20 @@ namespace llvm {
 //class MCSymbol;
 
 class MCSectionRepo : public MCSection {
+public:
+    using DigestType = MD5::MD5Result;
+    enum { MDDigest_name, MDDigest_value, LastMDD };
+
 private:
     std::string id_;
+    DigestType digest_;
     unsigned const index_;
 
 
     friend class MCContext;
     MCSectionRepo(SectionKind K, MCSymbol *Begin);
-    MCSectionRepo(SectionKind K, MCSymbol *Begin, std::string id);
+    MCSectionRepo(SectionKind K, MCSymbol *Begin, std::string id,
+                  DigestType digest);
 
     void PrintSwitchToSection(const MCAsmInfo &MAI, const Triple &T,
                               raw_ostream &OS,
@@ -47,6 +54,7 @@ private:
 
 public:
     std::string id() const { return id_; }
+    DigestType hash() const { return digest_; }
     virtual ~MCSectionRepo();
 
     static bool classof(const MCSection *S) {

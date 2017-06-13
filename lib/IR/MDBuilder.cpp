@@ -95,7 +95,7 @@ MDNode *MDBuilder::createHashBytes(ArrayRef<uint8_t> Bytes) {
   assert(Bytes.size() == 16 && "The hash of GlobalValue is 128-bits!");
 
   Metadata *Vals[2];
-  Vals[0] = createString("Global_Value_Hashes");
+  Vals[0] = createString("digest");
 
   llvm::Constant *Field[16];
   Type *Int8Ty = Type::getInt8Ty(Context);

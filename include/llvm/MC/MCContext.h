@@ -21,6 +21,7 @@
 #include "llvm/BinaryFormat/Dwarf.h"
 #include "llvm/MC/MCAsmMacro.h"
 #include "llvm/MC/MCDwarf.h"
+#include "llvm/MC/MCSectionRepo.h"
 #include "llvm/MC/MCSubtargetInfo.h"
 #include "llvm/MC/SectionKind.h"
 #include "llvm/Support/Allocator.h"
@@ -399,8 +400,8 @@ namespace llvm {
                              BeginSymName);
     }
 
-    MCSectionRepo *getRepoSection(std::string const & Id, RepoSection K);
-
+    MCSectionRepo *getRepoSection(std::string const &Id, RepoSection K,
+                                  MCSectionRepo::DigestType const &Digest);
 
     MCSectionELF *getELFSection(const Twine &Section, unsigned Type,
                                 unsigned Flags) {

@@ -677,6 +677,63 @@ MCSection *TargetLoweringObjectFileRepo::getExplicitSectionGlobal(
   return nullptr;
 }
 
+static MCSectionRepo::DigestType getDigest(const GlobalObject *GO) {
+  // Use the digest in the MCSectionRepo.
+  MDNode const *MD = GO->getMetadata(LLVMContext::MD_fragment);
+
+  if (!MD) {
+    // If invalid, report the error with report_fatal_error.
+    report_fatal_error("Failed to get digest metadata for global object '" +
+                       GO->getName() + "'.");
+  }
+
+  if (MD->getNumOperands() != MCSectionRepo::LastMDD) {
+    // If invalid, report the error with report_fatal_error.
+    report_fatal_error("Global object '" + GO->getName() +
+                       "' has invalid number of 'digest' metadata operands.");
+  }
+
+  MDString const *MDS =
+      dyn_cast<MDString>(MD->getOperand(MCSectionRepo::MDDigest_name));
+  if (!MDS || !MDS->getString().equals("digest")) {
+    // If invalid, report the error with report_fatal_error.
+    report_fatal_error("Global object '" + GO->getName() +
+                       "' has invalid 'digest' string metadata.");
+  }
+
+  Constant const *C = mdconst::dyn_extract<Constant>(
+      MD->getOperand(MCSectionRepo::MDDigest_value));
+  if (!C || !C->getType()->isArrayTy()) {
+    // If invalid, report the error with report_fatal_error.
+    report_fatal_error(
+        "Global object '" + GO->getName() +
+        "' has invalid the digest value type that must be array type.'");
+  }
+
+  auto const AarryType = C->getType();
+  auto const Elems = AarryType->getArrayNumElements();
+  MCSectionRepo::DigestType D;
+  if (Elems != D.Bytes.max_size()) {
+    // If invalid, report the error with report_fatal_error.
+    report_fatal_error("Global object '" + GO->getName() +
+                       "' has invalid the digest array size.'");
+  }
+
+  if (!AarryType->getArrayElementType()->isIntegerTy(8)) {
+    // If invalid, report the error with report_fatal_error.
+    report_fatal_error("Global object '" + GO->getName() +
+                       "' has invalid the array element type which should be "
+                       "8-bit integer type.'");
+  }
+
+  for (unsigned I = 0, E = Elems; I != E; ++I) {
+	  ConstantInt const *CI = dyn_cast<ConstantInt>(C->getAggregateElement(I));
+	  assert(CI);
+      D[I] = CI->getValue().getZExtValue();
+  }
+  return D;
+}
+
 static MCSectionRepo *
 selectRepoSectionForGlobal(MCContext &Ctx, const GlobalObject *GO,
                           SectionKind Kind,
@@ -684,6 +741,8 @@ selectRepoSectionForGlobal(MCContext &Ctx, const GlobalObject *GO,
     //enum class RepoSection { TextSection, BSSSection };
     //MCSectionRepo *getRepoSection(RepoSection K);
 std::string id = GO->getGlobalIdentifier (); // TODO: use the digest, not the identifier.
+
+MCSectionRepo::DigestType const Digest = getDigest(GO);
 
 //Repo: the repo sections are keyed off the gloval value. This gets us the associated hash. 
     MCContext::RepoSection K;
@@ -740,7 +799,7 @@ std::string id = GO->getGlobalIdentifier (); // TODO: use the digest, not the id
   }
 #endif
 
-  return Ctx.getRepoSection(id, K);
+  return Ctx.getRepoSection(id, K, Digest);
 }
 
 MCSection *TargetLoweringObjectFileRepo::SelectSectionForGlobal(
