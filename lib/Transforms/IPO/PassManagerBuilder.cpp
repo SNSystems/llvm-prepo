@@ -166,7 +166,6 @@ PassManagerBuilder::PassManagerBuilder() {
     VerifyInput = false;
     VerifyOutput = false;
     MergeFunctions = false;
-	ProgramRepository = false;
     PrepareForLTO = false;
     EnablePGOInstrGen = RunPGOInstrGen;
     PGOInstrGen = PGOOutputFile;
@@ -433,6 +432,8 @@ void PassManagerBuilder::populateModulePassManager(
       Inliner = nullptr;
     }
 
+    MPM.add(createProgramRepositoryPass());
+
     // FIXME: The BarrierNoopPass is a HACK! The inliner pass above implicitly
     // creates a CGSCC pass manager, but we don't want to add extensions into
     // that pass manager. To prevent this we insert a no-op module pass to reset
@@ -442,9 +443,6 @@ void PassManagerBuilder::populateModulePassManager(
       MPM.add(createMergeFunctionsPass());
     else if (GlobalExtensionsNotEmpty() || !Extensions.empty())
       MPM.add(createBarrierNoopPass());
-
-    if (ProgramRepository)
-      MPM.add(createProgramRepositoryPass());
 
     if (PerformThinLTO) {
       // Drop available_externally and unreferenced globals. This is necessary
@@ -546,6 +544,8 @@ void PassManagerBuilder::populateModulePassManager(
 
   if (RunPartialInlining)
     MPM.add(createPartialInliningPass());
+
+  MPM.add(createProgramRepositoryPass());
 
   if (OptLevel > 1 && !PrepareForLTO && !PrepareForThinLTO)
     // Remove avail extern fns and globals definitions if we aren't
@@ -712,9 +712,6 @@ void PassManagerBuilder::populateModulePassManager(
 
   if (MergeFunctions)
     MPM.add(createMergeFunctionsPass());
-
-  if (ProgramRepository)
-    MPM.add(createProgramRepositoryPass());
 
   // LoopSink pass sinks instructions hoisted by LICM, which serves as a
   // canonicalization pass that enables other optimizations. As a result,

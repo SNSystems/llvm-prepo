@@ -8,6 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/ADT/Statistic.h"
+#include "llvm/ADT/Triple.h"
 #include "llvm/IR/CallSite.h"
 #include "llvm/IR/MDBuilder.h"
 #include "llvm/IR/Metadata.h"
@@ -44,6 +45,10 @@ public:
 private:
   /// Whether or not the target supports global aliases.
   bool HasGlobalAliases;
+
+  bool isObjFormatRepo(Module &M) const {
+    return Triple(M.getTargetTriple()).isOSBinFormatRepo();
+  }
 };
 
 } // end anonymous namespace
@@ -65,7 +70,7 @@ static void printHash(raw_fd_ostream &OS, StringRef Name,
 }
 
 bool ProgramRepository::runOnModule(Module &M) {
-  if (skipModule(M))
+  if (skipModule(M) || !isObjFormatRepo(M))
     return false;
 
 #ifndef NDEBUG
