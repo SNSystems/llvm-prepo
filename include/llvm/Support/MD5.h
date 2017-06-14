@@ -105,6 +105,14 @@ inline bool operator==(const MD5::MD5Result &LHS, const MD5::MD5Result &RHS) {
   return LHS.Bytes == RHS.Bytes;
 }
 
+inline bool operator<=(const MD5::MD5Result &LHS, const MD5::MD5Result &RHS) {
+  return LHS.Bytes <= RHS.Bytes;
+}
+
+inline bool operator<(const MD5::MD5Result &LHS, const MD5::MD5Result &RHS) {
+  return LHS.Bytes < RHS.Bytes;
+}
+
 /// Helper to compute and return lower 64 bits of the given string's MD5 hash.
 inline uint64_t MD5Hash(StringRef Str) {
   using namespace support;

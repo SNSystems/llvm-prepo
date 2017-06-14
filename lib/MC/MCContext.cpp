@@ -463,7 +463,7 @@ MCSectionRepo *MCContext::getRepoSection (std::string const & Id, RepoSection K,
                                           MCSectionRepo::DigestType const &Digest) {
 
     // Do the lookup, if we have a hit, return it.
-    RepoSectionKey key = std::make_pair (Id, K); // Fixme: use Digest instead of Id.
+    RepoSectionKey key = std::make_pair (Digest, K);
     auto IterBool = RepoUniquingMap.insert(std::make_pair (key, nullptr));
     auto Iter = IterBool.first;
     if (!IterBool.second) {

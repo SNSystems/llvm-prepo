@@ -257,7 +257,7 @@ namespace llvm {
     enum class RepoSection { TextSection, BSSSection, DataSection };
 
   private:
-    using RepoSectionKey = std::pair<std::string, RepoSection>;
+    using RepoSectionKey = std::pair<MCSectionRepo::DigestType, RepoSection>;
     // Repo: "RepoSectionKey" (a pair of digest/section ID?)
     std::map<RepoSectionKey, MCSectionRepo *> RepoUniquingMap;
     std::map<WasmSectionKey, MCSectionWasm *> WasmUniquingMap;
