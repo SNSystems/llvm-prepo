@@ -99,7 +99,7 @@ public:
   //===------------------------------------------------------------------===//
 
   /// \brief Return metadata containing a numbe of hash bytes.
-  MDNode *createHashBytes(ArrayRef<uint8_t> Bytes);
+  MDNode *createHashBytes(const MD5::MD5Result &Bytes);
 
   //===------------------------------------------------------------------===//
   // AA metadata.

@@ -91,9 +91,7 @@ MDNode *MDBuilder::createRange(const APInt &Lo, const APInt &Hi) {
   return createRange(ConstantInt::get(Ty, Lo), ConstantInt::get(Ty, Hi));
 }
 
-MDNode *MDBuilder::createHashBytes(ArrayRef<uint8_t> Bytes) {
-  assert(Bytes.size() == 16 && "The hash of GlobalValue is 128-bits!");
-
+MDNode *MDBuilder::createHashBytes(const MD5::MD5Result  &Bytes) {
   Metadata *Vals[2];
   Vals[0] = createString("digest");
 

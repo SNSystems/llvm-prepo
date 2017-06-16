@@ -27,8 +27,7 @@ class GetElementPtrInst;
 
 /// Hash a function. Equivalent functions will have the same hash, and unequal
 /// functions will have different hashes with high probability.
-typedef std::pair<uint64_t, uint64_t> HashType;
-typedef std::array<uint8_t, 16> HashBytesType;
+using HashType = MD5::MD5Result;
 
 enum HashKind {
   TAG_Uint32,
@@ -209,9 +208,7 @@ private:
 /// FunctionHashCalculator - Calculate the function hash.
 class FunctionHashCalculator {
 public:
-  FunctionHashCalculator(const Function *F,
-                         std::map<GlobalVariable *, HashType> *HashedGVMap)
-      : Fn(F), HashedGVs(HashedGVMap) {}
+  FunctionHashCalculator(const Function *F) : Fn(F) {}
 
   /// Calculate the hash for the function.
   void calculateFunctionHash(Module &M);
@@ -257,8 +254,6 @@ protected:
 
   // Hold the function hash value.
   HashCalculator FnHash;
-
-  std::map<GlobalVariable *, HashType> *HashedGVs;
 };
 
 /// VaribleHashCalculator - Calculate the global variable hash.

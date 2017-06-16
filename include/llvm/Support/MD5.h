@@ -105,6 +105,10 @@ inline bool operator==(const MD5::MD5Result &LHS, const MD5::MD5Result &RHS) {
   return LHS.Bytes == RHS.Bytes;
 }
 
+inline bool operator!=(const MD5::MD5Result &LHS, const MD5::MD5Result &RHS) {
+	return LHS.Bytes != RHS.Bytes;
+}
+
 inline bool operator<=(const MD5::MD5Result &LHS, const MD5::MD5Result &RHS) {
   return LHS.Bytes <= RHS.Bytes;
 }

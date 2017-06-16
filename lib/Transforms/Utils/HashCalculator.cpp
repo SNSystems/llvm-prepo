@@ -674,5 +674,5 @@ HashType AliasHashCalculator::calculate() {
   // ... take the least significant 8 bytes and return those. Our MD5
   // implementation always returns its results in little endian, so we actually
   // need the "high" word.
-  return Result.words();
+  return Result;
 }

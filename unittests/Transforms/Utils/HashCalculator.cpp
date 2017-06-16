@@ -45,7 +45,7 @@ struct TestFunction {
 /// accessible from a derived class of FunctionComparator.
 class TestHash : public FunctionHashCalculator {
 public:
-  TestHash(const Function *F1) : FunctionHashCalculator(F1, nullptr) {}
+  TestHash(const Function *F1) : FunctionHashCalculator(F1) {}
 
   bool testFunctionAccess(const Function *F1) {
     // Test if Fn is accessible.
@@ -55,13 +55,13 @@ public:
   HashType getHash() {
     MD5::MD5Result Result;
     getHashResult(Result);
-    return Result.words();
+    return Result;
   }
 
-//  HashType testCalculate() {
-//    calculateFunctionHash();
-//    return getHash();
-//  }
+  HashType testCalculate(Module &M) {
+    calculateFunctionHash(M);
+    return getHash();
+  }
 
   HashType testSignatureHash() {
     FnHash.beginCalculate();
@@ -143,8 +143,8 @@ TEST(HashCalculatorTest, TestAPI) {
   TestHash F3H(F3.F);
 
   EXPECT_TRUE(F1H.testFunctionAccess(F1.F));
-//  EXPECT_NE(F1H.testCalculate(), F2H.testCalculate());
-//  EXPECT_EQ(F1H.testCalculate(), F3H.testCalculate());
+  EXPECT_NE(F1H.testCalculate(M), F2H.testCalculate(M));
+  EXPECT_EQ(F1H.testCalculate(M), F3H.testCalculate(M));
   EXPECT_EQ(F1H.testSignatureHash(), F2H.testSignatureHash());
   EXPECT_NE(F1H.testBasicBlockHash(F1.BB), F2H.testBasicBlockHash(F2.BB));
   EXPECT_EQ(F1H.testBasicBlockHash(F1.BB), F3H.testBasicBlockHash(F3.BB));

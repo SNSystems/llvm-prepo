@@ -61,19 +61,13 @@ ModulePass *llvm::createProgramRepositoryPass() {
   return new ProgramRepository();
 }
 
-static void printHash(raw_fd_ostream &OS, StringRef Name,
-                      HashBytesType &Bytes) {
-  OS << '\t' << Name << ": HEX : 0x";
-  for (int i = 0; i < 16; ++i)
-    OS << format("%.2x", Bytes[i]);
-  OS << '\n';
-}
+using GlobalVariableMap = std::map<const GlobalVariable *, HashType>;
+using GlobalFunctionMap = std::map<const Function *, HashType>;
+using GlobalAliasMap = std::map<const GlobalAlias *, Constant *>;
 
-bool ProgramRepository::runOnModule(Module &M) {
-  if (skipModule(M) || !isObjFormatRepo(M))
-    return false;
-
-#ifndef NDEBUG
+static void createHashFile(Module &M, GlobalVariableMap &VarMap,
+                           GlobalFunctionMap &FuncMap,
+                           GlobalAliasMap &GAliases) {
   const std::string &MId = M.getModuleIdentifier();
   std::string hashFName(MId.begin(), find(MId, '.'));
   hashFName += ".hash";
@@ -84,97 +78,89 @@ bool ProgramRepository::runOnModule(Module &M) {
            << " for generating hash.\nError:" << EC.message() << "\n";
     exit(1);
   }
-#endif
+
+  if (!VarMap.empty()) {
+    OS << "The summary of global variables hash:\n";
+    for (auto const &GV : VarMap) {
+      OS << '\t' << GV.first->getName() << ": " << GV.second.digest() << '\n';
+    }
+  }
+
+  if (!FuncMap.empty()) {
+    OS << "The summary of function hash:\n";
+    for (auto const &GF : FuncMap) {
+      OS << '\t' << GF.first->getName() << ": " << GF.second.digest() << '\n';
+    }
+  }
+
+  if (!GAliases.empty()) {
+    OS << "The summary of global alias hash:\n";
+    for (auto const &GA : GAliases) {
+      OS << '\t' << GA.first->getName() << ": Alias to ";
+      if (auto GVA = dyn_cast<GlobalVariable>(GA.second)) {
+        OS << "a global variable: " << GVA->getName() << ": "
+           << VarMap[GVA].digest() << '\n';
+      } else if (auto GVF = dyn_cast<Function>(GA.second)) {
+        OS << "a function: " << GVF->getName() << ": " << FuncMap[GVF].digest()
+           << '\n';
+      } else {
+        assert(false && "alias to unknown GlobalValue type!");
+      }
+    }
+  }
+}
+
+bool ProgramRepository::runOnModule(Module &M) {
+  if (skipModule(M) || !isObjFormatRepo(M))
+    return false;
 
   MDBuilder MDB(M.getContext());
-  std::map<GlobalVariable *, HashType> HashedGVs;
-  HashBytesType Bytes;
 
-#ifndef NDEBUG
-  OS << "The summary of global variables hash:\n";
-#endif
-
-  for (GlobalVariable &G : M.globals()) {
-    //    if (!G.hasName())
-    //      continue;
-    auto GVHC = VaribleHashCalculator(&G);
+  GlobalVariableMap HashedGVs;
+  for (GlobalVariable &GV : M.globals()) {
+    if (GV.isDeclaration())
+      continue;
+    auto GVHC = VaribleHashCalculator(&GV);
     GVHC.calculateVaribleHash(M);
     MD5::MD5Result Result;
     GVHC.getHashResult(Result);
-    HashedGVs[&G] = Result.words();
-    Bytes = Result;
-    if (M.getDataLayout().isLittleEndian())
-      std::reverse(Bytes.begin(), Bytes.end());
-    G.setMetadata(LLVMContext::MD_fragment, MDB.createHashBytes(Bytes));
-
+    HashedGVs[&GV] = Result;
+    GV.setMetadata(LLVMContext::MD_fragment, MDB.createHashBytes(Result));
     ++NumVariablesHashed;
-
-#ifndef NDEBUG
-    printHash(OS, G.getName(), Bytes);
-#endif
   }
 
-  // All functions in the module, ordered by hash. Functions with a unique
-  // hash value are easily eliminated.
-
-  std::map<Function *, HashType> HashedFuncs;
-
-#ifndef NDEBUG
-  OS << "The summary of function hash:\n";
-#endif
+  GlobalFunctionMap HashedFuncs;
   for (Function &Func : M) {
     if (Func.isDeclaration() || Func.hasAvailableExternallyLinkage())
       continue;
-    auto GFHC = FunctionHashCalculator(&Func, &HashedGVs);
+    auto GFHC = FunctionHashCalculator(&Func);
     GFHC.calculateFunctionHash(M);
     MD5::MD5Result Result;
     GFHC.getHashResult(Result);
-    HashedFuncs[&Func] = Result.words();
-    Bytes = Result;
-    if (M.getDataLayout().isLittleEndian())
-      std::reverse(Bytes.begin(), Bytes.end());
-    Func.setMetadata(LLVMContext::MD_fragment, MDB.createHashBytes(Bytes));
-
+    HashedFuncs[&Func] = Result;
+    Func.setMetadata(LLVMContext::MD_fragment, MDB.createHashBytes(Result));
     ++NumFunctionsHashed;
-
-#ifndef NDEBUG
-    printHash(OS, Func.getName(), Bytes);
-#endif
   }
 
   DEBUG(dbgs() << "size of module: " << M.size() << '\n');
   DEBUG(dbgs() << "size of HashedFuncs: " << HashedFuncs.size() << '\n');
 
-#ifndef NDEBUG
-  OS << "The summary of global alias hash:\n";
-#endif
-
-  for (GlobalAlias &A : M.aliases()) {
-    auto Aliasee = A.getAliasee();
+  GlobalAliasMap AliveAliases;
+  for (GlobalAlias &GA : M.aliases()) {
+    auto Aliasee = GA.getAliasee();
     assert(Aliasee && "Aliasee cannot be NULL!");
-
     auto Target = Aliasee->stripPointerCasts();
     assert(Target && "Target cannot be NULL!");
-    // After stripping pointer casts, the target type shoulf be only GlobalValue
+    // After stripping pointer casts, the target type should be only GlobalValue
     // type.
     assert(isa<GlobalValue>(Target) && "Aliasee should be only GlobalValue");
-
-#ifndef NDEBUG
-    OS << '\t' << A.getName() << ": Alias to ";
-    if (auto GVA = dyn_cast<GlobalVariable>(Target)) {
-      OS << "a global variable: " << GVA->getName() << ": 0x"
-         << utohexstr(HashedGVs[GVA].first) << utohexstr(HashedGVs[GVA].second)
-         << '\n';
-    } else if (auto GVF = dyn_cast<Function>(Target)) {
-      OS << "a function: " << GVF->getName() << ": 0x"
-         << utohexstr(HashedFuncs[GVF].first)
-         << utohexstr(HashedFuncs[GVF].second) << '\n';
-    } else {
-      assert(false && "alias to unknown GlobalValue type!");
-    }
-#endif
+    AliveAliases[&GA] = Target;
     ++NumAliasesHashed;
   }
+
+#ifdef DEBUG
+  createHashFile(M, HashedGVs, HashedFuncs, AliveAliases);
+#endif
 
   return true;
 }
