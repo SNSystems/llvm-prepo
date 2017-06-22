@@ -15,6 +15,7 @@
 #define LLVM_MC_MCSECTIONREPO_H
 
 //#include "llvm/ADT/Twine.h"
+#include "llvm/IR/Digest.h"
 #include "llvm/MC/MCSection.h"
 //#include "llvm/MC/MCSymbolELF.h"
 //#include "llvm/Support/Debug.h"
@@ -28,14 +29,12 @@ namespace llvm {
 
 class MCSectionRepo : public MCSection {
 public:
-    using DigestType = MD5::MD5Result;
-    enum { MDDigest_name, MDDigest_value, LastMDD };
+    using DigestType = Digest::DigestType;
 
 private:
     std::string id_;
     DigestType digest_;
     unsigned const index_;
-
 
     friend class MCContext;
     MCSectionRepo(SectionKind K, MCSymbol *Begin);

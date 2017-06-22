@@ -207,6 +207,12 @@ ModulePass *createMergeFunctionsPass();
 ModulePass *createProgramRepositoryPass();
 
 //===----------------------------------------------------------------------===//
+/// createProgramRepositoryPruningPass - This pass prunes the global objects
+/// which are already in the Program Repository.
+///
+ModulePass *createProgramRepositoryPruningPass();
+
+//===----------------------------------------------------------------------===//
 /// createPartialInliningPass - This pass inlines parts of functions.
 ///
 ModulePass *createPartialInliningPass();

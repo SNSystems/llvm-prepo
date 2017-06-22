@@ -27,6 +27,7 @@ add_llvm_library(LLVMipo
   PartialInlining.cpp
   PassManagerBuilder.cpp
   ProgramRepository.cpp
+  ProgramRepositoryPruning.cpp
   PruneEH.cpp
   SampleProfile.cpp
   SCCP.cpp

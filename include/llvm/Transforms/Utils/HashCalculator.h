@@ -100,9 +100,10 @@ public:
     reset();
   }
 
-  void getHashResult(MD5::MD5Result &Result) {
-    // Now return the result.
+  MD5::MD5Result getHashResult() {
+    MD5::MD5Result Result;
     Hash.final(Result);
+    return Result;
   }
 
   void reset() { Hash = MD5(); }
@@ -211,10 +212,10 @@ public:
   FunctionHashCalculator(const Function *F) : Fn(F) {}
 
   /// Calculate the hash for the function.
-  void calculateFunctionHash(Module &M);
+  void calculateHash(Module &M);
 
   /// Return the function hash result.
-  void getHashResult(MD5::MD5Result &HashRes);
+  MD5::MD5Result getHashResult();
 
 protected:
   /// Calculate the hash for the signature and other general attributes of the
@@ -262,13 +263,11 @@ public:
   VaribleHashCalculator(const GlobalVariable *V) : Gv(V) {}
 
   /// Calculate the global varible Gv hash value.
-  void calculateVaribleHash(Module &M);
+  void calculateHash(Module &M);
 
   std::string &get(MD5::MD5Result &HashRes) { return GvHash.get(HashRes); }
 
-  void getHashResult(MD5::MD5Result &HashRes) {
-    return GvHash.getHashResult(HashRes);
-  }
+  MD5::MD5Result getHashResult() { return GvHash.getHashResult(); }
 
 private:
   /// Accumulate the comdat variable hash value.

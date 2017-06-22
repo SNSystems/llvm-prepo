@@ -533,7 +533,7 @@ void FunctionHashCalculator::basicBlockHash(const BasicBlock *BB) {
   } while (Inst != InstE);
 }
 
-void FunctionHashCalculator::calculateFunctionHash(Module &M) {
+void FunctionHashCalculator::calculateHash(Module &M) {
   FnHash.beginCalculate();
   FnHash.Hash.update(HashKind::TAG_GlobalFunction);
   moduleHash(M);
@@ -564,8 +564,8 @@ void FunctionHashCalculator::calculateFunctionHash(Module &M) {
 }
 
 /// Calculate the function hash and return the result as the words.
-void FunctionHashCalculator::getHashResult(MD5::MD5Result &HashRes) {
-  return FnHash.getHashResult(HashRes);
+MD5::MD5Result FunctionHashCalculator::getHashResult() {
+  return FnHash.getHashResult();
 }
 
 void VaribleHashCalculator::comdatHash() {
@@ -583,7 +583,7 @@ void VaribleHashCalculator::moduleHash(Module &M) {
 }
 
 // Calculate the global varible hash value.
-void VaribleHashCalculator::calculateVaribleHash(Module &M) {
+void VaribleHashCalculator::calculateHash(Module &M) {
   GvHash.Hash.update(HashKind::TAG_GlobalVarible);
   GvHash.beginCalculate();
   moduleHash(M);

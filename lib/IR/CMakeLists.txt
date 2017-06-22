@@ -20,6 +20,7 @@ add_llvm_library(LLVMCore
   DiagnosticHandler.cpp
   DiagnosticInfo.cpp
   DiagnosticPrinter.cpp
+  Digest.cpp
   Dominators.cpp
   DomTreeUpdater.cpp
   Function.cpp

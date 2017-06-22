@@ -53,13 +53,11 @@ public:
   }
 
   HashType getHash() {
-    MD5::MD5Result Result;
-    getHashResult(Result);
-    return Result;
+    return getHashResult();
   }
 
   HashType testCalculate(Module &M) {
-    calculateFunctionHash(M);
+    calculateHash(M);
     return getHash();
   }
 

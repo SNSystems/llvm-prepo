@@ -10,6 +10,7 @@
 #include "llvm/ADT/Statistic.h"
 #include "llvm/ADT/Triple.h"
 #include "llvm/IR/CallSite.h"
+#include "llvm/IR/Digest.h"
 #include "llvm/IR/MDBuilder.h"
 #include "llvm/IR/Metadata.h"
 #include "llvm/IR/Module.h"
@@ -25,9 +26,9 @@ using namespace llvm;
 
 #define DEBUG_TYPE "prepo"
 
-STATISTIC(NumFunctionsHashed, "Number of functions hashed");
-STATISTIC(NumVariablesHashed, "Number of variables hashed");
-STATISTIC(NumAliasesHashed, "Number of aliases hashed");
+STATISTIC(NumFunctions, "Number of functions hashed");
+STATISTIC(NumVariables, "Number of variables hashed");
+STATISTIC(NumAliases, "Number of aliases hashed");
 
 namespace {
 
@@ -39,6 +40,8 @@ public:
   ProgramRepository() : ModulePass(ID), HasGlobalAliases(false) {
     initializeProgramRepositoryPass(*PassRegistry::getPassRegistry());
   }
+
+  StringRef getPassName() const override { return "PrepoDigestPass"; }
 
   bool runOnModule(Module &M) override;
 
@@ -61,105 +64,70 @@ ModulePass *llvm::createProgramRepositoryPass() {
   return new ProgramRepository();
 }
 
-using GlobalVariableMap = std::map<const GlobalVariable *, HashType>;
-using GlobalFunctionMap = std::map<const Function *, HashType>;
-using GlobalAliasMap = std::map<const GlobalAlias *, Constant *>;
+using GlobalValueMap = Digest::GlobalValueMap;
+namespace {
 
-static void createHashFile(Module &M, GlobalVariableMap &VarMap,
-                           GlobalFunctionMap &FuncMap,
-                           GlobalAliasMap &GAliases) {
-  const std::string &MId = M.getModuleIdentifier();
-  std::string hashFName(MId.begin(), find(MId, '.'));
-  hashFName += ".hash";
-  std::error_code EC;
-  raw_fd_ostream OS(hashFName, EC, sys::fs::F_Text);
-  if (EC) {
-    errs() << "Couldn't open " << M.getModuleIdentifier()
-           << " for generating hash.\nError:" << EC.message() << "\n";
-    exit(1);
-  }
+template <typename T> // primary template
+struct DigestCalculator {};
 
-  if (!VarMap.empty()) {
-    OS << "The summary of global variables hash:\n";
-    for (auto const &GV : VarMap) {
-      OS << '\t' << GV.first->getName() << ": " << GV.second.digest() << '\n';
-    }
-  }
+template <> // explicit specialization for T = GlobalVariable
+struct DigestCalculator<GlobalVariable> {
+  using Calculator = VaribleHashCalculator;
+};
 
-  if (!FuncMap.empty()) {
-    OS << "The summary of function hash:\n";
-    for (auto const &GF : FuncMap) {
-      OS << '\t' << GF.first->getName() << ": " << GF.second.digest() << '\n';
-    }
-  }
+template <> // explicit specialization for T = Function
+struct DigestCalculator<Function> {
+  using Calculator = FunctionHashCalculator;
+};
+} // namespace
 
-  if (!GAliases.empty()) {
-    OS << "The summary of global alias hash:\n";
-    for (auto const &GA : GAliases) {
-      OS << '\t' << GA.first->getName() << ": Alias to ";
-      if (auto GVA = dyn_cast<GlobalVariable>(GA.second)) {
-        OS << "a global variable: " << GVA->getName() << ": "
-           << VarMap[GVA].digest() << '\n';
-      } else if (auto GVF = dyn_cast<Function>(GA.second)) {
-        OS << "a function: " << GVF->getName() << ": " << FuncMap[GVF].digest()
-           << '\n';
-      } else {
-        assert(false && "alias to unknown GlobalValue type!");
-      }
-    }
-  }
+template <typename T>
+static void setMetadata(Module &M, T &GO, GlobalValueMap &DigestMap,
+                        bool &Changed, llvm::Statistic &Num) {
+  if (GO.isDeclaration() || GO.hasAvailableExternallyLinkage())
+    return;
+  // Calculate the global object hash value.
+  typename DigestCalculator<T>::Calculator GOHC{&GO};
+  GOHC.calculateHash(M);
+  Digest::DigestType Result = GOHC.getHashResult();
+  DigestMap.emplace(&GO, Result);
+  Digest::set(M, &GO, Result);
+  Changed = true;
+  ++Num;
 }
 
 bool ProgramRepository::runOnModule(Module &M) {
   if (skipModule(M) || !isObjFormatRepo(M))
     return false;
 
+  bool Changed = false;
   MDBuilder MDB(M.getContext());
 
-  GlobalVariableMap HashedGVs;
+  GlobalValueMap DigestMap;
+
   for (GlobalVariable &GV : M.globals()) {
-    if (GV.isDeclaration())
-      continue;
-    auto GVHC = VaribleHashCalculator(&GV);
-    GVHC.calculateVaribleHash(M);
-    MD5::MD5Result Result;
-    GVHC.getHashResult(Result);
-    HashedGVs[&GV] = Result;
-    GV.setMetadata(LLVMContext::MD_fragment, MDB.createHashBytes(Result));
-    ++NumVariablesHashed;
+    setMetadata<GlobalVariable>(M, GV, DigestMap, Changed, NumVariables);
   }
 
-  GlobalFunctionMap HashedFuncs;
   for (Function &Func : M) {
-    if (Func.isDeclaration() || Func.hasAvailableExternallyLinkage())
-      continue;
-    auto GFHC = FunctionHashCalculator(&Func);
-    GFHC.calculateFunctionHash(M);
-    MD5::MD5Result Result;
-    GFHC.getHashResult(Result);
-    HashedFuncs[&Func] = Result;
-    Func.setMetadata(LLVMContext::MD_fragment, MDB.createHashBytes(Result));
-    ++NumFunctionsHashed;
+    setMetadata<Function>(M, Func, DigestMap, Changed, NumFunctions);
+  }
+
+  for (GlobalAlias &GA : M.aliases()) {
+    auto GAAliasee = dyn_cast<GlobalValue>(Digest::getAliasee(&GA));
+    auto GADigest = DigestMap[GAAliasee];
+    DigestMap.emplace(&GA, GADigest);
+    Changed = true;
+    ++NumAliases;
   }
 
   DEBUG(dbgs() << "size of module: " << M.size() << '\n');
-  DEBUG(dbgs() << "size of HashedFuncs: " << HashedFuncs.size() << '\n');
-
-  GlobalAliasMap AliveAliases;
-  for (GlobalAlias &GA : M.aliases()) {
-    auto Aliasee = GA.getAliasee();
-    assert(Aliasee && "Aliasee cannot be NULL!");
-    auto Target = Aliasee->stripPointerCasts();
-    assert(Target && "Target cannot be NULL!");
-    // After stripping pointer casts, the target type should be only GlobalValue
-    // type.
-    assert(isa<GlobalValue>(Target) && "Aliasee should be only GlobalValue");
-    AliveAliases[&GA] = Target;
-    ++NumAliasesHashed;
-  }
+  DEBUG(dbgs() << "size of hashed functions: " << NumFunctions << '\n');
+  DEBUG(dbgs() << "size of hashed variables: " << NumVariables << '\n');
+  DEBUG(dbgs() << "size of hashed aliases: " << NumAliases << '\n');
 
 #ifdef DEBUG
-  createHashFile(M, HashedGVs, HashedFuncs, AliveAliases);
+  Digest::createHashFile(M, DigestMap, getPassName());
 #endif
 
   return true;

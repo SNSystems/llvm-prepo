@@ -56,7 +56,8 @@
 ; a barrier pass.
 ; CHECK-O2: A No-Op Barrier Pass
 ; Calculate program repository digest ASAP after the inliner.
-; CHECK-O2-NEXT: Create Program Repository
+; CHECK-O2-NEXT: PrepoDigestPass
+; CHECK-O2-NEXT: PrepoPruningPass
 ; Reduce the size of the IR ASAP after the inliner.
 ; CHECK-O2-NEXT: Eliminate Available Externally
 ; Inferring function attribute should be right after the CGSCC pipeline, before
