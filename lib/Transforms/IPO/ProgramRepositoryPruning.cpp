@@ -74,6 +74,7 @@ bool ProgramRepositoryPruning::runOnModule(Module &M) {
   // Keep track of the existing hash value.
   std::set<HashType> Digests;
   GlobalValueMap DigestMap;
+  MDNode *MD = nullptr;
 
   // Erase the unchanged global objects.
   auto EraseUnchangedGlobalObect = [&](GlobalObject &GO,
@@ -86,7 +87,10 @@ bool ProgramRepositoryPruning::runOnModule(Module &M) {
       Changed = true;
       ++NumGO;
       GO.setComdat(nullptr);
+      // Remove all metadata except fragment.
+      MD = GO.getMetadata(LLVMContext::MD_fragment);
       GO.clearMetadata();
+      GO.setMetadata(LLVMContext::MD_fragment, MD);
       GO.setLinkage(GlobalValue::ExternalLinkage);
       return true;
     }
@@ -106,6 +110,7 @@ bool ProgramRepositoryPruning::runOnModule(Module &M) {
   for (Function &Func : M) {
     if (EraseUnchangedGlobalObect(Func, NumFunctions)) {
       Func.deleteBody();
+      Func.setMetadata(LLVMContext::MD_fragment, MD);
     }
   }
 
