@@ -485,7 +485,7 @@ void MCObjectFileInfo::initRepoMCObjectFileInfo(const Triple &T) {
   // FIXME: these is a dummy sections simply present to allow the assembler to have a "default" section.
   // Nothing should be added to it.
   TextSection = Ctx->getRepoSection("null", MCContext::RepoSection::TextSection,
-                                    MCSectionRepo::DigestType{{0}});
+                                    Digest::DigestType{{0}});
   BSSSection = nullptr; //Ctx->getRepoSection ("null", MCContext::RepoSection::BSSSection);
 
 #if 0

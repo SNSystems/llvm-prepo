@@ -8,6 +8,7 @@
 //===----------------------------------------------------------------------===//
 #include "llvm/Transforms/Utils/HashCalculator.h"
 #include "llvm/IR/BasicBlock.h"
+#include "llvm/IR/Digest.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/LLVMContext.h"
@@ -52,76 +53,74 @@ public:
     return F1 == Fn;
   }
 
-  HashType getHash() {
-    return getHashResult();
-  }
+  Digest::DigestType getHash() { return getHashResult(); }
 
-  HashType testCalculate(Module &M) {
+  Digest::DigestType testCalculate(Module &M) {
     calculateHash(M);
     return getHash();
   }
 
-  HashType testSignatureHash() {
+  Digest::DigestType testSignatureHash() {
     FnHash.beginCalculate();
     signatureHash(Fn);
     return getHash();
   }
 
-  HashType testBasicBlockHash(const BasicBlock *BB) {
+  Digest::DigestType testBasicBlockHash(const BasicBlock *BB) {
     FnHash.beginCalculate();
     basicBlockHash(BB);
     return getHash();
   }
 
-  HashType testConstantHash(const Constant *V) {
+  Digest::DigestType testConstantHash(const Constant *V) {
     FnHash.beginCalculate();
     FnHash.constantHash(V);
     return getHash();
   }
 
-  HashType testGlobalValueHash(const GlobalValue *V) {
+  Digest::DigestType testGlobalValueHash(const GlobalValue *V) {
     FnHash.beginCalculate();
     FnHash.globalValueHash(V);
     return getHash();
   }
 
-  HashType testValueHash(const Value *V) {
+  Digest::DigestType testValueHash(const Value *V) {
     FnHash.beginCalculate();
     FnHash.valueHash(V);
     return getHash();
   }
 
-  HashType testInstructionHash(const Instruction *V) {
+  Digest::DigestType testInstructionHash(const Instruction *V) {
     FnHash.beginCalculate();
     instructionHash(V);
     return getHash();
   }
 
-  HashType testTypeHash(Type *Ty) {
+  Digest::DigestType testTypeHash(Type *Ty) {
     FnHash.beginCalculate();
     FnHash.typeHash(Ty);
     return getHash();
   }
 
-  HashType testNumberHash(uint64_t V) {
+  Digest::DigestType testNumberHash(uint64_t V) {
     FnHash.beginCalculate();
     FnHash.numberHash(V);
     return getHash();
   }
 
-  HashType testAPIntHash(const APInt &V) {
+  Digest::DigestType testAPIntHash(const APInt &V) {
     FnHash.beginCalculate();
     FnHash.APIntHash(V);
     return getHash();
   }
 
-  HashType testAPFloatHash(const APFloat &V) {
+  Digest::DigestType testAPFloatHash(const APFloat &V) {
     FnHash.beginCalculate();
     FnHash.APFloatHash(V);
     return getHash();
   }
 
-  HashType testMemHash(StringRef V) {
+  Digest::DigestType testMemHash(StringRef V) {
     FnHash.beginCalculate();
     FnHash.memHash(V);
     return getHash();

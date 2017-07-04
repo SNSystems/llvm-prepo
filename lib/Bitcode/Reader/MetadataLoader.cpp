@@ -38,6 +38,7 @@
 #include "llvm/IR/DebugLoc.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/DiagnosticPrinter.h"
+#include "llvm/IR/Digest.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/GVMaterializer.h"
 #include "llvm/IR/GlobalAlias.h"
@@ -1763,6 +1764,21 @@ Error MetadataLoader::MetadataLoaderImpl::parseOneMetadata(
     // block with METADATA_BLOCK_ID.
     if (Error Err = parseMetadataKindRecord(Record))
       return Err;
+    break;
+  }
+  case bitc::METADATA_TICKETNODE: {
+    if (Record.size() != 4)
+      return error("Invalid record");
+
+    IsDistinct = Record[0];
+    MDString *Name = getMDString(Record[1]);
+    ConstantAsMetadata *GVHash = dyn_cast<ConstantAsMetadata>(getMD(Record[2]));
+    unsigned Linkage = Record[3];
+
+    MetadataList.assignValue(
+        GET_OR_DISTINCT(TicketNode, (Context, Name, GVHash, Linkage)),
+        NextMetadataNo);
+    NextMetadataNo++;
     break;
   }
   }

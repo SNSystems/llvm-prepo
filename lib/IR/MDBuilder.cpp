@@ -91,20 +91,10 @@ MDNode *MDBuilder::createRange(const APInt &Lo, const APInt &Hi) {
   return createRange(ConstantInt::get(Ty, Lo), ConstantInt::get(Ty, Hi));
 }
 
-MDNode *MDBuilder::createHashBytes(const MD5::MD5Result  &Bytes) {
-  Metadata *Vals[2];
-  Vals[0] = createString("digest");
-
-  llvm::Constant *Field[16];
-  Type *Int8Ty = Type::getInt8Ty(Context);
-  for (unsigned Idx = 0; Idx < 16; ++Idx) {
-    Field[Idx] = llvm::ConstantInt::get(Int8Ty, Bytes[Idx], false);
-  }
-  // Array implementation that the hash is outputed as char/string.
-  Vals[1] = createConstant(
-      ConstantArray::get(llvm::ArrayType::get(Int8Ty, 16), Field));
-
-  return MDNode::get(Context, Vals);
+TicketNode *MDBuilder::createTicketNode(StringRef Name,
+                                        Digest::DigestType const &Bytes,
+                                        unsigned Linkage) {
+  return TicketNode::get(Context, Name, Bytes, Linkage);
 }
 
 MDNode *MDBuilder::createRange(Constant *Lo, Constant *Hi) {

@@ -36,6 +36,7 @@
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DebugInfoMetadata.h"
 #include "llvm/IR/DerivedTypes.h"
+#include "llvm/IR/Digest.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Metadata.h"
 #include "llvm/IR/TrackingMDRef.h"
@@ -455,6 +456,27 @@ template <> struct MDNodeKeyImpl<DIDerivedType> {
     // collision because of the full check above.
     return hash_combine(Tag, Name, File, Line, Scope, BaseType, Flags);
   }
+};
+
+/// \brief DenseMapInfo for TicketNode.
+template <> struct MDNodeKeyImpl<TicketNode> {
+  Metadata *Name;
+  Metadata *Digest;
+  unsigned Linkage;
+
+  MDNodeKeyImpl(unsigned Linkage, Metadata *Name, Metadata *Digest)
+      : Name(Name), Digest(Digest), Linkage(Linkage) {}
+
+  MDNodeKeyImpl(const TicketNode *RHS)
+      : Name(RHS->getNameAsMD()), Digest(RHS->getDigestAsMD()),
+        Linkage(RHS->getLinkage()) {}
+
+  bool isKeyOf(const TicketNode *RHS) const {
+    return Name == RHS->getNameAsMD() && Digest == RHS->getDigestAsMD() &&
+           Linkage == RHS->getLinkage();
+  }
+
+  unsigned getHashValue() const { return hash_combine(Linkage, Name, Digest); }
 };
 
 template <> struct MDNodeSubsetEqualImpl<DIDerivedType> {

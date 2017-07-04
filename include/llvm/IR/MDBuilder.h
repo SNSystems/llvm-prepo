@@ -17,6 +17,7 @@
 
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/IR/Digest.h"
 #include "llvm/IR/GlobalValue.h"
 #include "llvm/Support/DataTypes.h"
 #include <utility>
@@ -98,8 +99,9 @@ public:
   // Fragment metadata.
   //===------------------------------------------------------------------===//
 
-  /// \brief Return metadata containing a numbe of hash bytes.
-  MDNode *createHashBytes(const MD5::MD5Result &Bytes);
+  /// \brief Return metadata containing global object ticket information.
+  TicketNode *createTicketNode(StringRef Name, Digest::DigestType const &Bytes,
+                               unsigned Linkage);
 
   //===------------------------------------------------------------------===//
   // AA metadata.

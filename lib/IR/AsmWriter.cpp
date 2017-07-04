@@ -43,6 +43,7 @@
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DebugInfoMetadata.h"
 #include "llvm/IR/DerivedTypes.h"
+#include "llvm/IR/Digest.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/GlobalAlias.h"
 #include "llvm/IR/GlobalIFunc.h"
@@ -2131,6 +2132,19 @@ static void writeDIImportedEntity(raw_ostream &Out, const DIImportedEntity *N,
   Printer.printMetadata("entity", N->getRawEntity());
   Printer.printMetadata("file", N->getRawFile());
   Printer.printInt("line", N->getLine());
+  Out << ")";
+}
+
+static void writeTicketNode(raw_ostream &Out, const TicketNode *DN,
+                            TypePrinting *TypePrinter, SlotTracker *Machine,
+                            const Module *Context) {
+  Out << "!TicketNode(";
+  MDFieldPrinter Printer(Out, TypePrinter, Machine, Context);
+  Printer.printString("name", DN->getNameAsString(),
+                      /* ShouldSkipNull */ false);
+  Printer.printMetadata("digest", DN->getDigestAsMD(),
+                        /* ShouldSkipNull */ false);
+  Printer.printInt("linkage", DN->getLinkage(), /*ShouldSkipZero*/ false);
   Out << ")";
 }
 

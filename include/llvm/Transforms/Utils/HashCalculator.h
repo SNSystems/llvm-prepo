@@ -15,6 +15,7 @@
 #ifndef LLVM_TRANSFORMS_UTILS_HASHCALCULATOR_H
 #define LLVM_TRANSFORMS_UTILS_HASHCALCULATOR_H
 
+#include "llvm/IR/Digest.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Operator.h"
 #include "llvm/IR/ValueMap.h"
@@ -24,10 +25,6 @@
 namespace llvm {
 
 class GetElementPtrInst;
-
-/// Hash a function. Equivalent functions will have the same hash, and unequal
-/// functions will have different hashes with high probability.
-using HashType = MD5::MD5Result;
 
 enum HashKind {
   TAG_Uint32,
@@ -293,7 +290,7 @@ public:
   AliasHashCalculator(const GlobalAlias *V) : Ga(V) {}
 
   /// Calculate the global varible Gv hash value.
-  HashType calculate();
+  Digest::DigestType calculate();
 
 private:
   // The alias undergoing calculation.

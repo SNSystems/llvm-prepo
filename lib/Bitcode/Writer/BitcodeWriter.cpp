@@ -38,6 +38,7 @@
 #include "llvm/IR/DebugInfoMetadata.h"
 #include "llvm/IR/DebugLoc.h"
 #include "llvm/IR/DerivedTypes.h"
+#include "llvm/IR/Digest.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/GlobalAlias.h"
 #include "llvm/IR/GlobalIFunc.h"
@@ -347,6 +348,8 @@ private:
   void writeDIImportedEntity(const DIImportedEntity *N,
                              SmallVectorImpl<uint64_t> &Record,
                              unsigned Abbrev);
+  void writeTicketNode(const TicketNode *N, SmallVectorImpl<uint64_t> &Record,
+                       unsigned Abbrev);
   unsigned createNamedMetadataAbbrev();
   void writeNamedMetadata(SmallVectorImpl<uint64_t> &Record);
   unsigned createMetadataStringsAbbrev();
@@ -1851,6 +1854,18 @@ void ModuleBitcodeWriter::writeDIImportedEntity(
   Record.push_back(VE.getMetadataOrNullID(N->getRawFile()));
 
   Stream.EmitRecord(bitc::METADATA_IMPORTED_ENTITY, Record, Abbrev);
+  Record.clear();
+}
+
+void ModuleBitcodeWriter::writeTicketNode(const TicketNode *N,
+                                          SmallVectorImpl<uint64_t> &Record,
+                                          unsigned Abbrev) {
+  Record.push_back(N->isDistinct());
+  Record.push_back(VE.getMetadataID(N->getNameAsMD()));
+  Record.push_back(VE.getMetadataID(N->getDigestAsMD()));
+  Record.push_back(N->getLinkage());
+
+  Stream.EmitRecord(bitc::METADATA_TICKETNODE, Record, Abbrev);
   Record.clear();
 }
 

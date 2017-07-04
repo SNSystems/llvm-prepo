@@ -76,6 +76,7 @@
 #include "llvm/IR/DebugInfoMetadata.h"
 #include "llvm/IR/DebugLoc.h"
 #include "llvm/IR/DerivedTypes.h"
+#include "llvm/IR/Digest.h"
 #include "llvm/IR/Dominators.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/GlobalAlias.h"
@@ -683,6 +684,17 @@ void Verifier::visitGlobalVariable(const GlobalVariable &GV) {
                       "DIGlobalVariableExpression");
   }
 
+  // Visit any TicketNode attachments.
+  MDs.clear();
+  GV.getMetadata(LLVMContext::MD_fragment, MDs);
+  for (auto const *MD : MDs) {
+    if (auto const *GVD = dyn_cast<TicketNode>(MD))
+      visitTicketNode(*GVD);
+    else
+      AssertDI(false, "!fragment attachment of global variable must be a "
+                      "TicketNode");
+  }
+
   if (!GV.hasInitializer()) {
     visitGlobalValue(GV);
     return;
@@ -1268,6 +1280,33 @@ void Verifier::visitDIImportedEntity(const DIImportedEntity &N) {
     AssertDI(isa<DIScope>(S), "invalid scope for imported entity", &N, S);
   AssertDI(isDINode(N.getRawEntity()), "invalid imported entity", &N,
            N.getRawEntity());
+}
+
+void Verifier::visitTicketNode(const TicketNode &N) {
+  Assert(dyn_cast_or_null<MDString>(N.getNameAsMD()),
+         ("invalid value for TicketNode metadata entry operand"
+          "(the operand should be a string)"),
+         &N);
+
+  ConstantAsMetadata const *C = N.getDigestAsMDConstant();
+  Assert(
+      C && C->getType()->isArrayTy(),
+      "TicketNode has invalid the digest value type that must be array type!",
+      &N);
+
+  auto const AarryType = C->getType();
+  auto const Elems = AarryType->getArrayNumElements();
+  Digest::DigestType D;
+  Assert(Elems == D.Bytes.max_size(),
+         "TicketNode has invalid the digest array size!", &N);
+
+  Assert(AarryType->getArrayElementType()->isIntegerTy(8),
+         "TicketNode has invalid the array element type which should be "
+         "8-bit integer type!",
+         &N);
+
+  Assert(N.isValidLinkage(),
+         "TicketNode should have an available linkage type!", &N);
 }
 
 void Verifier::visitComdat(const Comdat &C) {

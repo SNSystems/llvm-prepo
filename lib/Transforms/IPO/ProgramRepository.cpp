@@ -127,7 +127,7 @@ bool ProgramRepository::runOnModule(Module &M) {
   DEBUG(dbgs() << "size of hashed aliases: " << NumAliases << '\n');
 
 #ifdef DEBUG
-  Digest::createHashFile(M, DigestMap, getPassName());
+  Digest::createDigestFile(M, DigestMap, getPassName());
 #endif
 
   return true;

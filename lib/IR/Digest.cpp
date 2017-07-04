@@ -12,11 +12,12 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/IR/Digest.h"
+#include "LLVMContextImpl.h"
+#include "MetadataImpl.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/GlobalObject.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/MDBuilder.h"
-#include "llvm/IR/Metadata.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Support/FileSystem.h"
 #include <cassert>
@@ -27,66 +28,23 @@ namespace llvm {
 
 class MDNode;
 
-void Digest::set(Module const &M, GlobalObject *GO, DigestType const &D) {
+void Digest::set(Module const &M, GlobalObject *GO,
+                 Digest::DigestType const &D) {
   MDBuilder MDB(M.getContext());
-  GO->setMetadata(LLVMContext::MD_fragment, MDB.createHashBytes(D));
+  GO->setMetadata(LLVMContext::MD_fragment,
+                  MDB.createTicketNode(GO->getName(), D, GO->getLinkage()));
 }
 
 Digest::DigestType Digest::get(const GlobalObject *GO) {
   // Use the digest in the MCSectionRepo.
-  MDNode const *MD = GO->getMetadata(LLVMContext::MD_fragment);
-
+  TicketNode *MD =
+      dyn_cast<TicketNode>(GO->getMetadata(LLVMContext::MD_fragment));
   if (!MD) {
     // If invalid, report the error with report_fatal_error.
-    report_fatal_error("Failed to get digest metadata for global object '" +
+    report_fatal_error("Failed to get TicketNode metadata for global object '" +
                        GO->getName() + "'.");
   }
-
-  if (MD->getNumOperands() != static_cast<unsigned>(Digest::MDDigest::Last)) {
-    // If invalid, report the error with report_fatal_error.
-    report_fatal_error("Global object '" + GO->getName() +
-                       "' has invalid number of 'digest' metadata operands.");
-  }
-
-  MDString const *MDS = dyn_cast<MDString>(
-      MD->getOperand(static_cast<unsigned>(Digest::MDDigest::Name)));
-  if (!MDS || !MDS->getString().equals("digest")) {
-    // If invalid, report the error with report_fatal_error.
-    report_fatal_error("Global object '" + GO->getName() +
-                       "' has invalid 'digest' string metadata.");
-  }
-
-  Constant const *C = mdconst::dyn_extract<Constant>(
-      MD->getOperand(static_cast<unsigned>(Digest::MDDigest::Value)));
-  if (!C || !C->getType()->isArrayTy()) {
-    // If invalid, report the error with report_fatal_error.
-    report_fatal_error(
-        "Global object '" + GO->getName() +
-        "' has invalid the digest value type that must be array type.'");
-  }
-
-  auto const AarryType = C->getType();
-  auto const Elems = AarryType->getArrayNumElements();
-  DigestType D;
-  if (Elems != D.Bytes.max_size()) {
-    // If invalid, report the error with report_fatal_error.
-    report_fatal_error("Global object '" + GO->getName() +
-                       "' has invalid the digest array size.'");
-  }
-
-  if (!AarryType->getArrayElementType()->isIntegerTy(8)) {
-    // If invalid, report the error with report_fatal_error.
-    report_fatal_error("Global object '" + GO->getName() +
-                       "' has invalid the array element type which should be "
-                       "8-bit integer type.'");
-  }
-
-  for (unsigned I = 0, E = Elems; I != E; ++I) {
-    ConstantInt const *CI = dyn_cast<ConstantInt>(C->getAggregateElement(I));
-    assert(CI);
-    D[I] = CI->getValue().getZExtValue();
-  }
-  return D;
+  return MD->getDigest();
 }
 
 const Constant *Digest::getAliasee(const GlobalAlias *GA) {
@@ -100,8 +58,8 @@ const Constant *Digest::getAliasee(const GlobalAlias *GA) {
   return Target;
 }
 
-void Digest::createHashFile(Module const &M, GlobalValueMap const &GVMap,
-                            StringRef FileExt) {
+void Digest::createDigestFile(Module const &M, GlobalValueMap const &GVMap,
+                              StringRef FileExt) {
   const std::string &MId = M.getModuleIdentifier();
   std::string hashFName(MId.begin(), find(MId, '.') + 1);
   hashFName += FileExt;
@@ -133,6 +91,69 @@ void Digest::createHashFile(Module const &M, GlobalValueMap const &GVMap,
     OS << '\t' << GO.first->getName() << ": digest:" << GO.second.digest()
        << '\n';
   }
+}
+
+#ifndef NDEBUG
+static bool isCanonical(const MDString *S) {
+  return !S || !S->getString().empty();
+}
+#endif
+
+TicketNode *TicketNode::getImpl(LLVMContext &Context, MDString *Name,
+                                ConstantAsMetadata *Digest, unsigned Linkage,
+                                StorageType Storage, bool ShouldCreate) {
+  if (Storage == Uniqued) {
+    if (auto *N = getUniqued(Context.pImpl->TicketNodes,
+                             TicketNodeInfo::KeyTy(Linkage, Name, Digest)))
+      return N;
+    if (!ShouldCreate)
+      return nullptr;
+  } else {
+    assert(ShouldCreate && "Expected non-uniqued nodes to always be created");
+  }
+
+  assert(isCanonical(Name) && "Expected canonical MDString");
+  Metadata *Ops[] = {Name, Digest};
+  return storeImpl(new (array_lengthof(Ops))
+                       TicketNode(Context, Storage, Linkage, Ops),
+                   Storage, Context.pImpl->TicketNodes);
+}
+
+TicketNode *TicketNode::getImpl(LLVMContext &Context, StringRef Name,
+                                Digest::DigestType const &Digest,
+                                unsigned Linkage, StorageType Storage,
+                                bool ShouldCreate) {
+  MDString *MDName = nullptr;
+  if (!Name.empty())
+    MDName = MDString::get(Context, Name);
+  MDBuilder MDB(Context);
+  const auto Size = Digest::DigestSize;
+  llvm::Constant *Field[Size];
+  Type *Int8Ty = Type::getInt8Ty(Context);
+  for (unsigned Idx = 0; Idx < Size; ++Idx) {
+    Field[Idx] = llvm::ConstantInt::get(Int8Ty, Digest[Idx], false);
+  }
+  // Array implementation that the hash is outputed as char/string.
+  ConstantAsMetadata *MDDigest = ConstantAsMetadata::get(
+      ConstantArray::get(llvm::ArrayType::get(Int8Ty, Size), Field));
+  return getImpl(Context, MDName, MDDigest, Linkage, Storage, ShouldCreate);
+}
+
+Digest::DigestType TicketNode::getDigest() const {
+  ConstantAsMetadata const *C = getDigestAsMDConstant();
+  auto const ArrayType = C->getType();
+  auto const Elems = ArrayType->getArrayNumElements();
+  Digest::DigestType D;
+
+  assert(Elems == D.Bytes.max_size() &&
+         "Global object has invalid digest array size.");
+  for (unsigned I = 0, E = Elems; I != E; ++I) {
+    ConstantInt const *CI =
+        dyn_cast<ConstantInt>(C->getValue()->getAggregateElement(I));
+    assert(CI);
+    D[I] = CI->getValue().getZExtValue();
+  }
+  return D;
 }
 
 } // end namespace llvm

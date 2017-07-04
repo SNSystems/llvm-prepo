@@ -455,33 +455,36 @@ MCSectionCOFF *MCContext::getCOFFSection(StringRef Section,
   return Result;
 }
 
+MCSectionRepo *MCContext::getRepoSection(std::string const &Id, RepoSection K,
+                                         Digest::DigestType const &Digest) {
 
+  // Do the lookup, if we have a hit, return it.
+  RepoSectionKey key = std::make_pair(Digest, K);
+  auto IterBool = RepoUniquingMap.insert(std::make_pair(key, nullptr));
+  auto Iter = IterBool.first;
+  if (!IterBool.second) {
+    return Iter->second;
+  }
 
+  SectionKind Kind;
+  switch (K) {
+  case RepoSection::TextSection:
+    Kind = SectionKind::getText();
+    break;
+  case RepoSection::BSSSection:
+    Kind = SectionKind::getBSS();
+    break;
+  case RepoSection::DataSection:
+    Kind = SectionKind::getData();
+    break;
+  default:
+    assert(0);
+    break;
+  }
 
-
-MCSectionRepo *MCContext::getRepoSection (std::string const & Id, RepoSection K,
-                                          MCSectionRepo::DigestType const &Digest) {
-
-    // Do the lookup, if we have a hit, return it.
-    RepoSectionKey key = std::make_pair (Digest, K);
-    auto IterBool = RepoUniquingMap.insert(std::make_pair (key, nullptr));
-    auto Iter = IterBool.first;
-    if (!IterBool.second) {
-        return Iter->second;
-    }
-
-
-    SectionKind Kind;
-    switch (K) {
-    case RepoSection::TextSection: Kind = SectionKind::getText (); break;
-    case RepoSection::BSSSection: Kind = SectionKind::getBSS (); break;
-    case RepoSection::DataSection: Kind = SectionKind::getData (); break;
-    default: assert (0); break;
-    }
-
-    auto Result = new MCSectionRepo (Kind, nullptr/*symbol*/, Id, Digest);
-    Iter->second = Result;
-    return Result;
+  auto Result = new MCSectionRepo(Kind, nullptr /*symbol*/, Id, Digest);
+  Iter->second = Result;
+  return Result;
 }
 
 MCSectionCOFF *MCContext::getCOFFSection(StringRef Section,

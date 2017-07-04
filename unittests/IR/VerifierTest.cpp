@@ -17,6 +17,8 @@
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/LegacyPassManager.h"
+#include "llvm/IR/MDBuilder.h"
 #include "llvm/IR/Module.h"
 #include "gtest/gtest.h"
 
@@ -187,6 +189,86 @@ TEST(VerifierTest, DetectInvalidDebugInfo) {
     // Now break it by not listing the CU at all.
     M.eraseNamedMetadata(M.getOrInsertNamedMetadata("llvm.dbg.cu"));
     EXPECT_TRUE(verifyModule(M));
+  }
+}
+
+TEST(VerifierTest, StripInvalidDebugInfoLegacy) {
+  LLVMContext C;
+  Module M("M", C);
+  DIBuilder DIB(M);
+  DIB.createCompileUnit(dwarf::DW_LANG_C89, DIB.createFile("broken.c", "/"),
+                        "unittest", false, "", 0);
+  DIB.finalize();
+  EXPECT_FALSE(verifyModule(M));
+
+  // Now break it.
+  auto *File = DIB.createFile("not-a-CU.f", ".");
+  NamedMDNode *NMD = M.getOrInsertNamedMetadata("llvm.dbg.cu");
+  NMD->addOperand(File);
+  EXPECT_TRUE(verifyModule(M));
+
+  legacy::PassManager Passes;
+  Passes.add(createVerifierPass(false));
+  Passes.run(M);
+  EXPECT_FALSE(verifyModule(M));
+}
+
+TEST(VerifierTest, InvalidTicketNodeVariable) {
+  LLVMContext C;
+  Module M("M", C);
+  MDBuilder MDB(M.getContext());
+  auto GV =
+      new GlobalVariable(M, Type::getInt8Ty(C), false,
+                         GlobalValue::ExternalLinkage, nullptr, "Some Global");
+  {
+    // Invalid linkage type.
+    GV->setMetadata(LLVMContext::MD_fragment,
+                    MDB.createTicketNode(GV->getName(), Digest::DigestType(),
+                                         TicketNode::MaxLinkageType + 1));
+
+    std::string Error;
+    raw_string_ostream ErrorOS(Error);
+    EXPECT_TRUE(verifyModule(M, &ErrorOS));
+    EXPECT_TRUE(
+        StringRef(ErrorOS.str())
+            .startswith("TicketNode should have an available linkage type!"));
+  }
+  {
+    // Valid TicketNode.
+    GV->setMetadata(LLVMContext::MD_fragment,
+                    MDB.createTicketNode(GV->getName(), Digest::DigestType(),
+                                         GV->getLinkage()));
+    EXPECT_FALSE(verifyModule(M));
+  }
+}
+
+TEST(VerifierTest, InvalidTicketNodeFunction) {
+  LLVMContext C;
+  Module M("M", C);
+  MDBuilder MDB(M.getContext());
+  FunctionType *FTy = FunctionType::get(Type::getVoidTy(C), /*isVarArg=*/false);
+  auto Func = Function::Create(FTy, GlobalValue::ExternalLinkage, "foo", &M);
+  {
+    // Invalid linkage type.
+    Func->setMetadata(LLVMContext::MD_fragment,
+                      MDB.createTicketNode(Func->getName(),
+                                           Digest::DigestType(),
+                                           TicketNode::MaxLinkageType + 1));
+
+    std::string Error;
+    raw_string_ostream ErrorOS(Error);
+    EXPECT_TRUE(verifyModule(M, &ErrorOS));
+    EXPECT_TRUE(
+        StringRef(ErrorOS.str())
+            .startswith("TicketNode should have an available linkage type!"));
+  }
+  {
+    // Valid global variable name.
+    Func->setMetadata(LLVMContext::MD_fragment,
+                      MDB.createTicketNode(Func->getName(),
+                                           Digest::DigestType(),
+                                           Func->getLinkage()));
+    EXPECT_FALSE(verifyModule(M));
   }
 }
 

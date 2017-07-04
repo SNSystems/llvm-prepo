@@ -72,7 +72,7 @@ bool ProgramRepositoryPruning::runOnModule(Module &M) {
   MDBuilder MDB(M.getContext());
 
   // Keep track of the existing hash value.
-  std::set<HashType> Digests;
+  std::set<Digest::DigestType> Digests;
   GlobalValueMap DigestMap;
   MDNode *MD = nullptr;
 
@@ -128,7 +128,7 @@ bool ProgramRepositoryPruning::runOnModule(Module &M) {
   DEBUG(dbgs() << "size of removed aliases: " << NumAliases << '\n');
 
 #ifdef DEBUG
-  Digest::createHashFile(M, DigestMap, getPassName());
+  Digest::createDigestFile(M, DigestMap, getPassName());
 #endif
 
   return Changed;

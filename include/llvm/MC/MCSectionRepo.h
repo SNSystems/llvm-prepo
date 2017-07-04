@@ -25,40 +25,34 @@
 
 namespace llvm {
 
-//class MCSymbol;
+// class MCSymbol;
 
 class MCSectionRepo : public MCSection {
-public:
-    using DigestType = Digest::DigestType;
-
 private:
-    std::string id_;
-    DigestType digest_;
-    unsigned const index_;
+  std::string id_;
+  Digest::DigestType digest_;
+  unsigned const index_;
 
-    friend class MCContext;
-    MCSectionRepo(SectionKind K, MCSymbol *Begin);
-    MCSectionRepo(SectionKind K, MCSymbol *Begin, std::string id,
-                  DigestType digest);
+  friend class MCContext;
+  MCSectionRepo(SectionKind K, MCSymbol *Begin);
+  MCSectionRepo(SectionKind K, MCSymbol *Begin, std::string id,
+                Digest::DigestType digest);
 
-    void PrintSwitchToSection(const MCAsmInfo &MAI, const Triple &T,
-                              raw_ostream &OS,
-                              const MCExpr *Subsection) const override {}
+  void PrintSwitchToSection(const MCAsmInfo &MAI, const Triple &T,
+                            raw_ostream &OS,
+                            const MCExpr *Subsection) const override {}
 
-    bool UseCodeAlign() const override { return false; }
-    bool isVirtualSection() const override { return false; }
+  bool UseCodeAlign() const override { return false; }
+  bool isVirtualSection() const override { return false; }
 
-
-//  void setSectionName(StringRef Name) { SectionName = Name; }
+  // void setSectionName(StringRef Name) { SectionName = Name; }
 
 public:
-    std::string id() const { return id_; }
-    DigestType hash() const { return digest_; }
-    virtual ~MCSectionRepo();
+  std::string id() const { return id_; }
+  Digest::DigestType hash() const { return digest_; }
+  virtual ~MCSectionRepo();
 
-    static bool classof(const MCSection *S) {
-        return S->getVariant() == SV_Repo;
-    }
+  static bool classof(const MCSection *S) { return S->getVariant() == SV_Repo; }
 };
 
 } // end namespace llvm

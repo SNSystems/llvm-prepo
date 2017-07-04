@@ -14,6 +14,7 @@
 
 #include "llvm/Transforms/Utils/HashCalculator.h"
 #include "llvm/IR/CallSite.h"
+#include "llvm/IR/Digest.h"
 #include "llvm/IR/GetElementPtrTypeIterator.h"
 #include "llvm/IR/InlineAsm.h"
 #include "llvm/IR/Module.h"
@@ -633,7 +634,7 @@ void VaribleHashCalculator::calculateHash(Module &M) {
 }
 
 // Calculate the global varible hash value.
-HashType AliasHashCalculator::calculate() {
+Digest::DigestType AliasHashCalculator::calculate() {
   GaHash.Hash.update(HashKind::TAG_GlobalAlias);
   GaHash.beginCalculate();
   // Accumulate the global variable name
