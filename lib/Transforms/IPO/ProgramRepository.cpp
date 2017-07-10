@@ -126,7 +126,7 @@ bool ProgramRepository::runOnModule(Module &M) {
   DEBUG(dbgs() << "size of hashed variables: " << NumVariables << '\n');
   DEBUG(dbgs() << "size of hashed aliases: " << NumAliases << '\n');
 
-#ifdef DEBUG
+#if 0
   Digest::createDigestFile(M, DigestMap, getPassName());
 #endif
 

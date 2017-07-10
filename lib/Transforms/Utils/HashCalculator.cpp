@@ -311,7 +311,7 @@ void HashCalculator::valueHash(const Value *V) {
 }
 
 void HashCalculator::globalValueHash(const GlobalValue *V) {
-  numberHash(V->getGUID());
+  memHash(V->getName());
   auto *GV = dyn_cast<GlobalVariable>(V);
   if (GV && GV->hasDefinitiveInitializer()) {
     DenseMap<const GlobalValue *, unsigned>::iterator GVI =

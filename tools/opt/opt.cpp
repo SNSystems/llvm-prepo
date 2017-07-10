@@ -774,6 +774,14 @@ int main(int argc, char **argv) {
   if (OptLevelO3)
     AddOptimizationPasses(Passes, *FPasses, TM.get(), 3, 0);
 
+  // The ProgramRepository and ProgramRepositoryPruning passes are enabled if
+  // target object type is repo format.
+  if (ModuleTriple.isOSBinFormatRepo() && !OptLevelO0 && !OptLevelO1 &&
+      !OptLevelO2 && !OptLevelOs && !OptLevelOz && !OptLevelO3) {
+    Passes.add(createProgramRepositoryPass());
+    Passes.add(createProgramRepositoryPruningPass());
+  }
+
   if (FPasses) {
     FPasses->doInitialization();
     for (Function &F : *M)
