@@ -828,6 +828,7 @@ MetadataLoader::MetadataLoaderImpl::lazyLoadModuleMetadataBlock() {
       case bitc::METADATA_OBJC_PROPERTY:
       case bitc::METADATA_IMPORTED_ENTITY:
       case bitc::METADATA_GLOBAL_VAR_EXPR:
+      case bitc::METADATA_TICKETNODE:
         // We don't expect to see any of these, if we see one, give up on
         // lazy-loading and fallback.
         MDStringRef.clear();
@@ -1771,7 +1772,7 @@ Error MetadataLoader::MetadataLoaderImpl::parseOneMetadata(
       return error("Invalid record");
 
     IsDistinct = Record[0];
-    MDString *Name = getMDString(Record[1]);
+    MDString *Name = dyn_cast<MDString>(getMD(Record[1]));
     ConstantAsMetadata *GVHash = dyn_cast<ConstantAsMetadata>(getMD(Record[2]));
     unsigned Linkage = Record[3];
 
