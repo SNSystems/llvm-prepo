@@ -219,8 +219,6 @@ static_assert(std::is_standard_layout<Section>::value,
 struct SectionCheck {
   static_assert(offsetof(Section, NumIfixups_) == 0,
                 "NumIfixups_ offset differs from expected value");
-  static_assert(offsetof(Section, NumIfixups_) == 0,
-                "NumIfixups_ offset differs from expected value");
   static_assert(offsetof(Section, NumXfixups_) == 4,
                 "NumXfixups_ offset differs from expected value");
   static_assert(offsetof(Section, DataSize_) == 8,
@@ -385,6 +383,55 @@ private:
 template <typename Iterator>
 inline ContentTypeIterator<Iterator> makeContentTypeIterator(Iterator It) {
   return ContentTypeIterator<Iterator>(It);
+}
+
+/// An iterator adaptor which produces a value_type of dereferences the
+/// value_type of the wrapped iterator.
+template <typename Iterator> class SectionContentIterator {
+public:
+  using value_type = typename std::pointer_traits<
+      typename std::pointer_traits<Iterator>::element_type>::element_type;
+  using difference_type =
+      typename std::iterator_traits<Iterator>::difference_type;
+  using pointer = value_type *;
+  using reference = value_type &;
+  using iterator_category = std::input_iterator_tag;
+
+  SectionContentIterator() : It_{} {}
+  explicit SectionContentIterator(Iterator It) : It_{It} {}
+  SectionContentIterator(SectionContentIterator const &Rhs) : It_{Rhs.It_} {}
+  SectionContentIterator &operator=(SectionContentIterator const &Rhs) {
+    It_ = Rhs.It_;
+    return *this;
+  }
+  bool operator==(SectionContentIterator const &Rhs) const {
+    return It_ == Rhs.It_;
+  }
+  bool operator!=(SectionContentIterator const &Rhs) const {
+    return !(operator==(Rhs));
+  }
+  SectionContentIterator &operator++() {
+    ++It_;
+    return *this;
+  }
+  SectionContentIterator operator++(int) {
+    SectionContentIterator Old{*this};
+    It_++;
+    return Old;
+  }
+
+  reference operator*() const { return **It_; }
+  pointer operator->() const { return &(**It_); }
+  reference operator[](difference_type n) const { return *(It_[n]); }
+
+private:
+  Iterator It_;
+};
+
+template <typename Iterator>
+inline SectionContentIterator<Iterator>
+makeSectionContentIterator(Iterator It) {
+  return SectionContentIterator<Iterator>(It);
 }
 
 } // end namespace details

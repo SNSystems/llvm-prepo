@@ -1455,7 +1455,7 @@ bool AsmPrinter::doFinalization(Module &M) {
     unsigned Align = 1;
     MCSection *ReadOnlySection = getObjFileLowering().getSectionForConstant(
         getDataLayout(), SectionKind::getReadOnly(),
-        /*C=*/nullptr, Align);
+        /*C=*/nullptr, Align, /*F=*/nullptr); // FIXME: F shouldn't be null.
     OutStreamer->SwitchSection(ReadOnlySection);
 
     MCSymbol *AddrSymbol =
@@ -1607,6 +1607,7 @@ void AsmPrinter::EmitConstantPool() {
   // Calculate sections for constant pool entries. We collect entries to go into
   // the same section together to reduce amount of section switch statements.
   SmallVector<SectionCPs, 4> CPSections;
+  const Function *F = MF->getFunction();
   for (unsigned i = 0, e = CP.size(); i != e; ++i) {
     const MachineConstantPoolEntry &CPE = CP[i];
     unsigned Align = CPE.getAlignment();
@@ -1617,8 +1618,8 @@ void AsmPrinter::EmitConstantPool() {
     if (!CPE.isMachineConstantPoolEntry())
       C = CPE.Val.ConstVal;
 
-    MCSection *S = getObjFileLowering().getSectionForConstant(getDataLayout(),
-                                                              Kind, C, Align);
+    MCSection *S = getObjFileLowering().getSectionForConstant(
+        getDataLayout(), Kind, C, Align, F);
 
     // The number of sections are small, just do a linear search from the
     // last section to the first.

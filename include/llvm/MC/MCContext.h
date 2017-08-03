@@ -254,7 +254,16 @@ namespace llvm {
     std::map<COFFSectionKey, MCSectionCOFF *> COFFUniquingMap;
 
   public:
-    enum class RepoSection { TextSection, BSSSection, DataSection };
+    enum class RepoSection {
+      TextSection,
+      BSSSection,
+      DataSection,
+      MergeableConst4Section,
+      MergeableConst8Section,
+      MergeableConst16Section,
+      MergeableConst32Section,
+      ReadOnlySection,
+    };
 
   private:
     using RepoSectionKey = std::pair<Digest::DigestType, RepoSection>;

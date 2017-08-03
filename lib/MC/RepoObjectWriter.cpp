@@ -64,8 +64,11 @@ class RepoObjectWriter : public MCObjectWriter {
 
   DenseMap<const MCSymbolRepo *, const MCSymbolRepo *> Renames;
 
-  llvm::DenseMap<const MCSectionRepo *, std::vector<RepoRelocationEntry>>
-      Relocations;
+  DenseMap<const MCSectionRepo *, std::vector<RepoRelocationEntry>> Relocations;
+
+  std::map<Digest::DigestType,
+           SmallVector<std::unique_ptr<repo::SectionContent>, 4>>
+      Contents;
 
   /// @}
   /// @name Symbol Table Data
@@ -506,7 +509,6 @@ void RepoObjectWriter::writeRepoSectionData(const MCAssembler &Asm,
 
   llvm::repo::SectionType St = llvm::repo::SectionType::Data;
 
-  dbgs() << "Digest: " << Section.hash().digest() << '\n';
   auto const kind = Section.getKind();
   if (kind.isBSS()) {
     St = llvm::repo::SectionType::BSS;
@@ -548,7 +550,9 @@ void RepoObjectWriter::writeRepoSectionData(const MCAssembler &Asm,
     llvm_unreachable("Unknown section type in writeRepoSectionData");
   }
 
-  llvm::repo::SectionContent Content{St};
+  auto &SC = Contents[Section.hash()];
+  SC.push_back(make_unique<repo::SectionContent>(St));
+  repo::SectionContent &Content = *SC.back();
 
   // Add the section content to the fragment.
   raw_svector_ostream VecOS{Content.Data};
@@ -567,9 +571,6 @@ void RepoObjectWriter::writeRepoSectionData(const MCAssembler &Asm,
         It->c_str(), static_cast<std::uint8_t>(Relocation.Type),
         Relocation.Offset, Relocation.Addend});
   }
-
-  auto Fragment = llvm::repo::Fragment::make_unique(&Content, &Content + 1);
-  dbgs() << *Fragment;
 
 #if 0
   // Compressing debug_frame requires handling alignment fragments which is
@@ -796,16 +797,23 @@ void RepoObjectWriter::writeObject(MCAssembler &Asm,
   SectionOffsetsTy SectionOffsets;
   // std::vector<MCSectionELF *> Groups;
   std::vector<MCSectionRepo *> Relocations;
+
   for (MCSection &Sec : Asm) {
     auto &Section = static_cast<MCSectionRepo &>(Sec);
-
-    // align(Section.getAlignment());
 
     // Remember the offset into the file for this section.
     uint64_t SecStart = getStream().tell();
 
     // const MCSymbolELF *SignatureSymbol = Section.getGroup();
     writeSectionData(Asm, Section, Layout);
+  }
+
+  for (auto &Content : Contents) {
+    dbgs() << "Digest: " << Content.first.digest() << '\n';
+    auto Fragment = llvm::repo::Fragment::make_unique(
+        llvm::repo::details::makeSectionContentIterator(Content.second.begin()),
+        llvm::repo::details::makeSectionContentIterator(Content.second.end()));
+    dbgs() << *Fragment;
   }
 }
 

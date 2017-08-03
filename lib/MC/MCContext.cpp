@@ -477,6 +477,21 @@ MCSectionRepo *MCContext::getRepoSection(std::string const &Id, RepoSection K,
   case RepoSection::DataSection:
     Kind = SectionKind::getData();
     break;
+  case RepoSection::MergeableConst4Section:
+    Kind = SectionKind::getMergeableConst4();
+    break;
+  case RepoSection::MergeableConst8Section:
+    Kind = SectionKind::getMergeableConst8();
+    break;
+  case RepoSection::MergeableConst16Section:
+    Kind = SectionKind::getMergeableConst16();
+    break;
+  case RepoSection::MergeableConst32Section:
+    Kind = SectionKind::getMergeableConst32();
+    break;
+  case RepoSection::ReadOnlySection:
+    Kind = SectionKind::getReadOnly();
+    break;
   default:
     assert(0);
     break;

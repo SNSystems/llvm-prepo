@@ -53,8 +53,8 @@ public:
   /// Given a constant with the SectionKind, return a section that it should be
   /// placed in.
   MCSection *getSectionForConstant(const DataLayout &DL, SectionKind Kind,
-                                   const Constant *C,
-                                   unsigned &Align) const override;
+                                   const Constant *C, unsigned &Align,
+                                   const Function *F) const override;
 
   MCSection *getExplicitSectionGlobal(const GlobalObject *GO, SectionKind Kind,
                                       const TargetMachine &TM) const override;
@@ -109,8 +109,8 @@ public:
                                       const TargetMachine &TM) const override;
 
   MCSection *getSectionForConstant(const DataLayout &DL, SectionKind Kind,
-                                   const Constant *C,
-                                   unsigned &Align) const override;
+                                   const Constant *C, unsigned &Align,
+                                   const Function *F) const override;
 
   /// The mach-o version of this method defaults to returning a stub reference.
   const MCExpr *getTTypeGlobalReference(const GlobalValue *GV,
@@ -145,6 +145,9 @@ public:
   MCSection *SelectSectionForGlobal(const GlobalObject *GO, SectionKind Kind,
 	  const TargetMachine &TM) const override;
 
+  MCSection *getSectionForConstant(const DataLayout &DL, SectionKind Kind,
+                                   const Constant *C, unsigned &Align,
+                                   const Function *F) const override;
 #if 0
   /// Emit the module flags that specify the garbage collection information.
   void emitModuleFlags(MCStreamer &Streamer,
@@ -158,10 +161,6 @@ public:
   MCSection *getExplicitSectionGlobal(const GlobalValue *GV, SectionKind Kind,
                                       Mangler &Mang,
                                       const TargetMachine &TM) const override;
-
-  MCSection *getSectionForConstant(const DataLayout &DL, SectionKind Kind,
-                                   const Constant *C,
-                                   unsigned &Align) const override;
 
   /// The mach-o version of this method defaults to returning a stub reference.
   const MCExpr *
