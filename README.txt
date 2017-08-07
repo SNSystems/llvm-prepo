@@ -1,3 +1,7 @@
+
+This repository contains a copy of LLVM with work-in-progress modifications to output to a Program Repository. To build a complete compiler it should be accompanied by a copy of Clang at commit 91321d9884b7ce357cac1d128244d22dbe2a0cc7.
+
+
 The LLVM Compiler Infrastructure
 ================================
 
