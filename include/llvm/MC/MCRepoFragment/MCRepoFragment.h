@@ -18,6 +18,11 @@
 
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Support/Debug.h"
+
+#include "pstore/address.hpp"
+#include "pstore/file_header.hpp"
+#include "pstore/transaction.hpp"
 
 #include "MCRepoAligned.h"
 #include "MCRepoSparseArray.h"
@@ -60,7 +65,7 @@ static_assert(sizeof(InternalFixup) == 12,
 //* |___/_\_\\__\___|_| |_||_\__,_|_|_| |_/_\_\\_,_| .__/ *
 //*                                                |_|    *
 struct ExternalFixup {
-  char const *Name;
+  pstore::address Name;
   std::uint8_t Type;
   // FIXME: much padding here.
   std::uint64_t Offset;
@@ -447,9 +452,26 @@ public:
     void operator()(void *P);
   };
 
+  template <typename LockType, typename Iterator>
+  static auto alloc (pstore::transaction<LockType> & transaction,
+                     Iterator First, Iterator Last) -> pstore::record;
+
   template <typename Iterator>
-  static auto make_unique(Iterator First, Iterator Last)
-      -> std::unique_ptr<Fragment, Deleter>;
+  void populate (Iterator First, Iterator Last) {
+    // Point past the end of the sparse array.
+    auto Out = reinterpret_cast<std::uint8_t *>(this) +
+               Arr_.size_bytes();
+
+    // Copy the contents of each of the segments to the fragment.
+    std::for_each(First, Last, [&Out, this](SectionContent const &C) {
+      Out = reinterpret_cast<std::uint8_t *>(alignedPtr<Section>(Out));
+      auto Scn = new (Out) Section(C.makeSources());
+      auto Offset = reinterpret_cast<std::uintptr_t>(Scn) -
+                    reinterpret_cast<std::uintptr_t>(this);
+      Arr_[static_cast<unsigned>(C.Type)] = Offset;
+      Out += Scn->sizeBytes();
+    });
+  }
 
   using MemberArray = SparseArray<std::uint64_t>;
 
@@ -457,39 +479,59 @@ public:
   std::size_t numSections() const { return Arr_.size(); }
   MemberArray const &sections() const { return Arr_; }
 
+  /// Returns the number of bytes of storage that is required for a fragment containing
+  /// the sections defined by [first, last).
+  template <typename Iterator>
+  static std::size_t sizeBytes (Iterator First, Iterator Last) {
+    auto const NumSections = std::distance(First, Last);
+    assert(NumSections >= 0);
+
+    // Space needed by the section offset array.
+    std::size_t SizeBytes = decltype(Fragment::Arr_)::size_bytes(NumSections);
+    // Now the storage for each of the sections
+    std::for_each(First, Last, [&SizeBytes](SectionContent const &C) {
+      SizeBytes = aligned<Section>(SizeBytes);
+      SizeBytes += Section::sizeBytes(C.makeSources());
+    });
+    return SizeBytes;
+  }
+
 private:
   template <typename IteratorIdx>
   Fragment(IteratorIdx FirstIndex, IteratorIdx LastIndex)
       : Arr_(FirstIndex, LastIndex) {}
 
+  Section const & offsetToSection (std::uint64_t Offset) const {
+    auto Ptr = reinterpret_cast<std::uint8_t const *>(this) + Offset;
+    assert(reinterpret_cast<std::uintptr_t>(Ptr) % alignof(Section) == 0);
+    return *reinterpret_cast<Section const *>(Ptr);
+  }
+
   MemberArray Arr_;
 };
 
-// make_unique
-// ~~~~~~~~~~~
-template <typename Iterator>
-auto Fragment::make_unique(Iterator First, Iterator Last)
-    -> std::unique_ptr<Fragment, Deleter> {
+raw_ostream &operator<<(raw_ostream &OS, llvm::repo::SectionType T);
+raw_ostream &operator<<(raw_ostream &OS, llvm::repo::InternalFixup const &ifx);
+raw_ostream &operator<<(raw_ostream &OS, llvm::repo::ExternalFixup const &Xfx);
+raw_ostream &operator<<(raw_ostream &OS, llvm::repo::Section const &Src);
+raw_ostream &operator<<(raw_ostream &OS, llvm::repo::Fragment const &F);
+
+template <typename LockType, typename Iterator>
+auto Fragment::alloc (pstore::transaction<LockType> & Transaction,
+                      Iterator First, Iterator Last) -> pstore::record {
   static_assert(
       (std::is_same<typename std::iterator_traits<Iterator>::value_type,
                     SectionContent>::value),
       "Iterator value_type should be SectionContent");
 
-  auto const NumSections = std::distance(First, Last);
-  assert(NumSections >= 0);
-
   // Compute the number of bytes of storage that we'll need for this fragment.
-  auto Size = std::size_t{0};
-  Size += decltype(Fragment::Arr_)::size_bytes(NumSections);
-  std::for_each(First, Last, [&Size](SectionContent const &C) {
-    Size = aligned<Section>(Size);
-    Size += Section::sizeBytes(C.makeSources());
-  });
+  auto Size = Fragment::sizeBytes (First, Last);
 
-  // Allocate sufficient memory for the fragment including its three arrays.
-  auto Ptr = std::unique_ptr<std::uint8_t[]>(new std::uint8_t[Size]);
-  std::fill(Ptr.get(), Ptr.get() + Size, std::uint8_t{0xFF});
+  // Allocate storage for the fragment including its three arrays.
+  std::pair <std::shared_ptr<void>, pstore::address> Storage = Transaction.alloc_rw(Size, alignof (Fragment));
+  auto Ptr = Storage.first;
 
+  // Construct the basic fragment structure into this memory.
   auto FragmentPtr =
       new (Ptr.get()) Fragment(details::makeContentTypeIterator(First),
                                details::makeContentTypeIterator(Last));
@@ -507,15 +549,11 @@ auto Fragment::make_unique(Iterator First, Iterator Last)
     Out += Scn->sizeBytes();
   });
 
-  assert(Out >= Ptr.get() && static_cast<std::size_t>(Out - Ptr.get()) == Size);
-  return {reinterpret_cast<Fragment *>(Ptr.release()), Deleter()};
-}
+dbgs () << *FragmentPtr << '\n';
 
-raw_ostream &operator<<(raw_ostream &OS, llvm::repo::SectionType T);
-raw_ostream &operator<<(raw_ostream &OS, llvm::repo::InternalFixup const &ifx);
-raw_ostream &operator<<(raw_ostream &OS, llvm::repo::ExternalFixup const &Xfx);
-raw_ostream &operator<<(raw_ostream &OS, llvm::repo::Section const &Src);
-raw_ostream &operator<<(raw_ostream &OS, llvm::repo::Fragment const &F);
+  assert(Out >= Ptr.get() && static_cast<std::size_t>(Out - reinterpret_cast <std::uint8_t *> (Ptr.get())) == Size);
+  return {Storage.second, Size};
+}
 
 } // end namespace repo
 } // end namespace llvm

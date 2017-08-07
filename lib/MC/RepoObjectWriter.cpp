@@ -41,6 +41,8 @@
 #include <string>
 #include <vector>
 
+#include "pstore/transaction.hpp"
+
 using namespace llvm;
 
 #undef DEBUG_TYPE
@@ -49,15 +51,15 @@ using namespace llvm;
 namespace {
 typedef DenseMap<const MCSectionRepo *, uint32_t> SectionIndexMapTy;
 
+using TransactionType = pstore::transaction<pstore::transaction_lock>;
+
+
 class RepoObjectWriter : public MCObjectWriter {
   //  static uint64_t SymbolValue(const MCSymbol &Sym, const MCAsmLayout
   //  &Layout);
   //  static bool isInSymtab(const MCAsmLayout &Layout, const MCSymbolELF
   //  &Symbol,
   //                         bool Used, bool Renamed);
-
-  // TODO: will be a set of strings in the repository.
-  std::set<std::string> Names;
 
   /// The target specific repository writer instance.
   std::unique_ptr<MCRepoObjectTargetWriter> TargetObjectWriter;
@@ -102,7 +104,9 @@ class RepoObjectWriter : public MCObjectWriter {
   void align(unsigned Alignment);
 
   void writeRepoSectionData(const MCAssembler &Asm, MCSectionRepo &Sec,
-                            const MCAsmLayout &Layout);
+                            const MCAsmLayout &Layout,
+                            TransactionType & transaction,
+                            pstore::index::name_index * const NamesIndex);
 
   bool shouldRelocateWithSymbol(const MCAssembler &Asm,
                                 const MCSymbolRefExpr *RefA, const MCSymbol *S,
@@ -163,7 +167,9 @@ public:
   void writeSectionHeader(const MCAsmLayout &Layout, const SectionIndexMapTy &SectionIndexMap, const SectionOffsetsTy &SectionOffsets);
 #endif
   void writeSectionData(const MCAssembler &Asm, MCSection &Sec,
-                        const MCAsmLayout &Layout);
+                        const MCAsmLayout &Layout,
+                        TransactionType & Transaction,
+                        pstore::index::name_index * const NamesIndex);
 
 #if 0
   void WriteSecHdrEntry(uint32_t Name, uint32_t Type, uint64_t Flags,
@@ -489,7 +495,9 @@ RepoObjectWriter::createRelocationSection(MCContext &Ctx,
 
 void RepoObjectWriter::writeRepoSectionData(const MCAssembler &Asm,
                                             MCSectionRepo &Section,
-                                            const MCAsmLayout &Layout) {
+                                            const MCAsmLayout &Layout,
+                                            TransactionType & Transaction,
+                                            pstore::index::name_index * const NamesIndex) {
 
 #if 0
     for (const MCSymbol &S : Asm.symbols()) {
@@ -565,66 +573,23 @@ void RepoObjectWriter::writeRepoSectionData(const MCAssembler &Asm,
   Content.Xfixups.reserve(Relocs.size());
   for (auto const &Relocation : Relocations[&Section]) {
     // Insert the target symbol name into the set of known names.
-    auto It = Names.emplace(Relocation.Symbol->getName()).first;
+    StringRef Name = Relocation.Symbol->getName();
+    auto It = NamesIndex->insert (Transaction, Name).first;
+
     // Attach a suitable external fixup to this section.
     Content.Xfixups.push_back(repo::ExternalFixup{
-        It->c_str(), static_cast<std::uint8_t>(Relocation.Type),
+        It.get_address (), static_cast<std::uint8_t>(Relocation.Type),
         Relocation.Offset, Relocation.Addend});
   }
-
-#if 0
-  // Compressing debug_frame requires handling alignment fragments which is
-  // more work (possibly generalizing MCAssembler.cpp:writeFragment to allow
-  // for writing to arbitrary buffers) for little benefit.
-  bool CompressionEnabled =
-      Asm.getContext().getAsmInfo()->compressDebugSections() !=
-      DebugCompressionType::DCT_None;
-  if (!CompressionEnabled || !SectionName.startswith(".debug_") ||
-      SectionName == ".debug_frame") {
-    Asm.writeSectionData(&Section, Layout);
-    return;
-  }
-
-  SmallVector<char, 128> UncompressedData;
-  raw_svector_ostream VecOS(UncompressedData);
-  raw_pwrite_stream &OldStream = getStream();
-  setStream(VecOS);
-  Asm.writeSectionData(&Section, Layout);
-  setStream(OldStream);
-
-  SmallVector<char, 128> CompressedContents;
-  zlib::Status Success = zlib::compress(
-      StringRef(UncompressedData.data(), UncompressedData.size()),
-      CompressedContents);
-  if (Success != zlib::StatusOK) {
-    getStream() << UncompressedData;
-    return;
-  }
-
-  bool ZlibStyle = Asm.getContext().getAsmInfo()->compressDebugSections() ==
-                   DebugCompressionType::DCT_Zlib;
-  if (!maybeWriteCompression(UncompressedData.size(), CompressedContents,
-                             ZlibStyle, Sec.getAlignment())) {
-    getStream() << UncompressedData;
-    return;
-  }
-
-  if (ZlibStyle)
-    // Set the compressed flag. That is zlib style.
-    Section.setFlags(Section.getFlags() | ELF::SHF_COMPRESSED);
-  else
-    // Add "z" prefix to section name. This is zlib-gnu style.
-    Asm.getContext().renameELFSection(&Section,
-                                      (".z" + SectionName.drop_front(1)).str());
-  getStream() << CompressedContents;
-#endif
 }
 
 void RepoObjectWriter::writeSectionData(const MCAssembler &Asm, MCSection &Sec,
-                                        const MCAsmLayout &Layout) {
+                                        const MCAsmLayout &Layout,
+                                        TransactionType & Transaction,
+                                        pstore::index::name_index * const NamesIndex) {
 
   auto &Section = static_cast<MCSectionRepo &>(Sec);
-  this->writeRepoSectionData(Asm, Section, Layout);
+  this->writeRepoSectionData(Asm, Section, Layout, Transaction, NamesIndex);
 }
 
 #if 0
@@ -646,52 +611,8 @@ void RepoObjectWriter::WriteSecHdrEntry(uint32_t Name, uint32_t Type,
   WriteWord(EntrySize); // sh_entsize
 }
 #endif
-void RepoObjectWriter::writeRelocations(const MCAssembler &Asm,
-                                        const MCSectionRepo &Sec) {
-  std::vector<RepoRelocationEntry> &Relocs = Relocations[&Sec];
-
-#if 0
-  // We record relocations by pushing to the end of a vector. Reverse the vector
-  // to get the relocations in the order they were created.
-  // In most cases that is not important, but it can be for special sections
-  // (.eh_frame) or specific relocations (TLS optimizations on SystemZ).
-  std::reverse(Relocs.begin(), Relocs.end());
-
-  // Sort the relocation entries. MIPS needs this.
-  TargetObjectWriter->sortRelocs(Asm, Relocs);
-
-  for (unsigned i = 0, e = Relocs.size(); i != e; ++i) {
-    const ELFRelocationEntry &Entry = Relocs[e - i - 1];
-    unsigned Index = Entry.Symbol ? Entry.Symbol->getIndex() : 0;
-
-    if (is64Bit()) {
-      write(Entry.Offset);
-      if (TargetObjectWriter->isN64()) {
-        write(uint32_t(Index));
-
-        write(TargetObjectWriter->getRSsym(Entry.Type));
-        write(TargetObjectWriter->getRType3(Entry.Type));
-        write(TargetObjectWriter->getRType2(Entry.Type));
-        write(TargetObjectWriter->getRType(Entry.Type));
-      } else {
-        struct ELF::Elf64_Rela ERE64;
-        ERE64.setSymbolAndType(Index, Entry.Type);
-        write(ERE64.r_info);
-      }
-      if (hasRelocationAddend())
-        write(Entry.Addend);
-    } else {
-      write(uint32_t(Entry.Offset));
-
-      struct ELF::Elf32_Rela ERE32;
-      ERE32.setSymbolAndType(Index, Entry.Type);
-      write(ERE32.r_info);
-
-      if (hasRelocationAddend())
-        write(uint32_t(Entry.Addend));
-    }
-  }
-#endif
+void RepoObjectWriter::writeRelocations(const MCAssembler &/*Asm*/,
+                                        const MCSectionRepo &/*Sec*/) {
 }
 
 #if 0
@@ -707,85 +628,37 @@ void RepoObjectWriter::writeSection(const SectionIndexMapTy &SectionIndexMap,
                                     uint64_t Size,
                                     const MCSectionRepo &Section) {
 #if 0
-  uint64_t sh_link = 0;
-  uint64_t sh_info = 0;
-
-  switch(Section.getType()) {
-  default:
-    // Nothing to do.
-    break;
-
-  case ELF::SHT_DYNAMIC:
-    llvm_unreachable("SHT_DYNAMIC in a relocatable object");
-
-  case ELF::SHT_REL:
-  case ELF::SHT_RELA: {
-    sh_link = SymbolTableIndex;
-    assert(sh_link && ".symtab not found");
-    const MCSectionELF *InfoSection = Section.getAssociatedSection();
-    sh_info = SectionIndexMap.lookup(InfoSection);
-    break;
-  }
-
-  case ELF::SHT_SYMTAB:
-  case ELF::SHT_DYNSYM:
-    sh_link = StringTableIndex;
-    sh_info = LastLocalSymbolIndex;
-    break;
-
-  case ELF::SHT_SYMTAB_SHNDX:
-    sh_link = SymbolTableIndex;
-    break;
-
-  case ELF::SHT_GROUP:
-    sh_link = SymbolTableIndex;
-    sh_info = GroupSymbolIndex;
-    break;
-  }
-
-  if (TargetObjectWriter->getEMachine() == ELF::EM_ARM &&
-      Section.getType() == ELF::SHT_ARM_EXIDX)
-    sh_link = SectionIndexMap.lookup(Section.getAssociatedSection());
-
-  WriteSecHdrEntry(StrTabBuilder.getOffset(Section.getSectionName()),
-                   Section.getType(), Section.getFlags(), 0, Offset, Size,
-                   sh_link, sh_info, Section.getAlignment(),
-                   Section.getEntrySize());
 #endif
 }
 
-#if 0
-void RepoObjectWriter::writeSectionHeader(
-    const MCAsmLayout &Layout, const SectionIndexMapTy &SectionIndexMap,
-    const SectionOffsetsTy &SectionOffsets) {
-  const unsigned NumSections = SectionTable.size();
+namespace {
 
-  // Null section first.
-  uint64_t FirstSectionSize =
-      (NumSections + 1) >= ELF::SHN_LORESERVE ? NumSections + 1 : 0;
-  WriteSecHdrEntry(0, 0, 0, 0, 0, FirstSectionSize, 0, 0, 0, 0);
-
-  for (const MCSectionELF *Section : SectionTable) {
-    uint32_t GroupSymbolIndex;
-    unsigned Type = Section->getType();
-    if (Type != ELF::SHT_GROUP)
-      GroupSymbolIndex = 0;
-    else
-      GroupSymbolIndex = Section->getGroup()->getIndex();
-
-    const std::pair<uint64_t, uint64_t> &Offsets =
-        SectionOffsets.find(Section)->second;
-    uint64_t Size;
-    if (Type == ELF::SHT_NOBITS)
-      Size = Layout.getSectionAddressSize(Section);
-    else
-      Size = Offsets.second - Offsets.first;
-
-    writeSection(SectionIndexMap, GroupSymbolIndex, Offsets.first, Size,
-                 *Section);
-  }
+auto getTransaction () -> std::pair <pstore::database &, TransactionType &> {
+    static pstore::database Repository ("./clang.db", true/*writable*/);
+    static auto Transaction = pstore::begin (Repository);
+    return {Repository, Transaction};
 }
-#endif
+
+raw_ostream & operator<< (raw_ostream & OS, pstore::index::uint128 const & V) {
+    auto digitToHex = [] (unsigned v) {
+        assert (v < 0x10);
+        return static_cast<char> (v + ((v < 10) ? '0' : 'a' - 10));
+    };
+
+    std::uint64_t const High = V.high ();
+    for (int Shift = 64 - 4; Shift >= 0; Shift -= 4) {
+        OS << digitToHex ((High >> Shift) & 0x0F);
+    }
+
+    std::uint64_t const Low = V.low ();
+    for (int Shift = 64 - 4; Shift >= 0; Shift -= 4) {
+        OS <<  digitToHex ((Low >> Shift) & 0x0F);
+    }
+    return OS;
+}
+
+} // (anonymous namespace)
+
 
 void RepoObjectWriter::writeObject(MCAssembler &Asm,
                                    const MCAsmLayout &Layout) {
@@ -798,23 +671,38 @@ void RepoObjectWriter::writeObject(MCAssembler &Asm,
   // std::vector<MCSectionELF *> Groups;
   std::vector<MCSectionRepo *> Relocations;
 
+  std::pair <pstore::database &, TransactionType &> DbTransact = getTransaction ();
+  auto & Db = DbTransact.first;
+  auto & Transaction = DbTransact.second;
+
+  pstore::index::name_index * const NamesIndex = Db.get_name_index ();
+  assert (NamesIndex);
+  pstore::index::digest_index * const DigestsIndex = Db.get_digest_index ();
+  assert (DigestsIndex);
+
   for (MCSection &Sec : Asm) {
     auto &Section = static_cast<MCSectionRepo &>(Sec);
-
-    // Remember the offset into the file for this section.
-    uint64_t SecStart = getStream().tell();
-
-    // const MCSymbolELF *SignatureSymbol = Section.getGroup();
-    writeSectionData(Asm, Section, Layout);
+    writeSectionData(Asm, Section, Layout, Transaction, NamesIndex);
   }
+
 
   for (auto &Content : Contents) {
-    dbgs() << "Digest: " << Content.first.digest() << '\n';
-    auto Fragment = llvm::repo::Fragment::make_unique(
-        llvm::repo::details::makeSectionContentIterator(Content.second.begin()),
-        llvm::repo::details::makeSectionContentIterator(Content.second.end()));
-    dbgs() << *Fragment;
+    auto const Key = pstore::index::uint128 {Content.first.high (), Content.first.low ()};
+    if (DigestsIndex->find (Key) != DigestsIndex->end ()) {
+      dbgs () << "fragment " << Key << " exists. skipping\n";
+    } else {
+      auto Begin = llvm::repo::details::makeSectionContentIterator(Content.second.begin());
+      auto End = llvm::repo::details::makeSectionContentIterator(Content.second.end());
+
+      dbgs () << "fragment " << Key << " adding. size=" << repo::Fragment::sizeBytes (Begin, End) << '\n';
+
+      pstore::record FragmentRecord = repo::Fragment::alloc (Transaction, Begin, End);
+      auto Kvp = std::make_pair (Key, FragmentRecord);
+      DigestsIndex->insert (Transaction, Kvp);
+    }
   }
+
+  Transaction.commit ();
 }
 
 bool RepoObjectWriter::isSymbolRefDifferenceFullyResolvedImpl(

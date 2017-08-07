@@ -68,7 +68,7 @@ raw_ostream &operator<<(raw_ostream &OS, InternalFixup const &Ifx) {
 
 raw_ostream &operator<<(raw_ostream &OS, ExternalFixup const &Xfx) {
   using TypeT = std::common_type <unsigned, decltype (Xfx.Type)>::type;
-  return OS << R"({name:")" << Xfx.Name << R"(",type:)" << static_cast <TypeT> (Xfx.Type)
+  return OS << R"({name:")" << Xfx.Name.absolute () << R"(",type:)" << static_cast <TypeT> (Xfx.Type)
             << ",offset:" << Xfx.Offset << ",addend:" << Xfx.Addend << "}";
 }
 
