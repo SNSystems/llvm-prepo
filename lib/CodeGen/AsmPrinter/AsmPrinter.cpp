@@ -108,6 +108,8 @@
 #include "llvm/Support/TargetRegistry.h"
 #include "llvm/Support/Timer.h"
 #include "llvm/Support/raw_ostream.h"
+//FIXME: Should move this header to Support directory??
+#include "llvm/Transforms/Utils/HashCalculator.h"
 #include "llvm/Target/TargetLoweringObjectFile.h"
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/Target/TargetOptions.h"
@@ -1453,9 +1455,24 @@ bool AsmPrinter::doFinalization(Module &M) {
   // Emit __morestack address if needed for indirect calls.
   if (MMI->usesMorestackAddr()) {
     unsigned Align = 1;
+    Type *Ty = Type::getInt1PtrTy(M.getContext());
+    GlobalVariable *MoreStack = nullptr;
+    if (TM.getTargetTriple().isOSBinFormatRepo()) {
+      MoreStack = new GlobalVariable(M, Ty, true, GlobalValue::ExternalLinkage,
+                                     nullptr, "__morestack_addr");
+      // Calculate the global varible MoreStack hash value.
+      VaribleHashCalculator GVHC{MoreStack};
+      GVHC.calculateHash(M);
+      // Since the __morestack_addr for each module, the ModuleID need to be
+      // considered in the Hash value.
+      auto Str = M.getModuleIdentifier();
+      ArrayRef<uint8_t> SVal((const uint8_t *)Str.data(), Str.size());
+      GVHC.update(SVal);
+      Digest::set(M, MoreStack, GVHC.getHashResult());
+    }
     MCSection *ReadOnlySection = getObjFileLowering().getSectionForConstant(
         getDataLayout(), SectionKind::getReadOnly(),
-        /*C=*/nullptr, Align, /*F=*/nullptr); // FIXME: F shouldn't be null.
+        /*C=*/nullptr, Align, MoreStack);
     OutStreamer->SwitchSection(ReadOnlySection);
 
     MCSymbol *AddrSymbol =

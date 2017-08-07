@@ -97,6 +97,9 @@ public:
     reset();
   }
 
+  /// Incrementally add the bytes in \p Data to the hash.
+  void update(ArrayRef<uint8_t> Data) { Hash.update(Data); }
+
   MD5::MD5Result getHashResult() {
     MD5::MD5Result Result;
     Hash.final(Result);
@@ -214,6 +217,9 @@ public:
   /// Return the function hash result.
   MD5::MD5Result getHashResult();
 
+  /// Incrementally add the bytes in \p Data to the hash.
+  void update(ArrayRef<uint8_t> Data) { FnHash.update(Data); }
+
 protected:
   /// Calculate the hash for the signature and other general attributes of the
   /// function.
@@ -265,6 +271,9 @@ public:
   std::string &get(MD5::MD5Result &HashRes) { return GvHash.get(HashRes); }
 
   MD5::MD5Result getHashResult() { return GvHash.getHashResult(); }
+
+  /// Incrementally add the bytes in \p Data to the hash.
+  void update(ArrayRef<uint8_t> Data) { GvHash.update(Data); }
 
 private:
   /// Accumulate the comdat variable hash value.

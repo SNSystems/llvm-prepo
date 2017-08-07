@@ -556,7 +556,7 @@ bool TargetLoweringObjectFileELF::shouldPutJumpTableInFunctionSection(
 /// information, return a section that it should be placed in.
 MCSection *TargetLoweringObjectFileELF::getSectionForConstant(
     const DataLayout &DL, SectionKind Kind, const Constant *C, unsigned &Align,
-    const Function *F) const {
+    const GlobalObject *GO) const {
   if (Kind.isMergeableConst4() && MergeableConst4Section)
     return MergeableConst4Section;
   if (Kind.isMergeableConst8() && MergeableConst8Section)
@@ -775,8 +775,8 @@ MCSection *TargetLoweringObjectFileRepo::SelectSectionForGlobal(
 /// information, return a section that it should be placed in.
 MCSection *TargetLoweringObjectFileRepo::getSectionForConstant(
     const DataLayout &DL, SectionKind Kind, const Constant *C, unsigned &Align,
-    const Function *F) const {
-  return selectRepoSectionForGlobal(getContext(), F, Kind);
+    const GlobalObject *GO) const {
+  return selectRepoSectionForGlobal(getContext(), GO, Kind);
 }
 
 //===----------------------------------------------------------------------===//
@@ -972,7 +972,7 @@ MCSection *TargetLoweringObjectFileMachO::SelectSectionForGlobal(
 
 MCSection *TargetLoweringObjectFileMachO::getSectionForConstant(
     const DataLayout &DL, SectionKind Kind, const Constant *C, unsigned &Align,
-    const Function *F) const {
+    const GlobalObject *GO) const {
   // If this constant requires a relocation, we have to put it in the data
   // segment, not in the text segment.
   if (Kind.isData() || Kind.isReadOnlyWithRel())
