@@ -17,6 +17,8 @@
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringMap.h"
+#include "llvm/ADT/StringExtras.h"
+
 #include "llvm/MC/MCAsmBackend.h"
 #include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/MCAsmLayout.h"
@@ -39,6 +41,7 @@
 #include "llvm/Support/StringSaver.h"
 #include <set>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "pstore/transaction.hpp"
@@ -53,6 +56,9 @@ typedef DenseMap<const MCSectionRepo *, uint32_t> SectionIndexMapTy;
 
 using TransactionType = pstore::transaction<pstore::transaction_lock>;
 
+auto StringHash = [] (StringRef s) {
+    return HashString (s);
+};
 
 class RepoObjectWriter : public MCObjectWriter {
   //  static uint64_t SymbolValue(const MCSymbol &Sym, const MCAsmLayout
@@ -68,6 +74,10 @@ class RepoObjectWriter : public MCObjectWriter {
 
   DenseMap<const MCSectionRepo *, std::vector<RepoRelocationEntry>> Relocations;
 
+  // Note that I don't use StringMap because we take pointers into this structure that must
+  // survive insertion.
+  using ModuleNamesContainer = std::unordered_map <StringRef, pstore::address, decltype (StringHash)>;
+
   std::map<Digest::DigestType,
            SmallVector<std::unique_ptr<repo::SectionContent>, 4>>
       Contents;
@@ -82,31 +92,12 @@ class RepoObjectWriter : public MCObjectWriter {
 
   /// @}
 
-  // This holds the symbol table index of the last local symbol.
-  unsigned LastLocalSymbolIndex;
-  // This holds the .strtab section index.
-  // unsigned StringTableIndex;
-  // This holds the .symtab section index.
-  // unsigned SymbolTableIndex;
-
-  // Sections in the order they are to be output in the section table.
-  std::vector<const MCSectionRepo *> SectionTable;
-  unsigned addToSectionTable(const MCSectionRepo *Sec);
-
   // TargetObjectWriter wrappers.
-  //  bool is64Bit() const { return TargetObjectWriter->is64Bit(); }
   bool hasRelocationAddend() const { return true; }
   unsigned getRelocType(MCContext &Ctx, const MCValue &Target,
                         const MCFixup &Fixup, bool IsPCRel) const {
     return TargetObjectWriter->getRelocType(Ctx, Target, Fixup, IsPCRel);
   }
-
-  void align(unsigned Alignment);
-
-  void writeRepoSectionData(const MCAssembler &Asm, MCSectionRepo &Sec,
-                            const MCAsmLayout &Layout,
-                            TransactionType & transaction,
-                            pstore::index::name_index * const NamesIndex);
 
   bool shouldRelocateWithSymbol(const MCAssembler &Asm,
                                 const MCSymbolRefExpr *RefA, const MCSymbol *S,
@@ -117,13 +108,12 @@ class RepoObjectWriter : public MCObjectWriter {
 public:
   RepoObjectWriter(MCRepoObjectTargetWriter *MOTW, raw_pwrite_stream &OS,
                    bool IsLittleEndian)
-      : MCObjectWriter(OS, IsLittleEndian), TargetObjectWriter(MOTW) {}
+    : MCObjectWriter(OS, IsLittleEndian), TargetObjectWriter(MOTW) {
+  }
 
   void reset() override {
     Renames.clear();
     Relocations.clear();
-    // StrTabBuilder.clear();
-    SectionTable.clear();
     MCObjectWriter::reset();
   }
 
@@ -155,29 +145,16 @@ public:
   // Map from a signature symbol to the group section index
   typedef DenseMap<const MCSymbol *, unsigned> RevGroupMapTy;
 
-  MCSectionRepo *createRelocationSection(MCContext &Ctx,
-                                         const MCSectionRepo &Sec);
-
-  // const MCSectionELF *createStringTable(MCContext &Ctx);
-
   void executePostLayoutBinding(MCAssembler &Asm,
                                 const MCAsmLayout &Layout) override;
 
-#if 0
-  void writeSectionHeader(const MCAsmLayout &Layout, const SectionIndexMapTy &SectionIndexMap, const SectionOffsetsTy &SectionOffsets);
-#endif
-  void writeSectionData(const MCAssembler &Asm, MCSection &Sec,
-                        const MCAsmLayout &Layout,
-                        TransactionType & Transaction,
-                        pstore::index::name_index * const NamesIndex);
 
-#if 0
-  void WriteSecHdrEntry(uint32_t Name, uint32_t Type, uint64_t Flags,
-                        uint64_t Address, uint64_t Offset, uint64_t Size,
-                        uint32_t Link, uint32_t Info, uint64_t Alignment,
-                        uint64_t EntrySize);
-#endif
-  void writeRelocations(const MCAssembler &Asm, const MCSectionRepo &Sec);
+
+
+  void writeSectionData(const MCAssembler &Asm, MCSection &Sec,
+                        const MCAsmLayout &Layout, ModuleNamesContainer & Names);
+
+
 
   bool isSymbolRefDifferenceFullyResolvedImpl(const MCAssembler &Asm,
                                               const MCSymbol &SymA,
@@ -187,22 +164,8 @@ public:
   // bool isWeak(const MCSymbol &Sym) const override;
 
   void writeObject(MCAssembler &Asm, const MCAsmLayout &Layout) override;
-  void writeSection(const SectionIndexMapTy &SectionIndexMap,
-                    uint32_t GroupSymbolIndex, uint64_t Offset, uint64_t Size,
-                    const MCSectionRepo &Section);
 };
 } // end anonymous namespace
-
-void RepoObjectWriter::align(unsigned Alignment) {
-  uint64_t Padding = OffsetToAlignment(getStream().tell(), Alignment);
-  WriteZeros(Padding);
-}
-
-unsigned RepoObjectWriter::addToSectionTable(const MCSectionRepo *Sec) {
-  SectionTable.push_back(Sec);
-  // StrTabBuilder.add(Sec->getSectionName());
-  return SectionTable.size();
-}
 
 RepoObjectWriter::~RepoObjectWriter() {}
 
@@ -462,59 +425,10 @@ bool RepoObjectWriter::isInSymtab(const MCAsmLayout &Layout,
 }
 #endif
 
-// createRelocationSection
-// ~~~~~~~~~~~~~~~~~~~~~~~
-MCSectionRepo *
-RepoObjectWriter::createRelocationSection(MCContext &Ctx,
-                                          const MCSectionRepo &Sec) {
-  return nullptr;
-
-#if 0
-  if (Relocations[&Sec].empty())
-    return nullptr;
-
-  const StringRef SectionName = Sec.getSectionName();
-  std::string RelaSectionName = hasRelocationAddend() ? ".rela" : ".rel";
-  RelaSectionName += SectionName;
-
-  unsigned EntrySize;
-  if (hasRelocationAddend())
-    EntrySize = is64Bit() ? sizeof(ELF::Elf64_Rela) : sizeof(ELF::Elf32_Rela);
-  else
-    EntrySize = is64Bit() ? sizeof(ELF::Elf64_Rel) : sizeof(ELF::Elf32_Rel);
-
-  unsigned Flags = 0;
-  if (Sec.getFlags() & ELF::SHF_GROUP)
-    Flags = ELF::SHF_GROUP;
-
-  MCSectionELF *RelaSection = Ctx.createELFRelSection(RelaSectionName, hasRelocationAddend() ? ELF::SHT_RELA : ELF::SHT_REL, Flags, EntrySize, Sec.getGroup(), &Sec);
-  RelaSection->setAlignment(is64Bit() ? 8 : 4);
-  return RelaSection;
-#endif
-}
-
-void RepoObjectWriter::writeRepoSectionData(const MCAssembler &Asm,
-                                            MCSectionRepo &Section,
-                                            const MCAsmLayout &Layout,
-                                            TransactionType & Transaction,
-                                            pstore::index::name_index * const NamesIndex) {
-
-#if 0
-    for (const MCSymbol &S : Asm.symbols()) {
-        std::string symbol_name = S.getName();
-        if (symbol_name.size () > 0) {
-            std::cout << R"(symbol: ")" << symbol_name << "\"\n";
-
-            uint64_t Value;
-            bool hasOffset = Layout.getSymbolOffset(S, Value);
-            std::cout << " " << hasOffset << " " << Value << '\n';
-
-  Section.getFragmentList().front ();
-
-        }
-    }
-#endif
-
+void RepoObjectWriter::writeSectionData(const MCAssembler &Asm, MCSection &Sec,
+                                        const MCAsmLayout &Layout,
+                                        ModuleNamesContainer & Names) {
+  auto &Section = static_cast<MCSectionRepo &>(Sec);
   llvm::repo::SectionType St = llvm::repo::SectionType::Data;
 
   auto const kind = Section.getKind();
@@ -572,104 +486,62 @@ void RepoObjectWriter::writeRepoSectionData(const MCAssembler &Asm,
   auto const &Relocs = Relocations[&Section];
   Content.Xfixups.reserve(Relocs.size());
   for (auto const &Relocation : Relocations[&Section]) {
-    // Insert the target symbol name into the set of known names.
-    StringRef Name = Relocation.Symbol->getName();
-    auto It = NamesIndex->insert (Transaction, Name).first;
+    // Insert the target symbol name into the set of known names for this module.
+    // By gathering just a single instance of each string used in this TU we reduce the
+    // number of insertions into the global name set (which are performed with the
+    // transaction lock held).
+    auto It = Names.insert (std::make_pair (Relocation.Symbol->getName(), pstore::address::null ())).first;
+    auto NamePtr = reinterpret_cast <std::uintptr_t> (&(*It));
+
+    static_assert (sizeof (NamePtr) <= sizeof (repo::ExternalFixup::Name),
+                   "ExternalFixup::Name is not large enough to hold a pointer");
+    assert (Relocation.Type <= std::numeric_limits <decltype (repo::ExternalFixup::Type)>::max ());
 
     // Attach a suitable external fixup to this section.
     Content.Xfixups.push_back(repo::ExternalFixup{
-        It.get_address (), static_cast<std::uint8_t>(Relocation.Type),
+        {NamePtr}, static_cast<std::uint8_t>(Relocation.Type),
         Relocation.Offset, Relocation.Addend});
   }
 }
 
-void RepoObjectWriter::writeSectionData(const MCAssembler &Asm, MCSection &Sec,
-                                        const MCAsmLayout &Layout,
-                                        TransactionType & Transaction,
-                                        pstore::index::name_index * const NamesIndex) {
-
-  auto &Section = static_cast<MCSectionRepo &>(Sec);
-  this->writeRepoSectionData(Asm, Section, Layout, Transaction, NamesIndex);
-}
-
-#if 0
-void RepoObjectWriter::WriteSecHdrEntry(uint32_t Name, uint32_t Type,
-                                       uint64_t Flags, uint64_t Address,
-                                       uint64_t Offset, uint64_t Size,
-                                       uint32_t Link, uint32_t Info,
-                                       uint64_t Alignment,
-                                       uint64_t EntrySize) {
-  write32(Name);        // sh_name: index into string table
-  write32(Type);        // sh_type
-  WriteWord(Flags);     // sh_flags
-  WriteWord(Address);   // sh_addr
-  WriteWord(Offset);    // sh_offset
-  WriteWord(Size);      // sh_size
-  write32(Link);        // sh_link
-  write32(Info);        // sh_info
-  WriteWord(Alignment); // sh_addralign
-  WriteWord(EntrySize); // sh_entsize
-}
-#endif
-void RepoObjectWriter::writeRelocations(const MCAssembler &/*Asm*/,
-                                        const MCSectionRepo &/*Sec*/) {
-}
-
-#if 0
-const MCSectionELF *RepoObjectWriter::createStringTable(MCContext &Ctx) {
-  const MCSectionELF *StrtabSection = SectionTable[StringTableIndex - 1];
-  getStream() << StrTabBuilder.data();
-  return StrtabSection;
-}
-#endif
-
-void RepoObjectWriter::writeSection(const SectionIndexMapTy &SectionIndexMap,
-                                    uint32_t GroupSymbolIndex, uint64_t Offset,
-                                    uint64_t Size,
-                                    const MCSectionRepo &Section) {
-#if 0
-#endif
-}
 
 namespace {
 
-auto getTransaction () -> std::pair <pstore::database &, TransactionType &> {
+  auto getTransaction () -> std::pair <pstore::database &, TransactionType &> {
     static pstore::database Repository ("./clang.db", true/*writable*/);
     static auto Transaction = pstore::begin (Repository);
     return {Repository, Transaction};
-}
+  }
 
-raw_ostream & operator<< (raw_ostream & OS, pstore::index::uint128 const & V) {
+  raw_ostream & operator<< (raw_ostream & OS, pstore::index::uint128 const & V) {
     auto digitToHex = [] (unsigned v) {
-        assert (v < 0x10);
-        return static_cast<char> (v + ((v < 10) ? '0' : 'a' - 10));
+      assert (v < 0x10);
+      return static_cast<char> (v + ((v < 10) ? '0' : 'a' - 10));
     };
 
     std::uint64_t const High = V.high ();
     for (int Shift = 64 - 4; Shift >= 0; Shift -= 4) {
-        OS << digitToHex ((High >> Shift) & 0x0F);
+      OS << digitToHex ((High >> Shift) & 0x0F);
     }
 
     std::uint64_t const Low = V.low ();
     for (int Shift = 64 - 4; Shift >= 0; Shift -= 4) {
-        OS <<  digitToHex ((Low >> Shift) & 0x0F);
+      OS <<  digitToHex ((Low >> Shift) & 0x0F);
     }
     return OS;
-}
+  }
 
 } // (anonymous namespace)
 
 
 void RepoObjectWriter::writeObject(MCAssembler &Asm,
                                    const MCAsmLayout &Layout) {
-  MCContext &Ctx = Asm.getContext();
+  ModuleNamesContainer Names {100, StringHash};
 
-  writeHeader(Asm);
-
-  // ... then the sections ...
-  SectionOffsetsTy SectionOffsets;
-  // std::vector<MCSectionELF *> Groups;
-  std::vector<MCSectionRepo *> Relocations;
+  for (MCSection &Sec : Asm) {
+    auto &Section = static_cast<MCSectionRepo &>(Sec);
+    writeSectionData(Asm, Section, Layout, Names);
+  }
 
   std::pair <pstore::database &, TransactionType &> DbTransact = getTransaction ();
   auto & Db = DbTransact.first;
@@ -677,14 +549,16 @@ void RepoObjectWriter::writeObject(MCAssembler &Asm,
 
   pstore::index::name_index * const NamesIndex = Db.get_name_index ();
   assert (NamesIndex);
-  pstore::index::digest_index * const DigestsIndex = Db.get_digest_index ();
-  assert (DigestsIndex);
 
-  for (MCSection &Sec : Asm) {
-    auto &Section = static_cast<MCSectionRepo &>(Sec);
-    writeSectionData(Asm, Section, Layout, Transaction, NamesIndex);
+  // Insert the names from this module into the global name set.
+  for (ModuleNamesContainer::value_type & NameAddress : Names) {
+    dbgs () << "insert name: " << NameAddress.first << '\n';
+    pstore::index::name_index::iterator It = NamesIndex->insert (Transaction, NameAddress.first).first;
+    NameAddress.second = It.get_address ();
   }
 
+  pstore::index::digest_index * const DigestsIndex = Db.get_digest_index ();
+  assert (DigestsIndex);
 
   for (auto &Content : Contents) {
     auto const Key = pstore::index::uint128 {Content.first.high (), Content.first.low ()};
@@ -693,6 +567,15 @@ void RepoObjectWriter::writeObject(MCAssembler &Asm,
     } else {
       auto Begin = llvm::repo::details::makeSectionContentIterator(Content.second.begin());
       auto End = llvm::repo::details::makeSectionContentIterator(Content.second.end());
+
+      // The name field of each of the external fixups is pointing into the 'Names' map. Here
+      // we turn that into the pstore address of the string.
+      std::for_each (Begin, End, [] (repo::SectionContent & Section) {
+        for (auto & XFixup : Section.Xfixups) {
+          auto MNC = reinterpret_cast <ModuleNamesContainer::value_type const *> (XFixup.Name.absolute ());
+          XFixup.Name = MNC->second;
+        }
+      });
 
       dbgs () << "fragment " << Key << " adding. size=" << repo::Fragment::sizeBytes (Begin, End) << '\n';
 
