@@ -23,6 +23,7 @@
 #include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/MCAsmLayout.h"
 #include "llvm/MC/MCAssembler.h"
+#include "pstore_support/portab.hpp"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCFixupKindInfo.h"
@@ -34,7 +35,7 @@
 #include "llvm/MC/StringTableBuilder.h"
 #include "llvm/Support/Compression.h"
 #include "llvm/Support/Debug.h"
-#include "llvm/Support/ELF.h"
+#include "llvm/Support/REPO.h"
 #include "llvm/Support/Endian.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/Format.h"
@@ -178,8 +179,9 @@ void RepoObjectWriter::writeHeader(const MCAssembler &Asm) {
   // ----
   // emitWord method behaves differently for ELF32 and ELF64, writing
   // 4 bytes in the former and 8 in the latter.
-
-  writeBytes("hello");
+  REPO::RepoObjectHeader header;
+  writeBytes(header.RepoMagic);
+  writeBytes(header.uuid.str());
 }
 
 #if 0
