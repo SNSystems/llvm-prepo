@@ -66,10 +66,7 @@ add_llvm_library(LLVMMC
   ADDITIONAL_HEADER_DIRS
   ${LLVM_MAIN_INCLUDE_DIR}/llvm/MC
   ${LLVM_MAIN_INCLUDE_DIR}/llvm/MC/MCRepoFragment
-
-DEPENDS
-pstore
-  )
+)
 
 add_subdirectory(MCParser)
 add_subdirectory(MCDisassembler)

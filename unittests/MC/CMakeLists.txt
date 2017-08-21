@@ -13,9 +13,6 @@ add_llvm_unittest(MCTests
   RepoSparseArray.cpp
   StringTableBuilderTest.cpp
   TargetRegistry.cpp
-
-DEPENDS
-pstore
   )
 
 target_link_libraries (MCTests pstore)
