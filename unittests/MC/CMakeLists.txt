@@ -8,9 +8,6 @@ set(LLVM_LINK_COMPONENTS
 add_llvm_unittest(MCTests
   Disassembler.cpp
   DwarfLineTables.cpp
-  RepoAligned.cpp
-  RepoFragment.cpp
-  RepoSparseArray.cpp
   StringTableBuilderTest.cpp
   TargetRegistry.cpp
   )

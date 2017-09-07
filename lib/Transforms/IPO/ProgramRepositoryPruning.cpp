@@ -21,7 +21,9 @@
 #include "llvm/Transforms/Utils/GlobalStatus.h"
 #include "llvm/Transforms/Utils/HashCalculator.h"
 #include <set>
-
+#include "pstore/database.hpp"
+#include "pstore/hamt_map.hpp"
+#include <iostream>
 using namespace llvm;
 
 #define DEBUG_TYPE "prepo-pruning"
@@ -71,13 +73,13 @@ bool ProgramRepositoryPruning::runOnModule(Module &M) {
   bool Changed = false;
   MDBuilder MDB(M.getContext());
 
-  // Keep track of the existing hash value.
-  std::set<Digest::DigestType> Digests = {
-      {{0xc7, 0x17, 0x3c, 0x9e, 0x67, 0x0f, 0x87, 0xd4, 0x74, 0x7f, 0x1b, 0xf3,
-        0xf2, 0x9d, 0x82, 0x26}}};
+  static pstore::database Repository ("./clang.db", true/*writable*/); // FIXME: share an instance with the repo-writer back-end!
 
-  GlobalValueMap DigestMap;
   MDNode *MD = nullptr;
+  pstore::index::digest_index * Digests = Repository.get_digest_index (false);
+  if (Digests == nullptr) {
+    return false;
+  }
 
   // Erase the unchanged global objects.
   auto EraseUnchangedGlobalObect = [&](GlobalObject &GO,
@@ -85,8 +87,9 @@ bool ProgramRepositoryPruning::runOnModule(Module &M) {
     if (GO.isDeclaration() || GO.hasAvailableExternallyLinkage())
       return false;
     auto Result = Digest::get(&GO);
-    DigestMap.emplace(&GO, Result);
-    if (!Digests.emplace(Result).second) {
+
+    auto const Key = pstore::index::uint128 {Result.high (), Result.low ()};
+    if (Digests->find (Key) != Digests->end ()) {
       Changed = true;
       ++NumGO;
       GO.setComdat(nullptr);
@@ -115,14 +118,6 @@ bool ProgramRepositoryPruning::runOnModule(Module &M) {
       Func.deleteBody();
       Func.setMetadata(LLVMContext::MD_fragment, MD);
     }
-  }
-
-  for (GlobalAlias &GA : M.aliases()) {
-    auto GAAliasee = dyn_cast<GlobalValue>(Digest::getAliasee(&GA));
-    auto GADigest = DigestMap[GAAliasee];
-    DigestMap.emplace(&GA, GADigest);
-    Changed = true;
-    ++NumAliases;
   }
 
   DEBUG(dbgs() << "size of module: " << M.size() << '\n');

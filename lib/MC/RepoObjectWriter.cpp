@@ -28,7 +28,6 @@
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCFixupKindInfo.h"
 #include "llvm/MC/MCObjectWriter.h"
-#include "llvm/MC/MCRepoFragment/MCRepoFragment.h"
 #include "llvm/MC/MCSectionRepo.h"
 #include "llvm/MC/MCSymbolRepo.h"
 #include "llvm/MC/MCValue.h"
@@ -46,6 +45,7 @@
 #include <vector>
 
 #include "pstore/transaction.hpp"
+#include "pstore_mcrepo/Fragment.h"
 
 using namespace llvm;
 
@@ -80,7 +80,7 @@ class RepoObjectWriter : public MCObjectWriter {
   using ModuleNamesContainer = std::unordered_map <StringRef, pstore::address, decltype (StringHash)>;
 
   std::map<Digest::DigestType,
-           SmallVector<std::unique_ptr<repo::SectionContent>, 4>>
+           SmallVector<std::unique_ptr<pstore::repo::SectionContent>, 4>>
       Contents;
 
   /// @}
@@ -427,59 +427,117 @@ bool RepoObjectWriter::isInSymtab(const MCAsmLayout &Layout,
 }
 #endif
 
+
+
+namespace {
+/// A raw_ostream that writes to an SmallVector or SmallString.  This is a
+/// simple adaptor class. This class does not encounter output errors.
+/// raw_svector_ostream operates without a buffer, delegating all memory
+/// management to the SmallString. Thus the SmallString is always up-to-date,
+/// may be used directly and there is no need to call flush().
+template <typename Container>
+class svector_ostream : public raw_pwrite_stream {
+public:
+  /// Construct a new raw_svector_ostream.
+  ///
+  /// \param O The vector to write to; this should generally have at least 128
+  /// bytes free to avoid any extraneous memory overhead.
+  explicit svector_ostream(Container &O) : OS_(O) {
+    SetUnbuffered();
+  }
+
+  ~svector_ostream() override = default;
+
+  void flush() = delete;
+
+  /// Return a StringRef for the vector contents.
+  StringRef str() { return StringRef(OS_.data(), OS_.size()); }
+
+private:
+  Container &OS_;
+
+  /// See raw_ostream::write_impl.
+  void write_impl(const char *Ptr, size_t Size) override;
+
+  void pwrite_impl(const char *Ptr, size_t Size, uint64_t Offset) override;
+
+  /// Return the current position within the stream.
+  uint64_t current_pos() const override;
+
+};
+
+template <typename Container>
+uint64_t svector_ostream <Container>::current_pos() const {
+    return OS_.size();
+}
+
+template <typename Container>
+void svector_ostream <Container>::write_impl(const char *Ptr, size_t Size) {
+  OS_.append(Ptr, Ptr + Size);
+}
+
+template <typename Container>
+void svector_ostream <Container>::pwrite_impl(const char *Ptr, size_t Size, uint64_t Offset) {
+  memcpy (OS_.data () + Offset, Ptr, Size);
+}
+
+
+}
+
+
 void RepoObjectWriter::writeSectionData(const MCAssembler &Asm, MCSection &Sec,
                                         const MCAsmLayout &Layout,
                                         ModuleNamesContainer & Names) {
   auto &Section = static_cast<MCSectionRepo &>(Sec);
-  llvm::repo::SectionType St = llvm::repo::SectionType::Data;
+  pstore::repo::SectionType St = pstore::repo::SectionType::Data;
 
   auto const kind = Section.getKind();
   if (kind.isBSS()) {
-    St = llvm::repo::SectionType::BSS;
+    St = pstore::repo::SectionType::BSS;
   } else if (kind.isCommon()) {
-    St = llvm::repo::SectionType::Common;
+    St = pstore::repo::SectionType::Common;
   } else if (kind.isData()) {
-    St = llvm::repo::SectionType::Data;
+    St = pstore::repo::SectionType::Data;
   } else if (kind.isReadOnlyWithRel()) {
-    St = llvm::repo::SectionType::RelRo;
+    St = pstore::repo::SectionType::RelRo;
   } else if (kind.isText()) {
-    St = llvm::repo::SectionType::Text;
+    St = pstore::repo::SectionType::Text;
   } else if (kind.isMergeable1ByteCString()) {
-    St = llvm::repo::SectionType::Mergeable1ByteCString;
+    St = pstore::repo::SectionType::Mergeable1ByteCString;
   } else if (kind.isMergeable2ByteCString()) {
-    St = llvm::repo::SectionType::Mergeable2ByteCString;
+    St = pstore::repo::SectionType::Mergeable2ByteCString;
   } else if (kind.isMergeable4ByteCString()) {
-    St = llvm::repo::SectionType::Mergeable4ByteCString;
+    St = pstore::repo::SectionType::Mergeable4ByteCString;
   } else if (kind.isMergeableConst4()) {
-    St = llvm::repo::SectionType::MergeableConst4;
+    St = pstore::repo::SectionType::MergeableConst4;
   } else if (kind.isMergeableConst8()) {
-    St = llvm::repo::SectionType::MergeableConst8;
+    St = pstore::repo::SectionType::MergeableConst8;
   } else if (kind.isMergeableConst16()) {
-    St = llvm::repo::SectionType::MergeableConst16;
+    St = pstore::repo::SectionType::MergeableConst16;
   } else if (kind.isMergeableConst32()) {
-    St = llvm::repo::SectionType::MergeableConst32;
+    St = pstore::repo::SectionType::MergeableConst32;
   } else if (kind.isMergeableConst()) {
-    St = llvm::repo::SectionType::MergeableConst;
+    St = pstore::repo::SectionType::MergeableConst;
   } else if (kind.isReadOnly()) {
-    St = llvm::repo::SectionType::ReadOnly;
+    St = pstore::repo::SectionType::ReadOnly;
   } else if (kind.isThreadBSS()) {
-    St = llvm::repo::SectionType::ThreadBSS;
+    St = pstore::repo::SectionType::ThreadBSS;
   } else if (kind.isThreadData()) {
-    St = llvm::repo::SectionType::ThreadData;
+    St = pstore::repo::SectionType::ThreadData;
   } else if (kind.isThreadLocal()) {
-    St = llvm::repo::SectionType::ThreadLocal;
+    St = pstore::repo::SectionType::ThreadLocal;
   } else if (kind.isMetadata()) {
-    St = llvm::repo::SectionType::Metadata;
+    St = pstore::repo::SectionType::Metadata;
   } else {
     llvm_unreachable("Unknown section type in writeRepoSectionData");
   }
 
   auto &SC = Contents[Section.hash()];
-  SC.push_back(make_unique<repo::SectionContent>(St));
-  repo::SectionContent &Content = *SC.back();
+  SC.push_back(make_unique<pstore::repo::SectionContent>(St));
+  pstore::repo::SectionContent &Content = *SC.back();
 
   // Add the section content to the fragment.
-  raw_svector_ostream VecOS{Content.Data};
+  svector_ostream <decltype (Content.Data)> VecOS{Content.Data};
   raw_pwrite_stream &OldStream = getStream();
   this->setStream(VecOS);
   Asm.writeSectionData(&Section, Layout);
@@ -495,12 +553,12 @@ void RepoObjectWriter::writeSectionData(const MCAssembler &Asm, MCSection &Sec,
     auto It = Names.insert (std::make_pair (Relocation.Symbol->getName(), pstore::address::null ())).first;
     auto NamePtr = reinterpret_cast <std::uintptr_t> (&(*It));
 
-    static_assert (sizeof (NamePtr) <= sizeof (repo::ExternalFixup::Name),
+    static_assert (sizeof (NamePtr) <= sizeof (pstore::repo::ExternalFixup::Name),
                    "ExternalFixup::Name is not large enough to hold a pointer");
-    assert (Relocation.Type <= std::numeric_limits <decltype (repo::ExternalFixup::Type)>::max ());
+    assert (Relocation.Type <= std::numeric_limits <decltype (pstore::repo::ExternalFixup::Type)>::max ());
 
     // Attach a suitable external fixup to this section.
-    Content.Xfixups.push_back(repo::ExternalFixup{
+    Content.Xfixups.push_back(pstore::repo::ExternalFixup{
         {NamePtr}, static_cast<std::uint8_t>(Relocation.Type),
         Relocation.Offset, Relocation.Addend});
   }
@@ -509,8 +567,16 @@ void RepoObjectWriter::writeSectionData(const MCAssembler &Asm, MCSection &Sec,
 
 namespace {
 
-  auto getTransaction () -> std::pair <pstore::database &, TransactionType &> {
-    static pstore::database Repository ("./clang.db", true/*writable*/);
+  pstore::database & getDatabase () {
+    static std::unique_ptr <pstore::database> Repository;
+    if (!Repository) {
+        Repository.reset (new pstore::database ("./clang.db", true/*writable*/));
+    }
+    return *Repository;
+  }
+
+  std::pair <pstore::database &, TransactionType &> getTransaction () {
+    pstore::database & Repository = getDatabase ();
     static auto Transaction = pstore::begin (Repository);
     return {Repository, Transaction};
   }
@@ -567,21 +633,21 @@ void RepoObjectWriter::writeObject(MCAssembler &Asm,
     if (DigestsIndex->find (Key) != DigestsIndex->end ()) {
       dbgs () << "fragment " << Key << " exists. skipping\n";
     } else {
-      auto Begin = llvm::repo::details::makeSectionContentIterator(Content.second.begin());
-      auto End = llvm::repo::details::makeSectionContentIterator(Content.second.end());
+      auto Begin = pstore::repo::details::makeSectionContentIterator(Content.second.begin());
+      auto End = pstore::repo::details::makeSectionContentIterator(Content.second.end());
 
       // The name field of each of the external fixups is pointing into the 'Names' map. Here
       // we turn that into the pstore address of the string.
-      std::for_each (Begin, End, [] (repo::SectionContent & Section) {
+      std::for_each (Begin, End, [] (pstore::repo::SectionContent & Section) {
         for (auto & XFixup : Section.Xfixups) {
           auto MNC = reinterpret_cast <ModuleNamesContainer::value_type const *> (XFixup.Name.absolute ());
           XFixup.Name = MNC->second;
         }
       });
 
-      dbgs () << "fragment " << Key << " adding. size=" << repo::Fragment::sizeBytes (Begin, End) << '\n';
+      dbgs () << "fragment " << Key << " adding. size=" << pstore::repo::Fragment::sizeBytes (Begin, End) << '\n';
 
-      pstore::record FragmentRecord = repo::Fragment::alloc (Transaction, Begin, End);
+      pstore::record FragmentRecord = pstore::repo::Fragment::alloc (Transaction, Begin, End);
       auto Kvp = std::make_pair (Key, FragmentRecord);
       DigestsIndex->insert (Transaction, Kvp);
     }
