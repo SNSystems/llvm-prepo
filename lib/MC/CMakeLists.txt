@@ -68,5 +68,4 @@ add_llvm_library(LLVMMC
 add_subdirectory(MCParser)
 add_subdirectory(MCDisassembler)
 
-target_link_libraries (LLVMMC PRIVATE pstore pstore_mcrepo)
-#set_property(GLOBAL APPEND PROPERTY LLVM_EXPORTS pstore)
+target_link_libraries (LLVMMC PRIVATE pstore pstore-mcrepo)
