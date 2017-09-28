@@ -621,9 +621,9 @@ void VaribleHashCalculator::calculateHash(Module &M) {
   // GvHash.Hash.update(HashKind::TAG_GVDLLStorageClassType);
   // GvHash.Hash.update(Gv->getDLLStorageClass());
   // Accumulate the Comdat section name.
-  if (Gv->hasComdat()) {
-    comdatHash();
-  }
+  //if (Gv->hasComdat()) {
+  //  comdatHash();
+  //}
   if (Gv->hasName() && Gv->hasDefinitiveInitializer()) {
     // Global variable is constant type. Accumulate the initial value.
     // This accumulation also cover the "llvm.global_ctors",

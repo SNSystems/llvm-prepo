@@ -32,7 +32,8 @@ void Digest::set(Module const &M, GlobalObject *GO,
                  Digest::DigestType const &D) {
   MDBuilder MDB(M.getContext());
   GO->setMetadata(LLVMContext::MD_fragment,
-                  MDB.createTicketNode(GO->getName(), D, GO->getLinkage()));
+                  MDB.createTicketNode(GO->getName(), D, GO->getLinkage(),
+                                       GO->getComdat() != nullptr));
 }
 
 Digest::DigestType Digest::get(const GlobalObject *GO) {
@@ -100,11 +101,14 @@ static bool isCanonical(const MDString *S) {
 #endif
 
 TicketNode *TicketNode::getImpl(LLVMContext &Context, MDString *Name,
-                                ConstantAsMetadata *Digest, unsigned Linkage,
-                                StorageType Storage, bool ShouldCreate) {
+                                ConstantAsMetadata *Digest,
+                                GlobalValue::LinkageTypes Linkage,
+                                bool IsComdat, StorageType Storage,
+                                bool ShouldCreate) {
   if (Storage == Uniqued) {
-    if (auto *N = getUniqued(Context.pImpl->TicketNodes,
-                             TicketNodeInfo::KeyTy(Linkage, Name, Digest)))
+    if (auto *N =
+            getUniqued(Context.pImpl->TicketNodes,
+                       TicketNodeInfo::KeyTy(Linkage, IsComdat, Name, Digest)))
       return N;
     if (!ShouldCreate)
       return nullptr;
@@ -115,13 +119,14 @@ TicketNode *TicketNode::getImpl(LLVMContext &Context, MDString *Name,
   assert(isCanonical(Name) && "Expected canonical MDString");
   Metadata *Ops[] = {Name, Digest};
   return storeImpl(new (array_lengthof(Ops))
-                       TicketNode(Context, Storage, Linkage, Ops),
+                       TicketNode(Context, Storage, Linkage, IsComdat, Ops),
                    Storage, Context.pImpl->TicketNodes);
 }
 
 TicketNode *TicketNode::getImpl(LLVMContext &Context, StringRef Name,
                                 Digest::DigestType const &Digest,
-                                unsigned Linkage, StorageType Storage,
+                                GlobalValue::LinkageTypes Linkage,
+                                bool IsComdat, StorageType Storage,
                                 bool ShouldCreate) {
   MDString *MDName = nullptr;
   if (!Name.empty())
@@ -136,7 +141,8 @@ TicketNode *TicketNode::getImpl(LLVMContext &Context, StringRef Name,
   // Array implementation that the hash is outputed as char/string.
   ConstantAsMetadata *MDDigest = ConstantAsMetadata::get(
       ConstantArray::get(llvm::ArrayType::get(Int8Ty, Size), Field));
-  return getImpl(Context, MDName, MDDigest, Linkage, Storage, ShouldCreate);
+  return getImpl(Context, MDName, MDDigest, Linkage, IsComdat, Storage,
+                 ShouldCreate);
 }
 
 Digest::DigestType TicketNode::getDigest() const {

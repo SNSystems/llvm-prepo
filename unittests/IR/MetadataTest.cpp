@@ -2259,46 +2259,41 @@ typedef MetadataTest TicketNodeTest;
 
 TEST_F(TicketNodeTest, get) {
   Digest::DigestType Digest = getDigest();
-  {
-    TicketNode *D = TicketNode::get(Context, "foo", Digest, 0u);
-    EXPECT_EQ(GlobalValue::ExternalLinkage, D->getLinkageType());
-    EXPECT_EQ("foo", D->getNameAsString());
-    EXPECT_EQ(Digest, D->getDigest());
-    EXPECT_TRUE(D->isUniqued());
-  }
-  {
-    TicketNode *D =
-        TicketNode::get(Context, "foo", Digest, TicketNode::MaxLinkageType);
-    EXPECT_EQ(GlobalValue::CommonLinkage, D->getLinkageType());
-  }
-  // FIXME: should we add overflow case?? or VerifierTest?
+  TicketNode *D = TicketNode::get(Context, "foo", Digest,
+                                  GlobalValue::ExternalLinkage, false);
+  EXPECT_EQ(GlobalValue::ExternalLinkage, D->getLinkage());
+  EXPECT_EQ(false, D->isComdat());
+  EXPECT_EQ("foo", D->getNameAsString());
+  EXPECT_EQ(Digest, D->getDigest());
+  EXPECT_TRUE(D->isUniqued());
 }
 
 TEST_F(TicketNodeTest, getDistinct) {
   Digest::DigestType Digest = getDigest();
   TicketNode *L0 = TicketNode::getDistinct(
-      Context, "foo", Digest, GlobalValue::LinkageTypes::InternalLinkage);
+      Context, "foo", Digest, GlobalValue::LinkageTypes::InternalLinkage, true);
   EXPECT_TRUE(L0->isDistinct());
-  TicketNode *L1 = TicketNode::get(Context, "foo", Digest,
-                                   GlobalValue::LinkageTypes::InternalLinkage);
+  TicketNode *L1 = TicketNode::get(
+      Context, "foo", Digest, GlobalValue::LinkageTypes::InternalLinkage, true);
   EXPECT_FALSE(L1->isDistinct());
   EXPECT_NE(L1, L0);
-  EXPECT_EQ(L1, TicketNode::get(Context, "foo", Digest,
-                                GlobalValue::LinkageTypes::InternalLinkage));
+  EXPECT_EQ(L1,
+            TicketNode::get(Context, "foo", Digest,
+                            GlobalValue::LinkageTypes::InternalLinkage, true));
 }
 
 TEST_F(TicketNodeTest, getTemporary) {
   Digest::DigestType Digest = getDigest();
-  auto L = TicketNode::getTemporary(Context, "foo", Digest,
-                                    GlobalValue::LinkageTypes::InternalLinkage);
+  auto L = TicketNode::getTemporary(
+      Context, "foo", Digest, GlobalValue::LinkageTypes::InternalLinkage, true);
   EXPECT_TRUE(L->isTemporary());
   EXPECT_FALSE(L->isResolved());
 }
 
 TEST_F(TicketNodeTest, cloneTemporary) {
   Digest::DigestType Digest = getDigest();
-  auto L = TicketNode::getTemporary(Context, "foo", Digest,
-                                    GlobalValue::LinkageTypes::InternalLinkage);
+  auto L = TicketNode::getTemporary(
+      Context, "foo", Digest, GlobalValue::LinkageTypes::InternalLinkage, true);
   EXPECT_TRUE(L->isTemporary());
   auto L2 = L->clone();
   EXPECT_TRUE(L2->isTemporary());

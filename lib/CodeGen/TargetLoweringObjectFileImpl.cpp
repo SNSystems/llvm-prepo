@@ -670,11 +670,22 @@ TargetLoweringObjectFileRepo::~TargetLoweringObjectFileRepo() {
 TargetLoweringObjectFileRepo::TargetLoweringObjectFileRepo() {
 }
 
+static const TicketNode *getTicketNode(const GlobalObject *GO) {
+  // Read the fragment metadata from global object.
+  llvm::MDNode *MD = GO->getMetadata(LLVMContext::MD_fragment);
+  if (!MD)
+    return nullptr;
+  const TicketNode *TN = dyn_cast<TicketNode>(MD);
+  if (!TN)
+    report_fatal_error("MD_fragment type is not TicketNode!");
+  return TN;
+}
+
 MCSection *TargetLoweringObjectFileRepo::getExplicitSectionGlobal(
     const GlobalObject *GO, SectionKind Kind, const TargetMachine &TM) const {
-  StringRef SectionName = GO->getSection();
   // TODO: map this named section to a section ID? What happens if there's no
   // match?
+  llvm_unreachable("getExplicitSectionGlobal not yet implemented");
   return nullptr;
 }
 
@@ -753,6 +764,11 @@ static MCSectionRepo *selectRepoSectionForGlobal(MCContext &Ctx,
   }
 #endif
 
+  // Record the TicketNode.
+  if (const TicketNode *TN = getTicketNode(GO)) {
+	  Ctx.addTicketNode(TN);
+  }
+
   return Ctx.getRepoSection(id, K, Digest);
 }
 
@@ -776,6 +792,7 @@ MCSection *TargetLoweringObjectFileRepo::SelectSectionForGlobal(
 MCSection *TargetLoweringObjectFileRepo::getSectionForConstant(
     const DataLayout &DL, SectionKind Kind, const Constant *C, unsigned &Align,
     const GlobalObject *GO) const {
+
   return selectRepoSectionForGlobal(getContext(), GO, Kind);
 }
 

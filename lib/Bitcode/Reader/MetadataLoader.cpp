@@ -1768,16 +1768,18 @@ Error MetadataLoader::MetadataLoaderImpl::parseOneMetadata(
     break;
   }
   case bitc::METADATA_TICKETNODE: {
-    if (Record.size() != 4)
+    if (Record.size() != 5)
       return error("Invalid record");
 
     IsDistinct = Record[0];
     MDString *Name = dyn_cast<MDString>(getMD(Record[1]));
     ConstantAsMetadata *GVHash = dyn_cast<ConstantAsMetadata>(getMD(Record[2]));
-    unsigned Linkage = Record[3];
+    GlobalValue::LinkageTypes Linkage =
+        static_cast<GlobalValue::LinkageTypes>(Record[3]);
+    bool IsComdat = Record[4];
 
     MetadataList.assignValue(
-        GET_OR_DISTINCT(TicketNode, (Context, Name, GVHash, Linkage)),
+        GET_OR_DISTINCT(TicketNode, (Context, Name, GVHash, Linkage, IsComdat)),
         NextMetadataNo);
     NextMetadataNo++;
     break;

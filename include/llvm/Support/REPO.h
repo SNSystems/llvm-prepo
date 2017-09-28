@@ -20,14 +20,14 @@
 
 namespace llvm {
 
-namespace REPO {
+namespace repo {
 struct RepoObjectHeader {
   // Object file magic string.
   const char RepoMagic[9] = {'R', 'e', 'p', 'o', 'U', 'u', 'i', 'd', '\0'};
   pstore::uuid uuid;
 };
 
-} // end namespace REPO
+} // end namespace repo
 
 } // end namespace llvm
 

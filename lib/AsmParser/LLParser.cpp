@@ -3802,6 +3802,10 @@ struct LinkageField : public MDUnsignedField {
       : MDUnsignedField(0, GlobalValue::LinkageTypes::CommonLinkage) {}
 };
 
+struct ComdatField : public MDBoolField {
+  ComdatField() : MDBoolField() {}
+};
+
 } // end anonymous namespace
 
 namespace llvm {
@@ -4141,6 +4145,11 @@ bool LLParser::ParseMDField(LocTy Loc, StringRef Name,
 template <>
 bool LLParser::ParseMDField(LocTy Loc, StringRef Name, LinkageField &Result) {
   return ParseMDField(Loc, Name, static_cast<MDUnsignedField &>(Result));
+}
+
+template <>
+bool LLParser::ParseMDField(LocTy Loc, StringRef Name, ComdatField &Result) {
+	return ParseMDField(Loc, Name, static_cast<MDBoolField &>(Result));
 }
 
 } // end namespace llvm
@@ -4808,18 +4817,20 @@ bool LLParser::ParseDIImportedEntity(MDNode *&Result, bool IsDistinct) {
 }
 
 /// ParseTicketNode:
-///   ::= !TicketNode(name: "foo", digest: !0, linkage: 0)
+///   ::= !TicketNode(name: "foo", digest: !0, linkage: 0, isComdat: false)
 bool LLParser::ParseTicketNode(MDNode *&Result, bool IsDistinct) {
 #define VISIT_MD_FIELDS(OPTIONAL, REQUIRED)                                    \
   REQUIRED(name, MDStringField, );                                             \
   REQUIRED(digest, MDField, );                                                 \
-  REQUIRED(linkage, LinkageField, );
+  REQUIRED(linkage, LinkageField, );                                           \
+  REQUIRED(isComdat, ComdatField, );
   PARSE_MD_FIELDS();
 #undef VISIT_MD_FIELDS
 
   Result = GET_OR_DISTINCT(
-      TicketNode, (Context, name.Val, dyn_cast<ConstantAsMetadata>(digest.Val),
-                   linkage.Val));
+      TicketNode,
+      (Context, name.Val, dyn_cast<ConstantAsMetadata>(digest.Val),
+       static_cast<GlobalValue::LinkageTypes>(linkage.Val), isComdat.Val));
   return false;
 }
 

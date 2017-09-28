@@ -1304,9 +1304,6 @@ void Verifier::visitTicketNode(const TicketNode &N) {
          "TicketNode has invalid the array element type which should be "
          "8-bit integer type!",
          &N);
-
-  Assert(N.isValidLinkage(),
-         "TicketNode should have an available linkage type!", &N);
 }
 
 void Verifier::visitComdat(const Comdat &C) {

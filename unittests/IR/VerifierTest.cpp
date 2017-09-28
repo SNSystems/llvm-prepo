@@ -213,63 +213,34 @@ TEST(VerifierTest, StripInvalidDebugInfoLegacy) {
   EXPECT_FALSE(verifyModule(M));
 }
 
-TEST(VerifierTest, InvalidTicketNodeVariable) {
+TEST(VerifierTest, TicketNodeVariable) {
   LLVMContext C;
   Module M("M", C);
   MDBuilder MDB(M.getContext());
   auto GV =
       new GlobalVariable(M, Type::getInt8Ty(C), false,
                          GlobalValue::ExternalLinkage, nullptr, "Some Global");
-  {
-    // Invalid linkage type.
-    GV->setMetadata(LLVMContext::MD_fragment,
-                    MDB.createTicketNode(GV->getName(), Digest::DigestType(),
-                                         TicketNode::MaxLinkageType + 1));
-
-    std::string Error;
-    raw_string_ostream ErrorOS(Error);
-    EXPECT_TRUE(verifyModule(M, &ErrorOS));
-    EXPECT_TRUE(
-        StringRef(ErrorOS.str())
-            .startswith("TicketNode should have an available linkage type!"));
-  }
-  {
-    // Valid TicketNode.
-    GV->setMetadata(LLVMContext::MD_fragment,
-                    MDB.createTicketNode(GV->getName(), Digest::DigestType(),
-                                         GV->getLinkage()));
-    EXPECT_FALSE(verifyModule(M));
-  }
+  // Valid TicketNode.
+  GV->setMetadata(LLVMContext::MD_fragment,
+                  MDB.createTicketNode(
+                      GV->getName(), Digest::DigestType(), GV->getLinkage(),
+                      GV->getComdat() != nullptr));
+  EXPECT_FALSE(verifyModule(M));
 }
 
-TEST(VerifierTest, InvalidTicketNodeFunction) {
+TEST(VerifierTest, TicketNodeFunction) {
   LLVMContext C;
   Module M("M", C);
   MDBuilder MDB(M.getContext());
   FunctionType *FTy = FunctionType::get(Type::getVoidTy(C), /*isVarArg=*/false);
   auto Func = Function::Create(FTy, GlobalValue::ExternalLinkage, "foo", &M);
-  {
-    // Invalid linkage type.
-    Func->setMetadata(LLVMContext::MD_fragment,
-                      MDB.createTicketNode(Func->getName(),
-                                           Digest::DigestType(),
-                                           TicketNode::MaxLinkageType + 1));
-
-    std::string Error;
-    raw_string_ostream ErrorOS(Error);
-    EXPECT_TRUE(verifyModule(M, &ErrorOS));
-    EXPECT_TRUE(
-        StringRef(ErrorOS.str())
-            .startswith("TicketNode should have an available linkage type!"));
-  }
-  {
-    // Valid global variable name.
-    Func->setMetadata(LLVMContext::MD_fragment,
-                      MDB.createTicketNode(Func->getName(),
-                                           Digest::DigestType(),
-                                           Func->getLinkage()));
-    EXPECT_FALSE(verifyModule(M));
-  }
+  // Valid global variable name.
+  Func->setMetadata(
+      LLVMContext::MD_fragment,
+      MDB.createTicketNode(Func->getName(), Digest::DigestType(),
+                           Func->getLinkage(),
+                           Func->getComdat() != nullptr));
+  EXPECT_FALSE(verifyModule(M));
 }
 
 } // end anonymous namespace
