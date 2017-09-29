@@ -14,10 +14,10 @@
 
 #include "llvm/Transforms/Utils/HashCalculator.h"
 #include "llvm/IR/CallSite.h"
-#include "llvm/IR/Digest.h"
 #include "llvm/IR/GetElementPtrTypeIterator.h"
 #include "llvm/IR/InlineAsm.h"
 #include "llvm/IR/Module.h"
+#include "llvm/IR/RepoTicket.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
 

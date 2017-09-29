@@ -15,9 +15,9 @@
 #ifndef LLVM_TRANSFORMS_UTILS_HASHCALCULATOR_H
 #define LLVM_TRANSFORMS_UTILS_HASHCALCULATOR_H
 
-#include "llvm/IR/Digest.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Operator.h"
+#include "llvm/IR/RepoTicket.h"
 #include "llvm/IR/ValueMap.h"
 #include "llvm/Support/AtomicOrdering.h"
 #include "llvm/Transforms/Utils/FunctionComparator.h"

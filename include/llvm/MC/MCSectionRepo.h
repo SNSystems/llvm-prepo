@@ -15,7 +15,7 @@
 #define LLVM_MC_MCSECTIONREPO_H
 
 //#include "llvm/ADT/Twine.h"
-#include "llvm/IR/Digest.h"
+#include "llvm/IR/RepoTicket.h"
 #include "llvm/MC/MCSection.h"
 //#include "llvm/MC/MCSymbolELF.h"
 //#include "llvm/Support/Debug.h"

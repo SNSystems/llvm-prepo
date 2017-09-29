@@ -1,4 +1,4 @@
-//===------ Digest.cpp -  Implement digest data structure. ------*- C++ -*-===//
+//===---- RepoTicket.cpp -  Implement digest data structure. ----*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -11,7 +11,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/IR/Digest.h"
+#include "llvm/IR/RepoTicket.h"
 #include "LLVMContextImpl.h"
 #include "MetadataImpl.h"
 #include "llvm/IR/Constants.h"

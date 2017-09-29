@@ -12,7 +12,6 @@ add_llvm_library(LLVMCore
   ConstantRange.cpp
   Constants.cpp
   Core.cpp
-  DIBuilder.cpp
   DataLayout.cpp
   DebugInfo.cpp
   DebugInfoMetadata.cpp
@@ -20,23 +19,23 @@ add_llvm_library(LLVMCore
   DiagnosticHandler.cpp
   DiagnosticInfo.cpp
   DiagnosticPrinter.cpp
-  Digest.cpp
+  DIBuilder.cpp
   Dominators.cpp
   DomTreeUpdater.cpp
   Function.cpp
-  GVMaterializer.cpp
   Globals.cpp
-  IRBuilder.cpp
-  IRPrintingPasses.cpp
+  GVMaterializer.cpp
   InlineAsm.cpp
   Instruction.cpp
   Instructions.cpp
   IntrinsicInst.cpp
+  IRBuilder.cpp
+  IRPrintingPasses.cpp
+  LegacyPassManager.cpp
   LLVMContext.cpp
   LLVMContextImpl.cpp
-  LegacyPassManager.cpp
-  MDBuilder.cpp
   Mangler.cpp
+  MDBuilder.cpp
   Metadata.cpp
   Module.cpp
   ModuleSummaryIndex.cpp
@@ -47,6 +46,7 @@ add_llvm_library(LLVMCore
   PassRegistry.cpp
   SafepointIRVerifier.cpp
   ProfileSummary.cpp
+  RepoDigest.cpp
   Statepoint.cpp
   Type.cpp
   TypeFinder.cpp

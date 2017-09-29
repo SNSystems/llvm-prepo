@@ -17,8 +17,8 @@
 
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/StringRef.h"
-#include "llvm/IR/Digest.h"
 #include "llvm/IR/GlobalValue.h"
+#include "llvm/IR/RepoTicket.h"
 #include "llvm/Support/DataTypes.h"
 #include <utility>
 
