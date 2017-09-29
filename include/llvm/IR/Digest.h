@@ -43,15 +43,12 @@ class TicketNode : public MDNode {
   struct CheckLinkageType {
     using LT = std::underlying_type<GlobalValue::LinkageTypes>::type;
     using ULT = std::make_unsigned<LT>::type;
-    static constexpr auto is_unsigned = std::is_unsigned<LT>::value;
-
-    constexpr bool operator()() const {
-      return (is_unsigned ? true : max<LT>() > 0) &&
-             max<ULT>() <= max<unsigned>();
-    }
-
     template <typename U> static constexpr U max() {
       return std::numeric_limits<U>::max();
+    }
+    static constexpr bool isSafeCast() {
+      return (std::is_unsigned<LT>::value ? true : max<LT>() > 0) &&
+             max<ULT>() <= max<unsigned>();
     }
   };
 
@@ -60,7 +57,7 @@ class TicketNode : public MDNode {
              ArrayRef<Metadata *> MDs)
       : MDNode(C, TicketNodeKind, Storage, MDs) {
     assert(MDs.size() == 2 && "Expected a hash and name.");
-	static_assert(CheckLinkageType()(), "Linkage type will overflow!");
+	static_assert(CheckLinkageType::isSafeCast (), "Linkage type will overflow!");
     SubclassData32 = static_cast<unsigned>(Linkage);
     SubclassData16 = static_cast<unsigned short>(IsComdat);
   }
