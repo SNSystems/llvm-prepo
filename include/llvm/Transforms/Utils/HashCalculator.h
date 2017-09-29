@@ -71,14 +71,12 @@ enum HashKind {
   TAG_GlobalVarible,
   TAG_GlobalAlias,
   TAG_GVName,
-  // TAG_GVSourceFileName,
   TAG_GVConstant,
   TAG_GVVisibility,
   TAG_GVThreadLocalMode,
   TAG_GVAlignment,
   TAG_GVUnnamedAddr,
   TAG_GVDLLStorageClassType,
-  TAG_GVComdat,
   TAG_GVInitValue,
   TAG_Datalayout,
   TAG_Triple,
@@ -164,13 +162,11 @@ public:
   /// Return the computed hash as a string.
   std::string &get(MD5::MD5Result &HashRes);
 
-  /// Assign serial numbers to values from left function, and values from
-  /// right function.
+  /// Assign serial numbers to values from the function.
   /// Explanation:
-  /// Being comparing functions we need to compare values we meet at left and
-  /// right sides.
+  /// Being caclulating functions we need to compare values.
   /// Its easy to sort things out for external values. It just should be
-  /// the same value at left and right.
+  /// the same value for all functions.
   /// But for local values (those were introduced inside function body)
   /// we have to ensure they were introduced at exactly the same place,
   /// and plays the same role.
@@ -183,23 +179,21 @@ public:
   /// It's safe to change the order of BasicBlocks in function.
   /// Relationship with other functions and serial numbering will not be
   /// changed in this case.
-  /// As follows from FunctionComparator::compare(), we do CFG walk: we start
-  /// from the entry, and then take each terminator. So it doesn't matter how in
-  /// fact BBs are ordered in function. And since cmpValues are called during
-  /// this walk, the numbering depends only on how BBs located inside the CFG.
-  /// So the answer is - yes. We will get the same numbering.
+  /// As follows from FunctionHashCalculator::calculateHash(), we do CFG walk:
+  /// we start from the entry, and then take each terminator. So it doesn't
+  /// matter how in fact BBs are ordered in function. And since valueHash are
+  /// called during this walk, the numbering depends only on how BBs located
+  /// inside the CFG. So the answer is - yes. We will get the same numbering.
   ///
   /// 2. Impossibility to use dominance properties of values.
-  /// If we compare two instruction operands: first is usage of local
-  /// variable AL from function FL, and second is usage of local variable AR
-  /// from FR, we could compare their origins and check whether they are
-  /// defined at the same place.
-  /// But, we are still not able to compare operands of PHI nodes, since those
-  /// could be operands from further BBs we didn't scan yet.
-  /// So it's impossible to use dominance properties in general.
+  /// If we calculate instruction operands: first is usage of local variable
+  /// from function, we could calulate the origin and check whether they are
+  /// defined at the same place. But, we are still not able to calulate operands
+  /// of PHI nodes, since those could be operands from further BBs we didn't
+  /// scan yet. So it's impossible to use dominance properties in general.
   DenseMap<const Value *, unsigned> sn_map;
 
-  // The global state we will use
+  // The global state we will use.
   DenseMap<const GlobalValue *, unsigned> global_numbers;
 
 private:
@@ -276,9 +270,6 @@ public:
   void update(ArrayRef<uint8_t> Data) { GvHash.update(Data); }
 
 private:
-  /// Accumulate the comdat variable hash value.
-  void comdatHash();
-
   /// Accumulate the hash for the target datalayout and triple.
   void moduleHash(Module &M);
 

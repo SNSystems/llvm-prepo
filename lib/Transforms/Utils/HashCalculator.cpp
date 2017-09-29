@@ -46,15 +46,11 @@ void HashCalculator::APFloatHash(const APFloat &V) {
   // Floats are ordered first by semantics (i.e. float, double, half, etc.),
   // then by value interpreted as a bitstring (aka APInt).
   const fltSemantics &SV = V.getSemantics();
-  //  unsigned int SPrec = APFloat::semanticsPrecision(SV);
-  //  Hash.update(ArrayRef<uint8_t>((uint8_t *)&SPrec, sizeof(unsigned int)));
   numberHash(APFloat::semanticsPrecision(SV));
   signed short SMax = APFloat::semanticsMaxExponent(SV);
   Hash.update(ArrayRef<uint8_t>((uint8_t *)&SMax, sizeof(signed short)));
   signed short SMin = APFloat::semanticsMinExponent(SV);
   Hash.update(ArrayRef<uint8_t>((uint8_t *)&SMin, sizeof(signed short)));
-  //  unsigned int SSize = APFloat::semanticsSizeInBits(SV);
-  //  Hash.update(ArrayRef<uint8_t>((uint8_t *)&SSize, sizeof(unsigned int)));
   numberHash(APFloat::semanticsSizeInBits(SV));
   APIntHash(V.bitcastToAPInt());
 }
@@ -149,8 +145,6 @@ void HashCalculator::typeHash(Type *Ty) {
 
   // Derived types
   case Type::IntegerTyID:
-    // unsigned int BWidth = cast<IntegerType>(Ty)->getBitWidth();
-    // Hash.update(ArrayRef<uint8_t>((uint8_t *)&BWidth, sizeof(unsigned int)));
     numberHash(cast<IntegerType>(Ty)->getBitWidth());
     break;
   case Type::FunctionTyID: {
@@ -213,7 +207,6 @@ void HashCalculator::constantHash(const Constant *V) {
   }
 
   unsigned int VID = V->getValueID();
-  // Hash.update(ArrayRef<uint8_t>((uint8_t *)&VID, sizeof(unsigned int)));
   numberHash(VID);
 
   if (const auto *SeqV = dyn_cast<ConstantDataSequential>(V)) {
@@ -474,9 +467,6 @@ void FunctionHashCalculator::instructionHash(const Instruction *V) {
   if (const InsertValueInst *IVI = dyn_cast<InsertValueInst>(V)) {
     FnHash.Hash.update(HashKind::TAG_InsertValueInst);
     ArrayRef<unsigned> Indices = IVI->getIndices();
-    // for (size_t I = 0, E = Indices.size(); I != E; ++I) {
-    //  FnHash.numberHash(Indices[I]);
-    //}
     FnHash.Hash.update(ArrayRef<uint8_t>((uint8_t *)&Indices,
                                          sizeof(unsigned) * Indices.size()));
     return;
@@ -484,9 +474,6 @@ void FunctionHashCalculator::instructionHash(const Instruction *V) {
   if (const ExtractValueInst *EVI = dyn_cast<ExtractValueInst>(V)) {
     FnHash.Hash.update(HashKind::TAG_ExtractValueInst);
     ArrayRef<unsigned> Indices = EVI->getIndices();
-    // for (size_t I = 0, E = Indices.size(); I != E; ++I) {
-    //  FnHash.numberHash(Indices[I]);
-    //}
     FnHash.Hash.update(ArrayRef<uint8_t>((uint8_t *)&Indices,
                                          sizeof(unsigned) * Indices.size()));
     return;
@@ -569,13 +556,6 @@ MD5::MD5Result FunctionHashCalculator::getHashResult() {
   return FnHash.getHashResult();
 }
 
-void VaribleHashCalculator::comdatHash() {
-  GvHash.Hash.update(HashKind::TAG_GVComdat);
-  const Comdat *GvC = Gv->getComdat();
-  GvHash.Hash.update(GvC->getName());
-  GvHash.Hash.update(GvC->getSelectionKind());
-}
-
 void VaribleHashCalculator::moduleHash(Module &M) {
   GvHash.Hash.update(HashKind::TAG_Datalayout);
   GvHash.memHash(M.getDataLayoutStr());
@@ -588,26 +568,10 @@ void VaribleHashCalculator::calculateHash(Module &M) {
   GvHash.Hash.update(HashKind::TAG_GlobalVarible);
   GvHash.beginCalculate();
   moduleHash(M);
-
-  // Accumulate the global variable name
-  // if (Gv->hasName()) {
-  //  GvHash.Hash.update(HashKind::TAG_GVName);
-  //  GvHash.memHash(Gv->getName());
-  //}
-  // Global variables which are defined in the different file have differetn
-  // hash values.
-  // GvHash.Hash.update(HashKind::TAG_GVSourceFileName);
-  // GvHash.memHash(Gv->getParent()->getSourceFileName());
-  // Value type.
   GvHash.typeHash(Gv->getValueType());
-  //// Accumulate the linkage type.
-  // GvHash.Hash.update(Gv->getLinkage());
   // If global variable is constant, accumulate the const attribute.
   GvHash.Hash.update(HashKind::TAG_GVConstant);
   GvHash.Hash.update(Gv->isConstant());
-  //// Accumulate meaningful attributes for global variable.
-  // GvHash.Hash.update(HashKind::TAG_GVVisibility);
-  // GvHash.Hash.update(Gv->getVisibility());
   // Accumulate the thread local mode.
   GvHash.Hash.update(HashKind::TAG_GVThreadLocalMode);
   GvHash.Hash.update(Gv->getThreadLocalMode());
@@ -616,14 +580,7 @@ void VaribleHashCalculator::calculateHash(Module &M) {
   GvHash.numberHash(Gv->getAlignment());
   // Accumulate an optional unnamed_addr or local_unnamed_addr attribute.
   GvHash.Hash.update(HashKind::TAG_GVUnnamedAddr);
-  GvHash.Hash.update (static_cast <uint8_t> (Gv->getUnnamedAddr()));
-  //// Accumulate the DLL storage class type.
-  // GvHash.Hash.update(HashKind::TAG_GVDLLStorageClassType);
-  // GvHash.Hash.update(Gv->getDLLStorageClass());
-  // Accumulate the Comdat section name.
-  //if (Gv->hasComdat()) {
-  //  comdatHash();
-  //}
+  GvHash.Hash.update(static_cast<uint8_t>(Gv->getUnnamedAddr()));
   if (Gv->hasName() && Gv->hasDefinitiveInitializer()) {
     // Global variable is constant type. Accumulate the initial value.
     // This accumulation also cover the "llvm.global_ctors",
@@ -637,16 +594,6 @@ void VaribleHashCalculator::calculateHash(Module &M) {
 Digest::DigestType AliasHashCalculator::calculate() {
   GaHash.Hash.update(HashKind::TAG_GlobalAlias);
   GaHash.beginCalculate();
-  // Accumulate the global variable name
-  // if (Ga->hasName()) {
-  //  GaHash.Hash.update(HashKind::TAG_GVName);
-  //  GaHash.memHash(Ga->getName());
-  //}
-  // Global variables which are defined in the different file have differetn
-  // hash values.
-  // GaHash.Hash.update(HashKind::TAG_GVSourceFileName);
-  // GaHash.memHash(Ga->getParent()->getSourceFileName());
-  // Value type.
   GaHash.typeHash(Ga->getValueType());
   // Accumulate the linkage type.
   GaHash.Hash.update(Ga->getLinkage());
@@ -661,7 +608,7 @@ Digest::DigestType AliasHashCalculator::calculate() {
   GaHash.numberHash(Ga->getAlignment());
   // Accumulate an optional unnamed_addr or local_unnamed_addr attribute.
   GaHash.Hash.update(HashKind::TAG_GVUnnamedAddr);
-  GaHash.Hash.update (static_cast <uint8_t> (Ga->getUnnamedAddr()));
+  GaHash.Hash.update(static_cast<uint8_t>(Ga->getUnnamedAddr()));
   // Accumulate the DLL storage class type.
   GaHash.Hash.update(HashKind::TAG_GVDLLStorageClassType);
   GaHash.Hash.update(Ga->getDLLStorageClass());
