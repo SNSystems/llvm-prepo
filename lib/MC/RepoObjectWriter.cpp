@@ -45,8 +45,8 @@
 #include <vector>
 
 #include "pstore/transaction.hpp"
-#include "pstore_mcrepo/Fragment.h"
-#include "pstore_mcrepo/ticket.h"
+#include "pstore_mcrepo/fragment.hpp"
+#include "pstore_mcrepo/ticket.hpp"
 
 using namespace llvm;
 
