@@ -19,7 +19,7 @@
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Transforms/IPO.h"
 #include "llvm/Transforms/Utils/GlobalStatus.h"
-#include "llvm/Transforms/Utils/HashCalculator.h"
+#include "llvm/Transforms/Utils/RepoHashCalculator.h"
 #include <set>
 #include "pstore/database.hpp"
 #include "pstore/hamt_map.hpp"

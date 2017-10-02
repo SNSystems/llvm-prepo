@@ -109,7 +109,7 @@
 #include "llvm/Support/Timer.h"
 #include "llvm/Support/raw_ostream.h"
 //FIXME: Should move this header to Support directory??
-#include "llvm/Transforms/Utils/HashCalculator.h"
+#include "llvm/Transforms/Utils/RepoHashCalculator.h"
 #include "llvm/Target/TargetLoweringObjectFile.h"
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/Target/TargetOptions.h"
@@ -1461,7 +1461,7 @@ bool AsmPrinter::doFinalization(Module &M) {
       MoreStack = new GlobalVariable(M, Ty, true, GlobalValue::ExternalLinkage,
                                      nullptr, "__morestack_addr");
       // Calculate the global varible MoreStack hash value.
-      VaribleHashCalculator GVHC{MoreStack};
+      VariableHashCalculator GVHC{MoreStack};
       GVHC.calculateHash(M);
       // Since the __morestack_addr for each module, the ModuleID need to be
       // considered in the Hash value.

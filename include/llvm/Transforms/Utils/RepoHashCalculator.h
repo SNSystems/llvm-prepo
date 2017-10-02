@@ -1,4 +1,4 @@
-//===- FunctionHash.h - Function Hash Calculation ---------------*- C++ -*-===//
+//===- RepoHashCalculator.h - Implement Hash Calculation --------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -7,13 +7,13 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file defines the FunctionHash and GlobalNumberState classes which
-// are used by the ProgramRepository pass for comparing function hashes.
+// This file implements the FunctionHash and  VariableHash Calculator which
+// are used as 'digest' item by the ProgramRepository passes.
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_TRANSFORMS_UTILS_HASHCALCULATOR_H
-#define LLVM_TRANSFORMS_UTILS_HASHCALCULATOR_H
+#ifndef LLVM_TRANSFORMS_UTILS_REPO_HASH_CALCULATOR_H
+#define LLVM_TRANSFORMS_UTILS_REPO_HASH_CALCULATOR_H
 
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Operator.h"
@@ -68,7 +68,7 @@ enum HashKind {
   TAG_PHINode,
   TAG_BasicBlock,
   TAG_GlobalFunction,
-  TAG_GlobalVarible,
+  TAG_GlobalVariable,
   TAG_GlobalAlias,
   TAG_GVName,
   TAG_GVConstant,
@@ -254,12 +254,12 @@ protected:
   HashCalculator FnHash;
 };
 
-/// VaribleHashCalculator - Calculate the global variable hash.
-class VaribleHashCalculator {
+/// VariableHashCalculator - Calculate the global variable hash.
+class VariableHashCalculator {
 public:
-  VaribleHashCalculator(const GlobalVariable *V) : Gv(V) {}
+  VariableHashCalculator(const GlobalVariable *V) : Gv(V) {}
 
-  /// Calculate the global varible Gv hash value.
+  /// Calculate the global Variable Gv hash value.
   void calculateHash(Module &M);
 
   std::string &get(MD5::MD5Result &HashRes) { return GvHash.get(HashRes); }
@@ -273,33 +273,13 @@ private:
   /// Accumulate the hash for the target datalayout and triple.
   void moduleHash(Module &M);
 
-  // The varible undergoing calculation.
+  // The Variable undergoing calculation.
   const GlobalVariable *Gv;
 
-  // Hold the varible hash value.
+  // Hold the Variable hash value.
   HashCalculator GvHash;
-};
-
-/// AliasHashCalculator - Calculate the global alias hash.
-/// Aliases have a name and an aliasee that is either a global value or a
-/// constant expression. If it has an aliasee to a global value, it should have
-/// the same hash as the global value. Otherwise, the hash value need to be
-/// caculated.
-class AliasHashCalculator {
-public:
-  AliasHashCalculator(const GlobalAlias *V) : Ga(V) {}
-
-  /// Calculate the global varible Gv hash value.
-  Digest::DigestType calculate();
-
-private:
-  // The alias undergoing calculation.
-  const GlobalAlias *Ga;
-
-  // Hold the varible hash value.
-  HashCalculator GaHash;
 };
 
 } // end namespace llvm
 
-#endif // LLVM_TRANSFORMS_UTILS_HASHCALCULATOR_H
+#endif // LLVM_TRANSFORMS_UTILS_REPO_HASH_CALCULATOR_H

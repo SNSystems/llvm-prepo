@@ -20,7 +20,7 @@
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Format.h"
 #include "llvm/Transforms/IPO.h"
-#include "llvm/Transforms/Utils/HashCalculator.h"
+#include "llvm/Transforms/Utils/RepoHashCalculator.h"
 
 using namespace llvm;
 
@@ -72,7 +72,7 @@ struct DigestCalculator {};
 
 template <> // explicit specialization for T = GlobalVariable
 struct DigestCalculator<GlobalVariable> {
-  using Calculator = VaribleHashCalculator;
+  using Calculator = VariableHashCalculator;
 };
 
 template <> // explicit specialization for T = Function

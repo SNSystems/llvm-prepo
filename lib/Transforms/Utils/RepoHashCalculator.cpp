@@ -1,4 +1,4 @@
-//===- FunctionHash.cpp - Function Hash Calculation ----------------------===//
+//===- RepoHashCalculator.cpp - Implement Hash Calculation ----------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -7,12 +7,12 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file implements the FunctionHash and GlobalNumberState classes which
-// are used by the ProgramRepository pass for comparing functions hashes.
+// This file implements the FunctionHash and  VariableHash Calculator which
+// are used as 'digest' item by the ProgramRepository passes.
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/Transforms/Utils/HashCalculator.h"
+#include "llvm/Transforms/Utils/RepoHashCalculator.h"
 #include "llvm/IR/CallSite.h"
 #include "llvm/IR/GetElementPtrTypeIterator.h"
 #include "llvm/IR/InlineAsm.h"
@@ -556,16 +556,16 @@ MD5::MD5Result FunctionHashCalculator::getHashResult() {
   return FnHash.getHashResult();
 }
 
-void VaribleHashCalculator::moduleHash(Module &M) {
+void VariableHashCalculator::moduleHash(Module &M) {
   GvHash.Hash.update(HashKind::TAG_Datalayout);
   GvHash.memHash(M.getDataLayoutStr());
   GvHash.Hash.update(HashKind::TAG_Triple);
   GvHash.memHash(M.getTargetTriple());
 }
 
-// Calculate the global varible hash value.
-void VaribleHashCalculator::calculateHash(Module &M) {
-  GvHash.Hash.update(HashKind::TAG_GlobalVarible);
+// Calculate the global Variable hash value.
+void VariableHashCalculator::calculateHash(Module &M) {
+  GvHash.Hash.update(HashKind::TAG_GlobalVariable);
   GvHash.beginCalculate();
   moduleHash(M);
   GvHash.typeHash(Gv->getValueType());
@@ -588,39 +588,4 @@ void VaribleHashCalculator::calculateHash(Module &M) {
     GvHash.Hash.update(HashKind::TAG_GVInitValue);
     GvHash.constantHash(Gv->getInitializer());
   }
-}
-
-// Calculate the global varible hash value.
-Digest::DigestType AliasHashCalculator::calculate() {
-  GaHash.Hash.update(HashKind::TAG_GlobalAlias);
-  GaHash.beginCalculate();
-  GaHash.typeHash(Ga->getValueType());
-  // Accumulate the linkage type.
-  GaHash.Hash.update(Ga->getLinkage());
-  // Accumulate meaningful attributes for global variable.
-  GaHash.Hash.update(HashKind::TAG_GVVisibility);
-  GaHash.Hash.update(Ga->getVisibility());
-  // Accumulate the thread local mode.
-  GaHash.Hash.update(HashKind::TAG_GVThreadLocalMode);
-  GaHash.Hash.update(Ga->getThreadLocalMode());
-  // Accumulate the alignment of global variable.
-  GaHash.Hash.update(HashKind::TAG_GVAlignment);
-  GaHash.numberHash(Ga->getAlignment());
-  // Accumulate an optional unnamed_addr or local_unnamed_addr attribute.
-  GaHash.Hash.update(HashKind::TAG_GVUnnamedAddr);
-  GaHash.Hash.update(static_cast<uint8_t>(Ga->getUnnamedAddr()));
-  // Accumulate the DLL storage class type.
-  GaHash.Hash.update(HashKind::TAG_GVDLLStorageClassType);
-  GaHash.Hash.update(Ga->getDLLStorageClass());
-
-  GaHash.constantHash(Ga->getAliasee());
-
-  // Now return the result.
-  MD5::MD5Result Result;
-  GaHash.Hash.final(Result);
-
-  // ... take the least significant 8 bytes and return those. Our MD5
-  // implementation always returns its results in little endian, so we actually
-  // need the "high" word.
-  return Result;
 }

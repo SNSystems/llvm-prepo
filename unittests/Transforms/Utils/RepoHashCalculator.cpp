@@ -1,4 +1,4 @@
-//===- HashCalculator.cpp - Unit tests for HashCalculator ---------===//
+//===- RepoHashCalculator.cpp - Unit tests for RepoHashCalculator ---------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -6,7 +6,7 @@
 // License. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
-#include "llvm/Transforms/Utils/HashCalculator.h"
+#include "llvm/Transforms/Utils/RepoHashCalculator.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Instructions.h"
@@ -40,7 +40,7 @@ struct TestFunction {
   }
 };
 
-/// A class for testing the HashCalculator API.
+/// A class for testing the RepoHashCalculator API.
 ///
 /// The main purpose is to test if the required protected functions are
 /// accessible from a derived class of FunctionComparator.
