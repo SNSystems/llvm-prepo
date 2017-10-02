@@ -61,11 +61,6 @@ using TransactionType = pstore::transaction<pstore::transaction_lock>;
 auto StringHash = [](StringRef s) { return HashString(s); };
 
 class RepoObjectWriter : public MCObjectWriter {
-  //  static uint64_t SymbolValue(const MCSymbol &Sym, const MCAsmLayout
-  //  &Layout);
-  //  static bool isInSymtab(const MCAsmLayout &Layout, const MCSymbolELF
-  //  &Symbol,
-  //                         bool Used, bool Renamed);
 
   /// The target specific repository writer instance.
   std::unique_ptr<MCRepoObjectTargetWriter> TargetObjectWriter;
@@ -96,7 +91,6 @@ class RepoObjectWriter : public MCObjectWriter {
 
   BumpPtrAllocator Alloc;
   StringSaver VersionSymSaver{Alloc};
-  // StringTableBuilder StrTabBuilder{StringTableBuilder::ELF};
 
   /// @}
 
@@ -105,12 +99,6 @@ class RepoObjectWriter : public MCObjectWriter {
   unsigned getRelocType(MCContext &Ctx, const MCValue &Target,
                         const MCFixup &Fixup, bool IsPCRel) const {
     return TargetObjectWriter->getRelocType(Ctx, Target, Fixup, IsPCRel);
-  }
-
-  bool shouldRelocateWithSymbol(const MCAssembler &Asm,
-                                const MCSymbolRefExpr *RefA, const MCSymbol *S,
-                                uint64_t C, unsigned Type) const {
-    return true;
   }
 
 public:
@@ -135,14 +123,7 @@ public:
       support::endian::Writer<support::big>(getStream()).write(Val);
   }
 
-  void writeHeader(const MCAssembler &Asm);
-
-  // void writeSymbol(SymbolTableWriter &Writer, uint32_t StringIndex,
-  // ELFSymbolData &MSD, const MCAsmLayout &Layout);
-
-  // Start and end offset of each section
-  typedef std::map<const MCSectionELF *, std::pair<uint64_t, uint64_t>>
-      SectionOffsetsTy;
+  void writeTicketFile(const MCAssembler &Asm);
 
   void recordRelocation(MCAssembler &Asm, const MCAsmLayout &Layout,
                         const MCFragment *Fragment, const MCFixup &Fixup,
@@ -165,37 +146,18 @@ public:
                                               const MCFragment &FB, bool InSet,
                                               bool IsPCRel) const override;
 
-  // bool isWeak(const MCSymbol &Sym) const override;
-
   void writeObject(MCAssembler &Asm, const MCAsmLayout &Layout) override;
 };
 } // end anonymous namespace
 
 RepoObjectWriter::~RepoObjectWriter() {}
 
-// Emit the ELF header.
-void RepoObjectWriter::writeHeader(const MCAssembler &Asm) {
+void RepoObjectWriter::writeTicketFile(const MCAssembler &Asm) {
   writeBytes(Header.RepoMagic);
   writeBytes(
       StringRef(reinterpret_cast<const char *>(Header.uuid.array().data()),
                 Header.uuid.elements));
 }
-
-#if 0
-uint64_t RepoObjectWriter::SymbolValue(const MCSymbol &Sym, const MCAsmLayout &Layout) {
-  if (Sym.isCommon() && Sym.isExternal())
-    return Sym.getCommonAlignment();
-
-  uint64_t Res;
-  if (!Layout.getSymbolOffset(Sym, Res))
-    return 0;
-
-  if (Layout.getAssembler().isThumbFunc(&Sym))
-    Res |= 1;
-
-  return Res;
-}
-#endif
 
 void RepoObjectWriter::executePostLayoutBinding(MCAssembler &Asm,
                                                 const MCAsmLayout &Layout) {
@@ -215,65 +177,6 @@ void RepoObjectWriter::executePostLayoutBinding(MCAssembler &Asm,
         std::make_pair(cast<MCSymbolRepo>(Alias), cast<MCSymbolRepo>(Begin)));
   }
 }
-
-#if 0
-static uint8_t mergeTypeForSet(uint8_t origType, uint8_t newType) {
-  uint8_t Type = newType;
-
-  // Propagation rules:
-  // IFUNC > FUNC > OBJECT > NOTYPE
-  // TLS_OBJECT > OBJECT > NOTYPE
-  //
-  // dont let the new type degrade the old type
-  switch (origType) {
-  default:
-    break;
-  case ELF::STT_GNU_IFUNC:
-    if (Type == ELF::STT_FUNC || Type == ELF::STT_OBJECT ||
-        Type == ELF::STT_NOTYPE || Type == ELF::STT_TLS)
-      Type = ELF::STT_GNU_IFUNC;
-    break;
-  case ELF::STT_FUNC:
-    if (Type == ELF::STT_OBJECT || Type == ELF::STT_NOTYPE ||
-        Type == ELF::STT_TLS)
-      Type = ELF::STT_FUNC;
-    break;
-  case ELF::STT_OBJECT:
-    if (Type == ELF::STT_NOTYPE)
-      Type = ELF::STT_OBJECT;
-    break;
-  case ELF::STT_TLS:
-    if (Type == ELF::STT_OBJECT || Type == ELF::STT_NOTYPE ||
-        Type == ELF::STT_GNU_IFUNC || Type == ELF::STT_FUNC)
-      Type = ELF::STT_TLS;
-    break;
-  }
-
-  return Type;
-}
-#endif
-
-#if 0
-// True if the assembler knows nothing about the final value of the symbol.
-// This doesn't cover the comdat issues, since in those cases the assembler
-// can at least know that all symbols in the section will move together.
-static bool isWeak(const MCSymbolELF &Sym) {
-  if (Sym.getType() == ELF::STT_GNU_IFUNC)
-    return true;
-
-  switch (Sym.getBinding()) {
-  default:
-    llvm_unreachable("Unknown binding");
-  case ELF::STB_LOCAL:
-    return false;
-  case ELF::STB_GLOBAL:
-    return false;
-  case ELF::STB_WEAK:
-  case ELF::STB_GNU_UNIQUE:
-    return true;
-  }
-}
-#endif
 
 void RepoObjectWriter::recordRelocation(MCAssembler &Asm,
                                         const MCAsmLayout &Layout,
@@ -343,10 +246,6 @@ void RepoObjectWriter::recordRelocation(MCAssembler &Asm,
 
   unsigned Type = getRelocType(Ctx, Target, Fixup, IsPCRel);
   uint64_t OriginalC = C;
-  bool RelocateWithSymbol = shouldRelocateWithSymbol(Asm, RefA, SymA, C, Type);
-  if (!RelocateWithSymbol && SymA && !SymA->isUndefined()) {
-    C += Layout.getSymbolOffset(*SymA);
-  }
 
   uint64_t Addend = 0;
   if (hasRelocationAddend()) {
@@ -356,73 +255,17 @@ void RepoObjectWriter::recordRelocation(MCAssembler &Asm,
 
   FixedValue = C;
 
-  if (!RelocateWithSymbol) {
-    const MCSection *SecA =
-        (SymA && !SymA->isUndefined()) ? &SymA->getSection() : nullptr;
-    auto *ELFSec = cast_or_null<MCSectionRepo>(SecA);
-    const MCSymbolRepo *SectionSymbol =
-        nullptr; // ELFSec ? cast<MCSymbolRepo>(ELFSec->getBeginSymbol()) :
-                 // nullptr;
-    if (SectionSymbol) {
-      SectionSymbol->setUsedInReloc();
-    }
-    Relocations[&FixupSection].emplace_back(FixupOffset, SectionSymbol, Type,
-                                            Addend, SymA, OriginalC);
-    return;
-  }
-
   const auto *RenamedSymA = SymA;
   if (SymA) {
     if (const MCSymbolRepo *R = Renames.lookup(SymA)) {
       RenamedSymA = R;
     }
 
-    // if (ViaWeakRef) {
-    //    RenamedSymA->setIsWeakrefUsedInReloc();
-    //} else {
     RenamedSymA->setUsedInReloc();
-    //}
   }
   Relocations[&FixupSection].emplace_back(FixupOffset, RenamedSymA, Type,
                                           Addend, SymA, OriginalC);
 }
-
-#if 0
-bool RepoObjectWriter::isInSymtab(const MCAsmLayout &Layout,
-                                 const MCSymbolELF &Symbol, bool Used,
-                                 bool Renamed) {
-  if (Symbol.isVariable()) {
-    const MCExpr *Expr = Symbol.getVariableValue();
-    if (const MCSymbolRefExpr *Ref = dyn_cast<MCSymbolRefExpr>(Expr)) {
-      if (Ref->getKind() == MCSymbolRefExpr::VK_WEAKREF)
-        return false;
-    }
-  }
-
-  if (Used)
-    return true;
-
-  if (Renamed)
-    return false;
-
-  if (Symbol.isVariable() && Symbol.isUndefined()) {
-    // FIXME: this is here just to diagnose the case of a var = commmon_sym.
-    Layout.getBaseSymbol(Symbol);
-    return false;
-  }
-
-  if (Symbol.isUndefined() && !Symbol.isBindingSet())
-    return false;
-
-  if (Symbol.isTemporary())
-    return false;
-
-  if (Symbol.getType() == ELF::STT_SECTION)
-    return false;
-
-  return true;
-}
-#endif
 
 namespace {
 /// A raw_ostream that writes to an SmallVector or SmallString.  This is a
@@ -618,7 +461,8 @@ raw_ostream &operator<<(raw_ostream &OS, pstore::index::uint128 const &V) {
 void RepoObjectWriter::writeObject(MCAssembler &Asm,
                                    const MCAsmLayout &Layout) {
   // Write out the ticket file ...
-  writeHeader(Asm);
+  writeTicketFile(Asm);
+
   ModuleNamesContainer Names{100, StringHash};
 
   raw_fd_ostream &TempStream = static_cast<raw_fd_ostream &>(getStream());
@@ -732,36 +576,10 @@ bool RepoObjectWriter::isSymbolRefDifferenceFullyResolvedImpl(
   const auto &SymA = cast<MCSymbolRepo>(SA);
   if (IsPCRel) {
     assert(!InSet);
-    // if (::isWeak(SymA)) {
-    //    return false;
-    //}
   }
   return MCObjectWriter::isSymbolRefDifferenceFullyResolvedImpl(Asm, SymA, FB,
                                                                 InSet, IsPCRel);
 }
-
-#if 0
-bool RepoObjectWriter::isWeak(const MCSymbol &S) const {
-  const auto &Sym = cast<MCSymbolELF>(S);
-  if (::isWeak(Sym))
-    return true;
-
-  // It is invalid to replace a reference to a global in a comdat
-  // with a reference to a local since out of comdat references
-  // to a local are forbidden.
-  // We could try to return false for more cases, like the reference
-  // being in the same comdat or Sym being an alias to another global,
-  // but it is not clear if it is worth the effort.
-  if (Sym.getBinding() != ELF::STB_GLOBAL)
-    return false;
-
-  if (!Sym.isInSection())
-    return false;
-
-  const auto &Sec = cast<MCSectionELF>(Sym.getSection());
-  return Sec.getGroup();
-}
-#endif
 
 MCObjectWriter *llvm::createRepoObjectWriter(MCRepoObjectTargetWriter *MOTW,
                                              raw_pwrite_stream &OS,
