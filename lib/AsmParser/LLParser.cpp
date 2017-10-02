@@ -4144,7 +4144,15 @@ bool LLParser::ParseMDField(LocTy Loc, StringRef Name,
 
 template <>
 bool LLParser::ParseMDField(LocTy Loc, StringRef Name, LinkageField &Result) {
-  return ParseMDField(Loc, Name, static_cast<MDUnsignedField &>(Result));
+  bool HasValidLinkage;
+  unsigned Res = parseOptionalLinkageAux(Lex.getKind(), HasValidLinkage);
+  if (!HasValidLinkage)
+    return TokError("Invalid linkage type!");
+  assert(Res <= Result.Max && "Expected valid Linkage type");
+
+  Result.assign(Res);
+  Lex.Lex();
+  return false;
 }
 
 template <>
