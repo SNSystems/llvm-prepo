@@ -80,7 +80,7 @@ class RepoObjectWriter : public MCObjectWriter {
       std::unordered_map<StringRef, pstore::address, decltype(StringHash)>;
 
   std::map<Digest::DigestType,
-           SmallVector<std::unique_ptr<pstore::repo::SectionContent>, 4>>
+           SmallVector<std::unique_ptr<pstore::repo::section_content>, 4>>
       Contents;
 
   std::map<pstore::uuid, std::vector<pstore::repo::ticket_member>>
@@ -479,62 +479,62 @@ void RepoObjectWriter::writeSectionData(const MCAssembler &Asm, MCSection &Sec,
                                         const MCAsmLayout &Layout,
                                         ModuleNamesContainer &Names) {
   auto &Section = static_cast<MCSectionRepo &>(Sec);
-  pstore::repo::SectionType St = pstore::repo::SectionType::Data;
+  auto St = pstore::repo::section_type::Data;
 
   auto const kind = Section.getKind();
   if (kind.isBSS()) {
-    St = pstore::repo::SectionType::BSS;
+    St = pstore::repo::section_type::BSS;
   } else if (kind.isCommon()) {
-    St = pstore::repo::SectionType::Common;
+    St = pstore::repo::section_type::Common;
   } else if (kind.isData()) {
-    St = pstore::repo::SectionType::Data;
+    St = pstore::repo::section_type::Data;
   } else if (kind.isReadOnlyWithRel()) {
-    St = pstore::repo::SectionType::RelRo;
+    St = pstore::repo::section_type::RelRo;
   } else if (kind.isText()) {
-    St = pstore::repo::SectionType::Text;
+    St = pstore::repo::section_type::Text;
   } else if (kind.isMergeable1ByteCString()) {
-    St = pstore::repo::SectionType::Mergeable1ByteCString;
+    St = pstore::repo::section_type::Mergeable1ByteCString;
   } else if (kind.isMergeable2ByteCString()) {
-    St = pstore::repo::SectionType::Mergeable2ByteCString;
+    St = pstore::repo::section_type::Mergeable2ByteCString;
   } else if (kind.isMergeable4ByteCString()) {
-    St = pstore::repo::SectionType::Mergeable4ByteCString;
+    St = pstore::repo::section_type::Mergeable4ByteCString;
   } else if (kind.isMergeableConst4()) {
-    St = pstore::repo::SectionType::MergeableConst4;
+    St = pstore::repo::section_type::MergeableConst4;
   } else if (kind.isMergeableConst8()) {
-    St = pstore::repo::SectionType::MergeableConst8;
+    St = pstore::repo::section_type::MergeableConst8;
   } else if (kind.isMergeableConst16()) {
-    St = pstore::repo::SectionType::MergeableConst16;
+    St = pstore::repo::section_type::MergeableConst16;
   } else if (kind.isMergeableConst32()) {
-    St = pstore::repo::SectionType::MergeableConst32;
+    St = pstore::repo::section_type::MergeableConst32;
   } else if (kind.isMergeableConst()) {
-    St = pstore::repo::SectionType::MergeableConst;
+    St = pstore::repo::section_type::MergeableConst;
   } else if (kind.isReadOnly()) {
-    St = pstore::repo::SectionType::ReadOnly;
+    St = pstore::repo::section_type::ReadOnly;
   } else if (kind.isThreadBSS()) {
-    St = pstore::repo::SectionType::ThreadBSS;
+    St = pstore::repo::section_type::ThreadBSS;
   } else if (kind.isThreadData()) {
-    St = pstore::repo::SectionType::ThreadData;
+    St = pstore::repo::section_type::ThreadData;
   } else if (kind.isThreadLocal()) {
-    St = pstore::repo::SectionType::ThreadLocal;
+    St = pstore::repo::section_type::ThreadLocal;
   } else if (kind.isMetadata()) {
-    St = pstore::repo::SectionType::Metadata;
+    St = pstore::repo::section_type::Metadata;
   } else {
     llvm_unreachable("Unknown section type in writeRepoSectionData");
   }
 
   auto &SC = Contents[Section.hash()];
-  SC.push_back(make_unique<pstore::repo::SectionContent>(St));
-  pstore::repo::SectionContent &Content = *SC.back();
+  SC.push_back(make_unique<pstore::repo::section_content>(St));
+  pstore::repo::section_content &Content = *SC.back();
 
   // Add the section content to the fragment.
-  svector_ostream<decltype(Content.Data)> VecOS{Content.Data};
+  svector_ostream<decltype(Content.data)> VecOS{Content.data};
   raw_pwrite_stream &OldStream = getStream();
   this->setStream(VecOS);
   Asm.writeSectionData(&Section, Layout);
   this->setStream(OldStream);
 
   auto const &Relocs = Relocations[&Section];
-  Content.Xfixups.reserve(Relocs.size());
+  Content.xfixups.reserve(Relocs.size());
   for (auto const &Relocation : Relocations[&Section]) {
     // Insert the target symbol name into the set of known names for this
     // module. By gathering just a single instance of each string used in this
@@ -546,17 +546,17 @@ void RepoObjectWriter::writeSectionData(const MCAssembler &Asm, MCSection &Sec,
                   .first;
     auto NamePtr = reinterpret_cast<std::uintptr_t>(&(*It));
 
-    static_assert(sizeof(NamePtr) <= sizeof(pstore::repo::ExternalFixup::Name),
+    static_assert(sizeof(NamePtr) <= sizeof(pstore::repo::external_fixup::name),
                   "ExternalFixup::Name is not large enough to hold a pointer");
     assert(Relocation.Type <= std::numeric_limits<decltype(
-                                  pstore::repo::ExternalFixup::Type)>::max());
+                                  pstore::repo::external_fixup::type)>::max());
 
     // Attach a suitable external fixup to this section.
-    Content.Xfixups.push_back(
-        pstore::repo::ExternalFixup{{NamePtr},
-                                    static_cast<std::uint8_t>(Relocation.Type),
-                                    Relocation.Offset,
-                                    Relocation.Addend});
+    Content.xfixups.push_back(
+        pstore::repo::external_fixup{{NamePtr},
+                                     static_cast<std::uint8_t>(Relocation.Type),
+                                     Relocation.Offset,
+                                     Relocation.Addend});
   }
 }
 
@@ -668,26 +668,26 @@ void RepoObjectWriter::writeObject(MCAssembler &Asm,
     if (DigestsIndex->find(Key) != DigestsIndex->end()) {
       dbgs() << "fragment " << Key << " exists. skipping\n";
     } else {
-      auto Begin = pstore::repo::details::makeSectionContentIterator(
+      auto Begin = pstore::repo::details::make_section_content_iterator(
           Content.second.begin());
-      auto End = pstore::repo::details::makeSectionContentIterator(
+      auto End = pstore::repo::details::make_section_content_iterator(
           Content.second.end());
 
       // The name field of each of the external fixups is pointing into the
       // 'Names' map. Here we turn that into the pstore address of the string.
-      std::for_each(Begin, End, [](pstore::repo::SectionContent &Section) {
-        for (auto &XFixup : Section.Xfixups) {
+      std::for_each(Begin, End, [](pstore::repo::section_content &Section) {
+        for (auto &XFixup : Section.xfixups) {
           auto MNC = reinterpret_cast<ModuleNamesContainer::value_type const *>(
-              XFixup.Name.absolute());
-          XFixup.Name = MNC->second;
+              XFixup.name.absolute());
+          XFixup.name = MNC->second;
         }
       });
 
       dbgs() << "fragment " << Key << " adding. size="
-             << pstore::repo::Fragment::sizeBytes(Begin, End) << '\n';
+             << pstore::repo::fragment::size_bytes(Begin, End) << '\n';
 
       pstore::record FragmentRecord =
-          pstore::repo::Fragment::alloc(Transaction, Begin, End);
+          pstore::repo::fragment::alloc(Transaction, Begin, End);
       auto Kvp = std::make_pair(Key, FragmentRecord);
       DigestsIndex->insert(Transaction, Kvp);
     }
