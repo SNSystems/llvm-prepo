@@ -38,8 +38,8 @@ public:
   bool isConstantInSmallSection(const DataLayout &DL, const Constant *CN) const;
 
   MCSection *getSectionForConstant(const DataLayout &DL, SectionKind Kind,
-                                   const Constant *C,
-                                   unsigned &Align) const override;
+                                   const Constant *C, unsigned &Align,
+                                   const GlobalObject *GO) const override;
 };
 } // end namespace llvm
 
