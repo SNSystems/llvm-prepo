@@ -15,7 +15,6 @@
 namespace llvm {
 class MCAsmInfoRepo : public MCAsmInfo {
   virtual void anchor();
-  //MCSection *getNonexecutableStackSection(MCContext &Ctx) const;
 
 protected:
   /// Targets which have non-executable stacks by default can set this to false

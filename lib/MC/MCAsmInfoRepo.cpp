@@ -20,10 +20,6 @@ using namespace llvm;
 
 void MCAsmInfoRepo::anchor() { }
 
-//MCSection *MCAsmInfoRepo::getNonexecutableStackSection(MCContext &Ctx) const {
-//    return nullptr;
-//}
-
 MCAsmInfoRepo::MCAsmInfoRepo() {
   HasIdentDirective = false;
   WeakRefDirective = "\t.weak\t";

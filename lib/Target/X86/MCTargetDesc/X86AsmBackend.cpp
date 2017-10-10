@@ -440,7 +440,6 @@ public:
 
 class RepoX86AsmBackend : public X86AsmBackend {
 public:
-  //uint8_t OSABI;
   RepoX86AsmBackend(const Target &T, StringRef CPU)
       : X86AsmBackend(T, CPU) {}
 };

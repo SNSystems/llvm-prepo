@@ -1,11 +1,11 @@
-//===-- X86RepoObjectWriter.cpp - X86 Repository Writer --------------------===//
+//===-- X86RepoObjectWriter.cpp - X86 Repository Writer ------------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
 // This file is distributed under the University of Illinois Open Source
 // License. See LICENSE.TXT for details.
 //
-//===----------------------------------------------------------------------===//
+//===---------------------------------------------------------------------===//
 
 #include "MCTargetDesc/X86FixupKinds.h"
 #include "MCTargetDesc/X86MCTargetDesc.h"
@@ -14,7 +14,6 @@
 #include "llvm/MC/MCRepoObjectWriter.h"
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCValue.h"
-//#include "llvm/Support/ELF.h"
 #include "llvm/Support/ErrorHandling.h"
 
 using namespace llvm;
@@ -295,14 +294,3 @@ MCObjectWriter *llvm::createX86RepoObjectWriter(raw_pwrite_stream &OS,
   auto *MOTW = new X86RepoObjectWriter (EMachine);
   return createRepoObjectWriter(MOTW, OS,  /*IsLittleEndian=*/true);
 }
-
-
-#if 0
-MCObjectWriter *llvm::createX86ELFObjectWriter(raw_pwrite_stream &OS,
-                                               bool IsELF64, uint8_t OSABI,
-                                               uint16_t EMachine) {
-  MCELFObjectTargetWriter *MOTW =
-    new X86ELFObjectWriter(IsELF64, OSABI, EMachine);
-  return createELFObjectWriter(MOTW, OS,  /*IsLittleEndian=*/true);
-}
-#endif
