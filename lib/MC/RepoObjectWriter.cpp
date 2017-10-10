@@ -322,6 +322,13 @@ void RepoObjectWriter::writeSectionData(const MCAssembler &Asm, MCSection &Sec,
                                         const MCAsmLayout &Layout,
                                         ModuleNamesContainer &Names) {
   auto &Section = static_cast<MCSectionRepo &>(Sec);
+  // A "dummy" section is created to provide a default for the assembler but we don't
+  // write it to the repository.
+  if (Section.isDummy ()) {
+      // TODO: warn if the dummy section is not empty.
+      return;
+  }
+
   auto St = pstore::repo::section_type::Data;
 
   auto const kind = Section.getKind();

@@ -32,6 +32,7 @@ private:
   std::string id_;
   Digest::DigestType digest_;
   unsigned const index_;
+  bool IsDummy = false;
 
   friend class MCContext;
   MCSectionRepo(SectionKind K, MCSymbol *Begin);
@@ -48,9 +49,12 @@ private:
   // void setSectionName(StringRef Name) { SectionName = Name; }
 
 public:
-  std::string id() const { return id_; }
+  std::string id() const { return id_; } // FIXME: remove
   Digest::DigestType hash() const { return digest_; }
   virtual ~MCSectionRepo();
+
+  void markAsDummy () { IsDummy = true; }
+  bool isDummy () const { return IsDummy; }
 
   static bool classof(const MCSection *S) { return S->getVariant() == SV_Repo; }
 };
