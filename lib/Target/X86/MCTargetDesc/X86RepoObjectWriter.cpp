@@ -11,31 +11,30 @@
 #include "MCTargetDesc/X86MCTargetDesc.h"
 #include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/MCContext.h"
-#include "llvm/MC/MCRepoObjectWriter.h"
 #include "llvm/MC/MCExpr.h"
+#include "llvm/MC/MCRepoObjectWriter.h"
 #include "llvm/MC/MCValue.h"
 #include "llvm/Support/ErrorHandling.h"
 
 using namespace llvm;
 
 namespace {
-  class X86RepoObjectWriter : public MCRepoObjectTargetWriter {
-  public:
-    X86RepoObjectWriter(uint16_t EMachine);
+class X86RepoObjectWriter : public MCRepoObjectTargetWriter {
+public:
+  X86RepoObjectWriter(uint16_t EMachine);
 
-    ~X86RepoObjectWriter() override;
+  ~X86RepoObjectWriter() override;
 
-  protected:
-    unsigned getRelocType(MCContext &Ctx, const MCValue &Target,
-                          const MCFixup &Fixup, bool IsPCRel) const override;
-  };
-}
+protected:
+  unsigned getRelocType(MCContext &Ctx, const MCValue &Target,
+                        const MCFixup &Fixup, bool IsPCRel) const override;
+};
+} // namespace
 
 X86RepoObjectWriter::X86RepoObjectWriter(uint16_t EMachine)
     : MCRepoObjectTargetWriter(EMachine) {}
 
-X86RepoObjectWriter::~X86RepoObjectWriter()
-{}
+X86RepoObjectWriter::~X86RepoObjectWriter() {}
 
 enum X86_64RelType { RT64_64, RT64_32, RT64_32S, RT64_16, RT64_8 };
 
@@ -274,9 +273,10 @@ static unsigned getRelocType32(MCContext &Ctx,
   }
 }
 
-unsigned X86RepoObjectWriter::getRelocType(MCContext &Ctx, const MCValue &Target,
-                                          const MCFixup &Fixup,
-                                          bool IsPCRel) const {
+unsigned X86RepoObjectWriter::getRelocType(MCContext &Ctx,
+                                           const MCValue &Target,
+                                           const MCFixup &Fixup,
+                                           bool IsPCRel) const {
   MCSymbolRefExpr::VariantKind Modifier = Target.getAccessVariant();
   unsigned Kind = Fixup.getKind();
   X86_64RelType Type = getType64(Kind, Modifier, IsPCRel);
@@ -290,7 +290,7 @@ unsigned X86RepoObjectWriter::getRelocType(MCContext &Ctx, const MCValue &Target
 }
 
 MCObjectWriter *llvm::createX86RepoObjectWriter(raw_pwrite_stream &OS,
-                                               uint16_t EMachine) {
-  auto *MOTW = new X86RepoObjectWriter (EMachine);
-  return createRepoObjectWriter(MOTW, OS,  /*IsLittleEndian=*/true);
+                                                uint16_t EMachine) {
+  auto *MOTW = new X86RepoObjectWriter(EMachine);
+  return createRepoObjectWriter(MOTW, OS, /*IsLittleEndian=*/true);
 }

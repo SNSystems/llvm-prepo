@@ -665,10 +665,8 @@ TargetLoweringObjectFileELF::InitializeELF(bool UseInitArray_) {
 //                                 Program Repository
 //===----------------------------------------------------------------------===//
 
-TargetLoweringObjectFileRepo::~TargetLoweringObjectFileRepo() {
-}
-TargetLoweringObjectFileRepo::TargetLoweringObjectFileRepo() {
-}
+TargetLoweringObjectFileRepo::~TargetLoweringObjectFileRepo() {}
+TargetLoweringObjectFileRepo::TargetLoweringObjectFileRepo() {}
 
 static const TicketNode *getTicketNode(const GlobalObject *GO) {
   // Read the fragment metadata from global object.
@@ -766,7 +764,7 @@ static MCSectionRepo *selectRepoSectionForGlobal(MCContext &Ctx,
 
   // Record the TicketNode.
   if (const TicketNode *TN = getTicketNode(GO)) {
-	  Ctx.addTicketNode(TN);
+    Ctx.addTicketNode(TN);
   }
 
   return Ctx.getRepoSection(id, K, Digest);

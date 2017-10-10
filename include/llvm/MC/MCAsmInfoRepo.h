@@ -23,7 +23,6 @@ protected:
 
   MCAsmInfoRepo();
 };
-}
+} // namespace llvm
 
 #endif // LLVM_MC_MCASMINFOREPO_H
-

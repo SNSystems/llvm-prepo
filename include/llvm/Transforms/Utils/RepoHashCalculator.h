@@ -106,8 +106,7 @@ public:
 
   void reset() { Hash = MD5(); }
 
-  template <typename Ty>
-  void numberHash (Ty V) {
+  template <typename Ty> void numberHash(Ty V) {
     Hash.update(ArrayRef<uint8_t>((uint8_t *)&V, sizeof(V)));
   }
 

@@ -7,6 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "pstore/database.hpp"
+#include "pstore/hamt_map.hpp"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/ADT/Triple.h"
 #include "llvm/IR/CallSite.h"
@@ -20,10 +22,8 @@
 #include "llvm/Transforms/IPO.h"
 #include "llvm/Transforms/Utils/GlobalStatus.h"
 #include "llvm/Transforms/Utils/RepoHashCalculator.h"
-#include <set>
-#include "pstore/database.hpp"
-#include "pstore/hamt_map.hpp"
 #include <iostream>
+#include <set>
 using namespace llvm;
 
 #define DEBUG_TYPE "prepo-pruning"
@@ -73,10 +73,12 @@ bool ProgramRepositoryPruning::runOnModule(Module &M) {
   bool Changed = false;
   MDBuilder MDB(M.getContext());
 
-  static pstore::database Repository ("./clang.db", true/*writable*/); // FIXME: share an instance with the repo-writer back-end!
+  static pstore::database Repository(
+      "./clang.db", true /*writable*/); // FIXME: share an instance with the
+                                        // repo-writer back-end!
 
   MDNode *MD = nullptr;
-  pstore::index::digest_index * Digests = Repository.get_digest_index (false);
+  pstore::index::digest_index *Digests = Repository.get_digest_index(false);
   if (Digests == nullptr) {
     return false;
   }
@@ -88,8 +90,8 @@ bool ProgramRepositoryPruning::runOnModule(Module &M) {
       return false;
     auto Result = Digest::get(&GO);
 
-    auto const Key = pstore::index::uint128 {Result.high (), Result.low ()};
-    if (Digests->find (Key) != Digests->end ()) {
+    auto const Key = pstore::index::uint128{Result.high(), Result.low()};
+    if (Digests->find(Key) != Digests->end()) {
       Changed = true;
       ++NumGO;
       GO.setComdat(nullptr);

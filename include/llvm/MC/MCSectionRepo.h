@@ -14,18 +14,11 @@
 #ifndef LLVM_MC_MCSECTIONREPO_H
 #define LLVM_MC_MCSECTIONREPO_H
 
-//#include "llvm/ADT/Twine.h"
 #include "llvm/IR/RepoTicket.h"
 #include "llvm/MC/MCSection.h"
-//#include "llvm/MC/MCSymbolELF.h"
-//#include "llvm/Support/Debug.h"
-//#include "llvm/Support/ELF.h"
 #include "llvm/Support/MD5.h"
-//#include "llvm/Support/raw_ostream.h"
 
 namespace llvm {
-
-// class MCSymbol;
 
 class MCSectionRepo : public MCSection {
 private:
@@ -45,8 +38,6 @@ private:
 
   bool UseCodeAlign() const override { return false; }
   bool isVirtualSection() const override { return false; }
-
-  // void setSectionName(StringRef Name) { SectionName = Name; }
 
 public:
   std::string id() const { return id_; } // FIXME: remove

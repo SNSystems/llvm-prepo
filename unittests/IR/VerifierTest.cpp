@@ -222,9 +222,9 @@ TEST(VerifierTest, TicketNodeVariable) {
                          GlobalValue::ExternalLinkage, nullptr, "Some Global");
   // Valid TicketNode.
   GV->setMetadata(LLVMContext::MD_fragment,
-                  MDB.createTicketNode(
-                      GV->getName(), Digest::DigestType(), GV->getLinkage(),
-                      GV->getComdat() != nullptr));
+                  MDB.createTicketNode(GV->getName(), Digest::DigestType(),
+                                       GV->getLinkage(),
+                                       GV->getComdat() != nullptr));
   EXPECT_FALSE(verifyModule(M));
 }
 
@@ -235,11 +235,10 @@ TEST(VerifierTest, TicketNodeFunction) {
   FunctionType *FTy = FunctionType::get(Type::getVoidTy(C), /*isVarArg=*/false);
   auto Func = Function::Create(FTy, GlobalValue::ExternalLinkage, "foo", &M);
   // Valid global variable name.
-  Func->setMetadata(
-      LLVMContext::MD_fragment,
-      MDB.createTicketNode(Func->getName(), Digest::DigestType(),
-                           Func->getLinkage(),
-                           Func->getComdat() != nullptr));
+  Func->setMetadata(LLVMContext::MD_fragment,
+                    MDB.createTicketNode(Func->getName(), Digest::DigestType(),
+                                         Func->getLinkage(),
+                                         Func->getComdat() != nullptr));
   EXPECT_FALSE(verifyModule(M));
 }
 

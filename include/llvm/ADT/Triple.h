@@ -596,9 +596,7 @@ public:
   }
 
   /// Tests whether we're producing output for a Program Repository.
-  bool isOSBinFormatRepo() const {
-    return getObjectFormat() == Triple::Repo;
-  }
+  bool isOSBinFormatRepo() const { return getObjectFormat() == Triple::Repo; }
 
   /// Tests whether the environment is MachO.
   bool isOSBinFormatMachO() const {

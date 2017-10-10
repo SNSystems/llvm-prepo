@@ -1645,31 +1645,31 @@ void MDFieldPrinter::printString(StringRef Name, StringRef Value,
 }
 
 static const char *getLinkagePrintName(GlobalValue::LinkageTypes LT) {
-	switch (LT) {
-	case GlobalValue::ExternalLinkage:
-		return "";
-	case GlobalValue::PrivateLinkage:
-		return "private ";
-	case GlobalValue::InternalLinkage:
-		return "internal ";
-	case GlobalValue::LinkOnceAnyLinkage:
-		return "linkonce ";
-	case GlobalValue::LinkOnceODRLinkage:
-		return "linkonce_odr ";
-	case GlobalValue::WeakAnyLinkage:
-		return "weak ";
-	case GlobalValue::WeakODRLinkage:
-		return "weak_odr ";
-	case GlobalValue::CommonLinkage:
-		return "common ";
-	case GlobalValue::AppendingLinkage:
-		return "appending ";
-	case GlobalValue::ExternalWeakLinkage:
-		return "extern_weak ";
-	case GlobalValue::AvailableExternallyLinkage:
-		return "available_externally ";
-	}
-	llvm_unreachable("invalid linkage");
+  switch (LT) {
+  case GlobalValue::ExternalLinkage:
+    return "";
+  case GlobalValue::PrivateLinkage:
+    return "private ";
+  case GlobalValue::InternalLinkage:
+    return "internal ";
+  case GlobalValue::LinkOnceAnyLinkage:
+    return "linkonce ";
+  case GlobalValue::LinkOnceODRLinkage:
+    return "linkonce_odr ";
+  case GlobalValue::WeakAnyLinkage:
+    return "weak ";
+  case GlobalValue::WeakODRLinkage:
+    return "weak_odr ";
+  case GlobalValue::CommonLinkage:
+    return "common ";
+  case GlobalValue::AppendingLinkage:
+    return "appending ";
+  case GlobalValue::ExternalWeakLinkage:
+    return "extern_weak ";
+  case GlobalValue::AvailableExternallyLinkage:
+    return "available_externally ";
+  }
+  llvm_unreachable("invalid linkage");
 }
 
 void MDFieldPrinter::printLinkage(GlobalValue::LinkageTypes LT) {

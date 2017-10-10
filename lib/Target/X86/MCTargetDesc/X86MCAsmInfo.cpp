@@ -80,9 +80,7 @@ X86_64MCAsmInfoDarwin::X86_64MCAsmInfoDarwin(const Triple &Triple)
   : X86MCAsmInfoDarwin(Triple) {
 }
 
-
-
-void X86RepoMCAsmInfo::anchor() { }
+void X86RepoMCAsmInfo::anchor() {}
 
 X86RepoMCAsmInfo::X86RepoMCAsmInfo(const Triple &T) {
   bool is64Bit = T.getArch() == Triple::x86_64;
@@ -110,9 +108,6 @@ X86RepoMCAsmInfo::X86RepoMCAsmInfo(const Triple &T) {
   // Clang also enabled it when the OS is Solaris but that is redundant here.
   UseIntegratedAssembler = true;
 }
-
-
-
 
 void X86ELFMCAsmInfo::anchor() { }
 

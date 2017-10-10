@@ -45,8 +45,8 @@
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/MathExtras.h"
-#include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/SaveAndRestore.h"
+#include "llvm/Support/raw_ostream.h"
 #include <algorithm>
 #include <cassert>
 #include <cstring>
@@ -4157,7 +4157,7 @@ bool LLParser::ParseMDField(LocTy Loc, StringRef Name, LinkageField &Result) {
 
 template <>
 bool LLParser::ParseMDField(LocTy Loc, StringRef Name, ComdatField &Result) {
-	return ParseMDField(Loc, Name, static_cast<MDBoolField &>(Result));
+  return ParseMDField(Loc, Name, static_cast<MDBoolField &>(Result));
 }
 
 } // end namespace llvm

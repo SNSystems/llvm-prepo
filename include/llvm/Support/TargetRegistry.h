@@ -102,8 +102,8 @@ MCStreamer *createWasmStreamer(MCContext &Ctx,
                                std::unique_ptr<MCCodeEmitter> &&CE,
                                bool RelaxAll);
 
-MCStreamer *createRepoStreamer (MCContext &Context, MCAsmBackend &MAB,
-                                raw_pwrite_stream &OS, MCCodeEmitter *CE);
+MCStreamer *createRepoStreamer(MCContext &Context, MCAsmBackend &MAB,
+                               raw_pwrite_stream &OS, MCCodeEmitter *CE);
 
 MCRelocationInfo *createMCRelocationInfo(const Triple &TT, MCContext &Ctx);
 
@@ -509,8 +509,8 @@ public:
                                std::move(Emitter), RelaxAll);
       break;
     case Triple::Repo:
-        S = createRepoStreamer (Ctx, TAB, OS, Emitter);
-        break;
+      S = createRepoStreamer(Ctx, TAB, OS, Emitter);
+      break;
     }
     if (ObjectTargetStreamerCtorFn)
       ObjectTargetStreamerCtorFn(*S, STI);

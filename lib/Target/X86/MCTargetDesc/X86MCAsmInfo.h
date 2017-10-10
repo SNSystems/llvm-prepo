@@ -37,16 +37,14 @@ struct X86_64MCAsmInfoDarwin : public X86MCAsmInfoDarwin {
                               MCStreamer &Streamer) const override;
 };
 
-//Repo: There needs to be a cross-target MCAsmInfoRepo to match the ELF pattern.
+// Repo: There needs to be a cross-target MCAsmInfoRepo to match the ELF
+// pattern.
 class X86RepoMCAsmInfo : public MCAsmInfoRepo {
   virtual void anchor() override;
   /// Targets can implement this method to specify a section to switch to if the
   /// translation unit doesn't have any trampolines that require an executable
   /// stack.
   MCSection *getNonexecutableStackSection(MCContext &Ctx) const override {
-    //if (!UsesNonexecutableStackSection)
-    //    return nullptr;
-    //return Ctx.getRepoSection(".note.GNU-stack", ELF::SHT_PROGBITS, 0);
     return nullptr;
   }
 

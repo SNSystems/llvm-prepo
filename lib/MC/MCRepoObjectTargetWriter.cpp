@@ -8,24 +8,19 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/ADT/STLExtras.h"
-#include "llvm/MC/MCRepoObjectWriter.h"
 #include "llvm/MC/MCExpr.h"
+#include "llvm/MC/MCRepoObjectWriter.h"
 #include "llvm/MC/MCValue.h"
 
 using namespace llvm;
 
 MCRepoObjectTargetWriter::MCRepoObjectTargetWriter(uint16_t EMachine_)
-  : EMachine(EMachine_) {
-}
+    : EMachine(EMachine_) {}
 
 bool MCRepoObjectTargetWriter::needsRelocateWithSymbol(const MCSymbol &Sym,
-                                                      unsigned Type) const {
+                                                       unsigned Type) const {
   return false;
 }
 
-void
-MCRepoObjectTargetWriter::sortRelocs(const MCAssembler &Asm,
-                                    std::vector<RepoRelocationEntry> &Relocs) {
-}
-
-
+void MCRepoObjectTargetWriter::sortRelocs(
+    const MCAssembler &Asm, std::vector<RepoRelocationEntry> &Relocs) {}

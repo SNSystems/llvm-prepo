@@ -164,7 +164,8 @@ bool TargetMachine::shouldAssumeDSOLocal(const Module &M,
     return GV && GV->isStrongDefinitionForLinker();
   }
 
-  assert(TT.isOSBinFormatELF() || TT.isOSBinFormatRepo()); //Repo: tying the DSO model to the file format doesn't seem quite right.
+  // Repo: tying the DSO model to the file format doesn't seem quite right.
+  assert(TT.isOSBinFormatELF() || TT.isOSBinFormatRepo());
   assert(RM != Reloc::DynamicNoPIC);
 
   bool IsExecutable =

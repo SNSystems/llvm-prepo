@@ -465,8 +465,8 @@ template <> struct MDNodeKeyImpl<TicketNode> {
   GlobalValue::LinkageTypes Linkage;
   bool IsComdat;
 
-  MDNodeKeyImpl(GlobalValue::LinkageTypes Linkage, bool IsComdat, Metadata *Name,
-                Metadata *Digest)
+  MDNodeKeyImpl(GlobalValue::LinkageTypes Linkage, bool IsComdat,
+                Metadata *Name, Metadata *Digest)
       : Name(Name), Digest(Digest), Linkage(Linkage), IsComdat(IsComdat) {}
 
   MDNodeKeyImpl(const TicketNode *RHS)

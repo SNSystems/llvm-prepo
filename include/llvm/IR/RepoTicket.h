@@ -1,15 +1,15 @@
-//===-- RepoTicket.h - Program repository digest data structure. -*- C++ -*-===//
+//===- RepoTicket.h - Program repository digest data structure. -*- C++ --===//
 //
 //                     The LLVM Compiler Infrastructure
 //
 // This file is distributed under the University of Illinois Open Source
 // License. See LICENSE.TXT for details.
 //
-//===----------------------------------------------------------------------===//
+//===---------------------------------------------------------------------===//
 //
 // This file defines the digest data structure.
 //
-//===----------------------------------------------------------------------===//
+//===---------------------------------------------------------------------===//
 
 #ifndef LLVM_IR_REPO_TICKET_H
 #define LLVM_IR_REPO_TICKET_H
@@ -57,7 +57,8 @@ class TicketNode : public MDNode {
              ArrayRef<Metadata *> MDs)
       : MDNode(C, TicketNodeKind, Storage, MDs) {
     assert(MDs.size() == 2 && "Expected a hash and name.");
-	static_assert(CheckLinkageType::isSafeCast (), "Linkage type will overflow!");
+    static_assert(CheckLinkageType::isSafeCast(),
+                  "Linkage type will overflow!");
     SubclassData32 = static_cast<unsigned>(Linkage);
     SubclassData16 = static_cast<unsigned short>(IsComdat);
   }

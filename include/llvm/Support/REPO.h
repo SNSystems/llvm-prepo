@@ -15,8 +15,8 @@
 #ifndef LLVM_SUPPORT_REPO_H
 #define LLVM_SUPPORT_REPO_H
 
-#include "llvm/Support/ELF.h"
 #include "pstore/uuid.hpp"
+#include "llvm/Support/ELF.h"
 
 namespace llvm {
 
