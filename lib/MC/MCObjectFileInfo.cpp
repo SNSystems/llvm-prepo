@@ -298,7 +298,7 @@ void MCObjectFileInfo::initRepoMCObjectFileInfo(const Triple &T) {
     // This is a dummy section simply present to allow the assembler to have a "default" section.
     // Nothing should be added to it. It won't be emitted to the final output.
     std::array<uint8_t, 16> const Null{{0}};
-    MCSectionRepo * const DummySection = Ctx->getRepoSection("null", MCContext::RepoSection::TextSection,
+    MCSectionRepo * const DummySection = Ctx->getRepoSection(MCContext::RepoSection::TextSection,
                                                              Digest::DigestType{Null});
     DummySection->markAsDummy ();
     TextSection = DummySection;

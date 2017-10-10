@@ -425,8 +425,7 @@ namespace llvm {
                              BeginSymName);
     }
 
-    MCSectionRepo *getRepoSection(std::string const &Id, RepoSection K,
-                                  Digest::DigestType const &Digest);
+    MCSectionRepo *getRepoSection(RepoSection K, Digest::DigestType const &Digest);
 
     MCSectionELF *getELFSection(const Twine &Section, unsigned Type,
                                 unsigned Flags) {

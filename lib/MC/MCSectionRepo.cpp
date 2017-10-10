@@ -1,5 +1,15 @@
-//#include <string>
-#include <iostream>
+//===- MCSectionRepo.cpp - Repository Machine Code Sections -----*- C++ -*-===//
+//
+//                     The LLVM Compiler Infrastructure
+//
+// This file is distributed under the University of Illinois Open Source
+// License. See LICENSE.TXT for details.
+//
+//===----------------------------------------------------------------------===//
+//
+// This file defines the MCSectionRepo class.
+//
+//===----------------------------------------------------------------------===//
 
 #include "llvm/MC/MCSectionRepo.h"
 #include "llvm/MC/MCSymbol.h"
@@ -11,20 +21,10 @@ unsigned idx = 0;
 }
 
 MCSectionRepo::MCSectionRepo(SectionKind K, MCSymbol *Begin)
-    : MCSection(SV_Repo, K, Begin), index_{++idx} {
+    : MCSection(SV_Repo, K, Begin), Index{++idx} {}
 
-  StringRef name = Begin == nullptr ? "<none>" : Begin->getName();
-  std::cout << "Section name:" << std::string{name} << " index_:" << index_
-            << '\n';
-}
-
-MCSectionRepo::MCSectionRepo(SectionKind K, MCSymbol *Begin, std::string id,
+MCSectionRepo::MCSectionRepo(SectionKind K, MCSymbol *Begin,
                              Digest::DigestType Digest)
-    : MCSection(SV_Repo, K, Begin), id_{std::move(id)},
-      digest_{std::move(Digest)}, index_{++idx} {
-  StringRef name = Begin == nullptr ? "<none>" : Begin->getName();
-  std::cout << "Section key:" << id_ << " (symbol:" << std::string(name)
-            << " index_:" << index_ << ")\n";
-}
+    : MCSection(SV_Repo, K, Begin), Digest{std::move(Digest)}, Index{++idx} {}
 
 MCSectionRepo::~MCSectionRepo() {}

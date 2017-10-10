@@ -690,10 +690,6 @@ MCSection *TargetLoweringObjectFileRepo::getExplicitSectionGlobal(
 static MCSectionRepo *selectRepoSectionForGlobal(MCContext &Ctx,
                                                  const GlobalObject *GO,
                                                  SectionKind Kind) {
-  // enum class RepoSection { TextSection, BSSSection };
-  // MCSectionRepo *getRepoSection(RepoSection K);
-  std::string id = GO->getGlobalIdentifier();
-
   Digest::DigestType const Digest = Digest::get(GO);
 
   // Repo: the repo sections are keyed off the global value. This gets us the
@@ -719,69 +715,16 @@ static MCSectionRepo *selectRepoSectionForGlobal(MCContext &Ctx,
     assert(0);
   }
 
-#if 0
-  StringRef Group = "";
-  if (const Comdat *C = getELFComdat(GV)) {
-    Flags |= ELF::SHF_GROUP;
-    Group = C->getName();
-  }
-#endif
-
-#if 0
-  //bool UniqueSectionNames = TM.getUniqueSectionNames();
-  bool UniqueSectionNames = true;
-  SmallString<128> Name;
-  if (Kind.isMergeableCString()) {
-    // We also need alignment here.
-    // FIXME: this is getting the alignment of the character, not the
-    // alignment of the global!
-    unsigned Align = GV->getParent()->getDataLayout().getPreferredAlignment(
-        cast<GlobalVariable>(GV));
-
-    std::string SizeSpec = ".rodata.str" + utostr(EntrySize) + ".";
-    Name = SizeSpec + utostr(Align);
-  } else if (Kind.isMergeableConst()) {
-    Name = ".rodata.cst";
-    Name += utostr(EntrySize);
-  } else {
-    Name = getSectionPrefixForGlobal(Kind);
-  }
-  // FIXME: Extend the section prefix to include hotness catagories such as .hot
-  //  or .unlikely for functions.
-  if (EmitUniqueSection && UniqueSectionNames) {
-    Name.push_back('.');
-    TM.getNameWithPrefix(Name, GV, Mang, true);
-  }
-#endif
-
-#if 0
-  unsigned UniqueID = MCContext::GenericSectionID;
-  if (EmitUniqueSection && !UniqueSectionNames) {
-    UniqueID = *NextUniqueID;
-    (*NextUniqueID)++;
-  }
-#endif
-
   // Record the TicketNode.
   if (const TicketNode *TN = getTicketNode(GO)) {
     Ctx.addTicketNode(TN);
   }
 
-  return Ctx.getRepoSection(id, K, Digest);
+  return Ctx.getRepoSection(K, Digest);
 }
 
 MCSection *TargetLoweringObjectFileRepo::SelectSectionForGlobal(
     const GlobalObject *GO, SectionKind Kind, const TargetMachine &TM) const {
-  // unsigned Flags = getELFSectionFlags(Kind);
-
-  // If we have -ffunction-section or -fdata-section then we should emit the
-  // global value to a uniqued section specifically for it.
-  bool EmitUniqueSection = true;
-  //        if (!Kind.isCommon()) {
-  //            EmitUniqueSection = true;
-  //        }
-  //        EmitUniqueSection |= GV->hasComdat();
-
   return selectRepoSectionForGlobal(getContext(), GO, Kind);
 }
 

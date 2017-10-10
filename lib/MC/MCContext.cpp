@@ -455,8 +455,7 @@ MCSectionCOFF *MCContext::getCOFFSection(StringRef Section,
   return Result;
 }
 
-MCSectionRepo *MCContext::getRepoSection(std::string const &Id, RepoSection K,
-                                         Digest::DigestType const &Digest) {
+MCSectionRepo *MCContext::getRepoSection(RepoSection K, Digest::DigestType const &Digest) {
 
   // Do the lookup, if we have a hit, return it.
   RepoSectionKey key = std::make_pair(Digest, K);
@@ -497,7 +496,7 @@ MCSectionRepo *MCContext::getRepoSection(std::string const &Id, RepoSection K,
     break;
   }
 
-  auto Result = new MCSectionRepo(Kind, nullptr /*symbol*/, Id, Digest);
+  auto Result = new MCSectionRepo(Kind, nullptr /*symbol*/, Digest);
   Iter->second = Result;
   return Result;
 }
