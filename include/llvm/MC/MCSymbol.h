@@ -1,4 +1,3 @@
-#include <iostream>
 //===- MCSymbol.h - Machine Code Symbols ------------------------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
@@ -24,6 +23,7 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <iostream>
 
 namespace llvm {
 
@@ -103,7 +103,6 @@ protected:
 
   /// LLVM RTTI discriminator. This is actually a SymbolKind enumerator, but is
   /// unsigned to avoid sign extension and achieve better bitpacking with MSVC.
-  // FIXME: really, a bitfield?
   unsigned Kind : 3;
 
   /// True if we have created a relocation that uses this symbol.

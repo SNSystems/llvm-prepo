@@ -65,7 +65,7 @@ namespace llvm {
   class MCContext {
   public:
     using SymbolTable = StringMap<MCSymbol *, BumpPtrAllocator &>;
-    using RepoTicketList = std::vector<const TicketNode *>;
+    using RepoTicketContainer = std::vector<const TicketNode *>;
 
   private:
     /// The SourceMgr for this object, if any.
@@ -273,7 +273,7 @@ namespace llvm {
     std::map<WasmSectionKey, MCSectionWasm *> WasmUniquingMap;
     StringMap<bool> RelSecNames;
 
-    RepoTicketList TicketNodes;
+    RepoTicketContainer TicketNodes;
 
     SpecificBumpPtrAllocator<MCSubtargetInfo> MCSubtargetAllocator;
 
@@ -397,7 +397,7 @@ namespace llvm {
     }
 
     /// getTickets - Get a reference for the ticket table.
-    const RepoTicketList &getTickets() const { return TicketNodes; }
+    const RepoTicketContainer &getTickets() const { return TicketNodes; }
 
     /// @}
 

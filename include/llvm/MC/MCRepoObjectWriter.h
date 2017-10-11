@@ -1,4 +1,4 @@
-//===-- llvm/MC/MCRepoTargetWriter.h - Repository Writer --------*- C++ -*-===//
+//===-- llvm/MC/MCRepoObjectWriter.h - Repository Writer --------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -7,8 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_MC_MCREPOTARGETWRITER_H
-#define LLVM_MC_MCREPOTARGETWRITER_H
+#ifndef LLVM_MC_MCREPOOBJECTWRITER_H
+#define LLVM_MC_MCREPOOBJECTWRITER_H
 
 #include "llvm/ADT/Triple.h"
 #include "llvm/MC/MCValue.h"
@@ -54,9 +54,10 @@ struct RepoRelocationEntry {
 
 class MCRepoObjectTargetWriter {
   const uint16_t EMachine;
+  virtual void anchor();
 
 protected:
-  MCRepoObjectTargetWriter(uint16_t EMachine_);
+  MCRepoObjectTargetWriter(uint16_t EM);
 
 public:
   static uint8_t getOSABI(Triple::OSType OSType) {
@@ -98,4 +99,4 @@ MCObjectWriter *createRepoObjectWriter(MCRepoObjectTargetWriter *MOTW,
                                        bool IsLittleEndian);
 } // namespace llvm
 
-#endif // LLVM_MC_MCREPOTARGETWRITER_H
+#endif // LLVM_MC_MCREPOOBJECTWRITER_H

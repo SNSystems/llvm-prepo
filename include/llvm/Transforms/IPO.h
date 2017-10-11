@@ -202,13 +202,12 @@ Pass *createReversePostOrderFunctionAttrsPass();
 ModulePass *createMergeFunctionsPass();
 
 //===----------------------------------------------------------------------===//
-/// createProgramRepositoryPass - This pass creates a program repository hash.
+/// This pass generates ticket metadata nodes for the program repository.
 ///
 ModulePass *createProgramRepositoryPass();
 
 //===----------------------------------------------------------------------===//
-/// createProgramRepositoryPruningPass - This pass prunes the global objects
-/// which are already in the Program Repository.
+/// This pass prunes global objects which are already in the program repository.
 ///
 ModulePass *createProgramRepositoryPruningPass();
 

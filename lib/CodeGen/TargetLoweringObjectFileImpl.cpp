@@ -733,7 +733,7 @@ MCSection *TargetLoweringObjectFileRepo::SelectSectionForGlobal(
 MCSection *TargetLoweringObjectFileRepo::getSectionForConstant(
     const DataLayout &DL, SectionKind Kind, const Constant *C, unsigned &Align,
     const GlobalObject *GO) const {
-
+  assert(GO && "Invalid global object!");
   return selectRepoSectionForGlobal(getContext(), GO, Kind);
 }
 

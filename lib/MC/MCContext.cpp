@@ -492,8 +492,7 @@ MCSectionRepo *MCContext::getRepoSection(RepoSection K, Digest::DigestType const
     Kind = SectionKind::getReadOnly();
     break;
   default:
-    assert(0);
-    break;
+    llvm_unreachable("Unsupported section type in getRepoSection");
   }
 
   auto Result = new MCSectionRepo(Kind, nullptr /*symbol*/, Digest);

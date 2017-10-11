@@ -7,15 +7,14 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/ADT/STLExtras.h"
-#include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCRepoObjectWriter.h"
-#include "llvm/MC/MCValue.h"
 
 using namespace llvm;
 
-MCRepoObjectTargetWriter::MCRepoObjectTargetWriter(uint16_t EMachine_)
-    : EMachine(EMachine_) {}
+void MCRepoObjectTargetWriter::anchor() {}
+
+MCRepoObjectTargetWriter::MCRepoObjectTargetWriter(uint16_t EM)
+    : EMachine(EM) {}
 
 bool MCRepoObjectTargetWriter::needsRelocateWithSymbol(const MCSymbol &Sym,
                                                        unsigned Type) const {

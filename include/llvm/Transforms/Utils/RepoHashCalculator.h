@@ -12,8 +12,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_TRANSFORMS_UTILS_REPO_HASH_CALCULATOR_H
-#define LLVM_TRANSFORMS_UTILS_REPO_HASH_CALCULATOR_H
+#ifndef LLVM_TRANSFORMS_UTILS_REPOHASHCALCULATOR_H
+#define LLVM_TRANSFORMS_UTILS_REPOHASHCALCULATOR_H
 
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Operator.h"
@@ -84,14 +84,10 @@ enum HashKind {
 
 class HashCalculator {
 public:
-  HashCalculator() {}
-
-  virtual ~HashCalculator() = default;
-
   /// Start the calculation.
   void beginCalculate() {
-    sn_map.clear();
-    global_numbers.clear();
+    SNMap.clear();
+    GlobalNumbers.clear();
     reset();
   }
 
@@ -106,18 +102,18 @@ public:
 
   void reset() { Hash = MD5(); }
 
-  template <typename Ty> void numberHash(Ty V) {
+  template <typename Ty> void hashNumber(Ty V) {
     Hash.update(ArrayRef<uint8_t>((uint8_t *)&V, sizeof(V)));
   }
 
-  void memHash(StringRef V);
-  void APIntHash(const APInt &V);
-  void APFloatHash(const APFloat &V);
-  void orderingHash(AtomicOrdering V);
-  void attributeHash(const Attribute &V);
-  void attributeListHash(const AttributeList &V);
-  void inlineAsmHash(const InlineAsm *V);
-  void rangeMetadataHash(const MDNode *V);
+  void hashMem(StringRef V);
+  void hashAPInt(const APInt &V);
+  void hashAPFloat(const APFloat &V);
+  void hashOrdering(AtomicOrdering V);
+  void hashAttribute(const Attribute &V);
+  void hashAttributeList(const AttributeList &V);
+  void hashInlineAsm(const InlineAsm *V);
+  void hashRangeMetadata(const MDNode *V);
 
   /// typeHash - accumulate a type hash,
   ///
@@ -138,20 +134,20 @@ public:
   /// hash.
   /// 5. If types are complex, use type and  element type to calculate the hash.
   /// 6. For all other cases put llvm_unreachable.
-  void typeHash(Type *Ty);
+  void hashType(Type *Ty);
 
   /// Constants Hash accumulate.
   /// 1. Accumulate the type ID of V.
   /// 2. Accumulate constant contents.
-  void constantHash(const Constant *V);
+  void hashConstant(const Constant *V);
 
   /// Assign or look up previously assigned number for the value. Numbers are
   /// assigned in the order visited.
-  void valueHash(const Value *V);
+  void hashValue(const Value *V);
 
   /// Accumulate th global values by number. Uses the GlobalNumbersState to
   /// identify the same gobals across function calls.
-  void globalValueHash(const GlobalValue *V);
+  void hashGlobalValue(const GlobalValue *V);
 
   // Accumulate the hash of basicblocks, instructions and variables etc in the
   // function Fn.
@@ -190,10 +186,10 @@ public:
   /// defined at the same place. But, we are still not able to calulate operands
   /// of PHI nodes, since those could be operands from further BBs we didn't
   /// scan yet. So it's impossible to use dominance properties in general.
-  DenseMap<const Value *, unsigned> sn_map;
+  DenseMap<const Value *, unsigned> SNMap;
 
   // The global state we will use.
-  DenseMap<const GlobalValue *, unsigned> global_numbers;
+  DenseMap<const GlobalValue *, unsigned> GlobalNumbers;
 
 private:
   std::string TheHash;
@@ -216,15 +212,15 @@ public:
 protected:
   /// Calculate the hash for the signature and other general attributes of the
   /// function.
-  void signatureHash(const Function *Fn);
+  void hashSignature(const Function *Fn);
 
   /// Accumulate the hash for the target datalayout and triple.
-  void moduleHash(Module &M);
+  void hashModule(Module &M);
 
   /// Accumulate the hash for the basic block.
-  void basicBlockHash(const BasicBlock *BB);
+  void hashBasicBlock(const BasicBlock *BB);
 
-  void operandBundlesHash(const Instruction *V);
+  void hashOperandBundles(const Instruction *V);
 
   /// Calculate the Instruction hash.
   ///
@@ -244,7 +240,7 @@ protected:
   /// 6.5.Load: range metadata (as integer ranges)
   /// On this stage its better to see the code, since its not more than 10-15
   /// strings for particular instruction, and could change sometimes.
-  void instructionHash(const Instruction *V);
+  void hashInstruction(const Instruction *V);
 
   // The function undergoing calculation.
   const Function *Fn;
@@ -270,7 +266,7 @@ public:
 
 private:
   /// Accumulate the hash for the target datalayout and triple.
-  void moduleHash(Module &M);
+  void hashModule(Module &M);
 
   // The Variable undergoing calculation.
   const GlobalVariable *Gv;
@@ -281,4 +277,4 @@ private:
 
 } // end namespace llvm
 
-#endif // LLVM_TRANSFORMS_UTILS_REPO_HASH_CALCULATOR_H
+#endif // LLVM_TRANSFORMS_UTILS_REPOHASHCALCULATOR_H

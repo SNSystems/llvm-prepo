@@ -27,40 +27,40 @@ using namespace llvm;
 
 /// \brief Adds \param V to the hash.
 
-void HashCalculator::memHash(StringRef V) {
+void HashCalculator::hashMem(StringRef V) {
   Hash.update(ArrayRef<uint8_t>(HashKind::TAG_StringRef));
-  numberHash(V.size());
+  hashNumber(V.size());
   Hash.update(V);
 }
 
-void HashCalculator::APIntHash(const APInt &V) {
+void HashCalculator::hashAPInt(const APInt &V) {
   Hash.update(HashKind::TAG_APInt);
   const uint64_t *Words = V.getRawData();
   for (unsigned I = 0, E = V.getNumWords(); I != E; ++I) {
-    numberHash(Words[I]);
+    hashNumber(Words[I]);
   }
 }
 
-void HashCalculator::APFloatHash(const APFloat &V) {
+void HashCalculator::hashAPFloat(const APFloat &V) {
   Hash.update(HashKind::TAG_APFloat);
   // Floats are ordered first by semantics (i.e. float, double, half, etc.),
   // then by value interpreted as a bitstring (aka APInt).
   const fltSemantics &SV = V.getSemantics();
-  numberHash(APFloat::semanticsPrecision(SV));
+  hashNumber(APFloat::semanticsPrecision(SV));
   signed short SMax = APFloat::semanticsMaxExponent(SV);
   Hash.update(ArrayRef<uint8_t>((uint8_t *)&SMax, sizeof(signed short)));
   signed short SMin = APFloat::semanticsMinExponent(SV);
   Hash.update(ArrayRef<uint8_t>((uint8_t *)&SMin, sizeof(signed short)));
-  numberHash(APFloat::semanticsSizeInBits(SV));
-  APIntHash(V.bitcastToAPInt());
+  hashNumber(APFloat::semanticsSizeInBits(SV));
+  hashAPInt(V.bitcastToAPInt());
 }
 
-void HashCalculator::orderingHash(AtomicOrdering V) {
+void HashCalculator::hashOrdering(AtomicOrdering V) {
   Hash.update(HashKind::TAG_AtomicOrdering);
   Hash.update(static_cast<uint8_t>(V));
 }
 
-void HashCalculator::attributeHash(const Attribute &V) {
+void HashCalculator::hashAttribute(const Attribute &V) {
   if (V.isEnumAttribute()) {
     // Enum attribute uses the attribute kind to calculate the hash.
     Hash.update(HashKind::TAG_AttributeEnum);
@@ -74,34 +74,34 @@ void HashCalculator::attributeHash(const Attribute &V) {
     auto EnunKind = V.getKindAsEnum();
     Hash.update(
         ArrayRef<uint8_t>((uint8_t *)&EnunKind, sizeof(Attribute::AttrKind)));
-    numberHash(V.getValueAsInt());
+    hashNumber(V.getValueAsInt());
   } else {
     // String attribute uses the attribute kind and string value to calculate
     // the hash.
     Hash.update(HashKind::TAG_AttributeString);
-    memHash(V.getKindAsString());
-    memHash(V.getValueAsString());
+    hashMem(V.getKindAsString());
+    hashMem(V.getValueAsString());
   }
 }
 
-void HashCalculator::attributeListHash(const AttributeList &V) {
+void HashCalculator::hashAttributeList(const AttributeList &V) {
   Hash.update(HashKind::TAG_AttributeList);
   for (unsigned I = 0, E = V.getNumAttrSets(); I != E; ++I) {
     for (unsigned I = V.index_begin(), E = V.index_end(); I != E; ++I) {
       AttributeSet AS = V.getAttributes(I);
       for (AttributeSet::iterator VI = AS.begin(), VE = AS.end(); VI != VE;
            ++VI) {
-        attributeHash(*VI);
+        hashAttribute(*VI);
       }
     }
   }
 }
 
-void HashCalculator::inlineAsmHash(const InlineAsm *V) {
+void HashCalculator::hashInlineAsm(const InlineAsm *V) {
   Hash.update(HashKind::TAG_InlineAsm);
-  typeHash(V->getFunctionType());
-  memHash(V->getAsmString());
-  memHash(V->getConstraintString());
+  hashType(V->getFunctionType());
+  hashMem(V->getAsmString());
+  hashMem(V->getConstraintString());
   Hash.update(HashKind::TAG_InlineAsm_SideEffects);
   Hash.update(V->hasSideEffects());
   Hash.update(HashKind::TAG_InlineAsm_AlignStack);
@@ -110,19 +110,19 @@ void HashCalculator::inlineAsmHash(const InlineAsm *V) {
   Hash.update(V->getDialect());
 }
 
-void HashCalculator::rangeMetadataHash(const MDNode *V) {
+void HashCalculator::hashRangeMetadata(const MDNode *V) {
   if (!V)
     return;
   Hash.update(HashKind::TAG_RangeMetadata);
   // Range metadata is a sequence of numbers.
   for (size_t I = 0; I < V->getNumOperands(); ++I) {
     ConstantInt *VLow = mdconst::extract<ConstantInt>(V->getOperand(I));
-    APIntHash(VLow->getValue());
+    hashAPInt(VLow->getValue());
   }
 }
 
-/// typeHash - calculate a type hash.
-void HashCalculator::typeHash(Type *Ty) {
+/// hashType - calculate a type hash.
+void HashCalculator::hashType(Type *Ty) {
   Hash.update(HashKind::TAG_Type);
   Hash.update(Ty->getTypeID());
 
@@ -145,27 +145,27 @@ void HashCalculator::typeHash(Type *Ty) {
 
   // Derived types
   case Type::IntegerTyID:
-    numberHash(cast<IntegerType>(Ty)->getBitWidth());
+    hashNumber(cast<IntegerType>(Ty)->getBitWidth());
     break;
   case Type::FunctionTyID: {
     FunctionType *FTy = cast<FunctionType>(Ty);
     for (Type *ParamTy : FTy->params()) {
-      typeHash(ParamTy);
+      hashType(ParamTy);
     }
     Hash.update(FTy->isVarArg());
-    typeHash(FTy->getReturnType());
+    hashType(FTy->getReturnType());
     break;
   }
   case Type::PointerTyID: {
     PointerType *PTy = dyn_cast<PointerType>(Ty);
     assert(PTy && "Ty type must be pointers here.");
-    numberHash(PTy->getAddressSpace());
+    hashNumber(PTy->getAddressSpace());
     break;
   }
   case Type::StructTyID: {
     StructType *STy = cast<StructType>(Ty);
     for (Type *ElemTy : STy->elements()) {
-      typeHash(ElemTy);
+      hashType(ElemTy);
     }
     if (STy->isPacked())
       Hash.update(STy->isPacked());
@@ -174,44 +174,44 @@ void HashCalculator::typeHash(Type *Ty) {
   case Type::ArrayTyID:
   case Type::VectorTyID: {
     auto *STy = cast<SequentialType>(Ty);
-    numberHash(STy->getNumElements());
-    typeHash(STy->getElementType());
+    hashNumber(STy->getNumElements());
+    hashType(STy->getElementType());
     break;
   }
   }
 }
 
 /// Accumulate the constants hash.
-void HashCalculator::constantHash(const Constant *V) {
+void HashCalculator::hashConstant(const Constant *V) {
   DEBUG(dbgs() << "Constant V name:  " << V->getName() << "\n");
 
   Hash.update(HashKind::TAG_Constant);
   Type *Ty = V->getType();
   // Calculate type hash.
-  typeHash(Ty);
+  hashType(Ty);
 
   auto GlobalValueV = dyn_cast<GlobalValue>(V);
   if (GlobalValueV) {
     auto *GV = dyn_cast<GlobalVariable>(GlobalValueV);
     if (GV && GV->hasDefinitiveInitializer()) {
       DenseMap<const GlobalValue *, unsigned>::iterator GVI =
-          global_numbers.find(GV);
-      if (GVI != global_numbers.end())
-        globalValueHash(GlobalValueV);
+          GlobalNumbers.find(GV);
+      if (GVI != GlobalNumbers.end())
+        hashGlobalValue(GlobalValueV);
       else {
-        global_numbers.insert(std::make_pair(GV, global_numbers.size()));
-        constantHash(GV->getInitializer());
+        GlobalNumbers.insert(std::make_pair(GV, GlobalNumbers.size()));
+        hashConstant(GV->getInitializer());
       }
     }
     return;
   }
 
   unsigned int VID = V->getValueID();
-  numberHash(VID);
+  hashNumber(VID);
 
   if (const auto *SeqV = dyn_cast<ConstantDataSequential>(V)) {
     // This handles ConstantDataArray and ConstantDataVector.
-    memHash(SeqV->getRawDataValues());
+    hashMem(SeqV->getRawDataValues());
     return;
   }
 
@@ -222,47 +222,47 @@ void HashCalculator::constantHash(const Constant *V) {
   case Value::ConstantPointerNullVal:
     break;
   case Value::ConstantIntVal: {
-    APIntHash(cast<ConstantInt>(V)->getValue());
+    hashAPInt(cast<ConstantInt>(V)->getValue());
     break;
   }
   case Value::ConstantFPVal: {
-    APFloatHash(cast<ConstantFP>(V)->getValueAPF());
+    hashAPFloat(cast<ConstantFP>(V)->getValueAPF());
     break;
   }
   case Value::ConstantArrayVal: {
     const ConstantArray *VA = cast<ConstantArray>(V);
     for (uint64_t I = 0; I < cast<ArrayType>(Ty)->getNumElements(); ++I) {
-      constantHash(cast<Constant>(VA->getOperand(I)));
+      hashConstant(cast<Constant>(VA->getOperand(I)));
     }
     break;
   }
   case Value::ConstantStructVal: {
     const ConstantStruct *VS = cast<ConstantStruct>(V);
     for (unsigned I = 0; I < cast<StructType>(Ty)->getNumElements(); ++I) {
-      constantHash(cast<Constant>(VS->getOperand(I)));
+      hashConstant(cast<Constant>(VS->getOperand(I)));
     }
     break;
   }
   case Value::ConstantVectorVal: {
     const ConstantVector *VV = cast<ConstantVector>(V);
     for (uint64_t I = 0; I < cast<VectorType>(Ty)->getNumElements(); ++I) {
-      constantHash(cast<Constant>(VV->getOperand(I)));
+      hashConstant(cast<Constant>(VV->getOperand(I)));
     }
     break;
   }
   case Value::ConstantExprVal: {
     const ConstantExpr *VE = cast<ConstantExpr>(V);
     for (unsigned i = 0; i < VE->getNumOperands(); ++i) {
-      constantHash(cast<Constant>(VE->getOperand(i)));
+      hashConstant(cast<Constant>(VE->getOperand(i)));
     }
     break;
   }
   case Value::BlockAddressVal: {
     const BlockAddress *BA = cast<BlockAddress>(V);
-    valueHash(BA->getFunction());
-    // valueHash will tell us if these are equivalent BasicBlocks, in the
+    hashValue(BA->getFunction());
+    // hashValue will tell us if these are equivalent BasicBlocks, in the
     // context of their respective functions.
-    valueHash(BA->getBasicBlock());
+    hashValue(BA->getBasicBlock());
     break;
   }
   default: // Unknown constant, abort.
@@ -274,17 +274,17 @@ void HashCalculator::constantHash(const Constant *V) {
 /// Calculate the value hash under pair-wise comparison. If this is the first
 /// time the values are seen, they're added to the mapping so that we will
 /// detect mismatches on next use. See comments in declaration for more details.
-void HashCalculator::valueHash(const Value *V) {
+void HashCalculator::hashValue(const Value *V) {
   Hash.update(HashKind::TAG_Value);
   const Constant *ConstV = dyn_cast<Constant>(V);
   if (ConstV) {
-    constantHash(ConstV);
+    hashConstant(ConstV);
     return;
   }
 
   const InlineAsm *InlineAsmV = dyn_cast<InlineAsm>(V);
   if (InlineAsmV) {
-    inlineAsmHash(InlineAsmV);
+    hashInlineAsm(InlineAsmV);
     return;
   }
 
@@ -295,25 +295,25 @@ void HashCalculator::valueHash(const Value *V) {
       GV = dyn_cast<GlobalVariable>(GA->getAliasee()->stripPointerCasts());
   }
   if (GV && !GV->getName().empty()) {
-    memHash(GV->getName());
+    hashMem(GV->getName());
     return;
   }
 
-  auto SN = sn_map.insert(std::make_pair(V, sn_map.size()));
-  numberHash(SN.first->second);
+  auto SN = SNMap.insert(std::make_pair(V, SNMap.size()));
+  hashNumber(SN.first->second);
 }
 
-void HashCalculator::globalValueHash(const GlobalValue *V) {
-  memHash(V->getName());
+void HashCalculator::hashGlobalValue(const GlobalValue *V) {
+  hashMem(V->getName());
   auto *GV = dyn_cast<GlobalVariable>(V);
   if (GV && GV->hasDefinitiveInitializer()) {
     DenseMap<const GlobalValue *, unsigned>::iterator GVI =
-        global_numbers.find(GV);
-    if (GVI == global_numbers.end()) {
-      global_numbers.insert(std::make_pair(GV, global_numbers.size()));
-      constantHash(GV->getInitializer());
+        GlobalNumbers.find(GV);
+    if (GVI == GlobalNumbers.end()) {
+      GlobalNumbers.insert(std::make_pair(GV, GlobalNumbers.size()));
+      hashConstant(GV->getInitializer());
     } else {
-      numberHash(GVI->second);
+      hashNumber(GVI->second);
     }
   }
 }
@@ -325,18 +325,18 @@ std::string &HashCalculator::get(MD5::MD5Result &HashRes) {
   return TheHash;
 }
 
-void FunctionHashCalculator::signatureHash(const Function *F) {
+void FunctionHashCalculator::hashSignature(const Function *F) {
   FnHash.Hash.update(HashKind::TAG_Signature);
   // TODO: review all the attributes to find the stardard c++ attributes to
   // affect the generated codes.
-  FnHash.attributeListHash(F->getAttributes());
+  FnHash.hashAttributeList(F->getAttributes());
   if (F->hasGC()) {
     FnHash.Hash.update(HashKind::TAG_Signature_GC);
-    FnHash.memHash(F->getGC());
+    FnHash.hashMem(F->getGC());
   }
   if (F->hasSection()) {
     FnHash.Hash.update(HashKind::TAG_Signature_Sec);
-    FnHash.memHash(F->getSection());
+    FnHash.hashMem(F->getSection());
   }
   FnHash.Hash.update(HashKind::TAG_Signature_VarArg);
   FnHash.Hash.update(F->isVarArg());
@@ -356,25 +356,25 @@ void FunctionHashCalculator::signatureHash(const Function *F) {
         ArrayRef<uint8_t>((uint8_t *)&CC, sizeof(CallingConv::ID)));
   }
 
-  FnHash.typeHash(F->getFunctionType());
+  FnHash.hashType(F->getFunctionType());
   // Visit the arguments so that they get enumerated in the order they're
   // passed in.
   FnHash.Hash.update(HashKind::TAG_Signature_Arg);
   for (Function::const_arg_iterator ArgI = F->arg_begin(), ArgE = F->arg_end();
        ArgI != ArgE; ++ArgI) {
-    FnHash.valueHash(&*ArgI);
+    FnHash.hashValue(&*ArgI);
   }
 }
 
-void FunctionHashCalculator::moduleHash(Module &M) {
+void FunctionHashCalculator::hashModule(Module &M) {
   FnHash.Hash.update(HashKind::TAG_Datalayout);
-  FnHash.memHash(M.getDataLayoutStr());
+  FnHash.hashMem(M.getDataLayoutStr());
   FnHash.Hash.update(HashKind::TAG_Triple);
-  FnHash.memHash(M.getTargetTriple());
+  FnHash.hashMem(M.getTargetTriple());
 }
 
 // Calculate either CallInst or InvokeInst instruction hash.
-void FunctionHashCalculator::operandBundlesHash(const Instruction *V) {
+void FunctionHashCalculator::hashOperandBundles(const Instruction *V) {
   FnHash.Hash.update(HashKind::TAG_OperandBundles);
   ImmutableCallSite VCS(V);
   assert(VCS && "Must not be empty!");
@@ -382,57 +382,57 @@ void FunctionHashCalculator::operandBundlesHash(const Instruction *V) {
 
   for (unsigned i = 0, e = VCS.getNumOperandBundles(); i != e; ++i) {
     auto VOB = VCS.getOperandBundleAt(i);
-    FnHash.memHash(VOB.getTagName());
+    FnHash.hashMem(VOB.getTagName());
     // Since input values have been used to calculate the instruction hash for
     // all instructions, we only consider the input sizes here.
-    FnHash.numberHash(VOB.Inputs.size());
+    FnHash.hashNumber(VOB.Inputs.size());
   }
 }
 
 /// Accumulate the instruction hash. The opcodes, type, operand types, operands
 /// value and any other factors affecting the operation must be considered.
-void FunctionHashCalculator::instructionHash(const Instruction *V) {
+void FunctionHashCalculator::hashInstruction(const Instruction *V) {
   FnHash.Hash.update(HashKind::TAG_Instruction);
   // Accumulate the hash of the instruction opcode.
-  FnHash.numberHash(V->getOpcode());
+  FnHash.hashNumber(V->getOpcode());
   // Instruction return type.
-  FnHash.typeHash(V->getType());
-  FnHash.numberHash(V->getRawSubclassOptionalData());
+  FnHash.hashType(V->getType());
+  FnHash.hashNumber(V->getRawSubclassOptionalData());
 
   // Accumulate the instruction operands type and value.
   for (unsigned I = 0, E = V->getNumOperands(); I != E; ++I) {
-    FnHash.typeHash(V->getOperand(I)->getType());
-    FnHash.valueHash(V->getOperand(I));
+    FnHash.hashType(V->getOperand(I)->getType());
+    FnHash.hashValue(V->getOperand(I));
   }
 
   // special GetElementPtrInst instruction.
   if (const GetElementPtrInst *GEP = dyn_cast<GetElementPtrInst>(V)) {
     FnHash.Hash.update(HashKind::TAG_GetElementPtrInst);
-    FnHash.typeHash(GEP->getSourceElementType());
+    FnHash.hashType(GEP->getSourceElementType());
     return;
   }
   // Check special state that is a part of some instructions.
   if (const AllocaInst *AI = dyn_cast<AllocaInst>(V)) {
     FnHash.Hash.update(HashKind::TAG_AllocaInst);
-    FnHash.typeHash(AI->getAllocatedType());
-    FnHash.numberHash(AI->getAlignment());
+    FnHash.hashType(AI->getAllocatedType());
+    FnHash.hashNumber(AI->getAlignment());
     return;
   }
   if (const LoadInst *LI = dyn_cast<LoadInst>(V)) {
     FnHash.Hash.update(HashKind::TAG_LoadInst);
     FnHash.Hash.update(LI->isVolatile());
-    FnHash.numberHash(LI->getAlignment());
-    FnHash.orderingHash(LI->getOrdering());
+    FnHash.hashNumber(LI->getAlignment());
+    FnHash.hashOrdering(LI->getOrdering());
     FnHash.Hash.update(LI->getSynchScope());
     // FIXME: Is there any other Metadata need to be considered??
-    FnHash.rangeMetadataHash(LI->getMetadata(LLVMContext::MD_range));
+    FnHash.hashRangeMetadata(LI->getMetadata(LLVMContext::MD_range));
     return;
   }
   if (const StoreInst *SI = dyn_cast<StoreInst>(V)) {
     FnHash.Hash.update(HashKind::TAG_StoreInst);
     FnHash.Hash.update(SI->isVolatile());
-    FnHash.numberHash(SI->getAlignment());
-    FnHash.orderingHash(SI->getOrdering());
+    FnHash.hashNumber(SI->getAlignment());
+    FnHash.hashOrdering(SI->getOrdering());
     FnHash.Hash.update(SI->getSynchScope());
     return;
   }
@@ -444,23 +444,22 @@ void FunctionHashCalculator::instructionHash(const Instruction *V) {
   if (const CallInst *CI = dyn_cast<CallInst>(V)) {
     FnHash.Hash.update(HashKind::TAG_CallInst);
     FnHash.Hash.update(CI->isTailCall());
-    // FnHash.numberHash(CI->getCallingConv());
-    FnHash.attributeListHash(CI->getAttributes());
-    operandBundlesHash(CI);
-    FnHash.rangeMetadataHash(CI->getMetadata(LLVMContext::MD_range));
+    FnHash.hashAttributeList(CI->getAttributes());
+    hashOperandBundles(CI);
+    FnHash.hashRangeMetadata(CI->getMetadata(LLVMContext::MD_range));
     if (const Function *F = CI->getCalledFunction()) {
-      FnHash.memHash(F->getName());
+      FnHash.hashMem(F->getName());
     }
     return;
   }
   if (const InvokeInst *II = dyn_cast<InvokeInst>(V)) {
     FnHash.Hash.update(HashKind::TAG_InvokeInst);
-    FnHash.numberHash(II->getCallingConv());
-    FnHash.attributeListHash(II->getAttributes());
-    operandBundlesHash(II);
-    FnHash.rangeMetadataHash(II->getMetadata(LLVMContext::MD_range));
+    FnHash.hashNumber(II->getCallingConv());
+    FnHash.hashAttributeList(II->getAttributes());
+    hashOperandBundles(II);
+    FnHash.hashRangeMetadata(II->getMetadata(LLVMContext::MD_range));
     if (const Function *F = II->getCalledFunction()) {
-      FnHash.memHash(F->getName());
+      FnHash.hashMem(F->getName());
     }
     return;
   }
@@ -480,7 +479,7 @@ void FunctionHashCalculator::instructionHash(const Instruction *V) {
   }
   if (const FenceInst *FI = dyn_cast<FenceInst>(V)) {
     FnHash.Hash.update(HashKind::TAG_FenceInst);
-    FnHash.orderingHash(FI->getOrdering());
+    FnHash.hashOrdering(FI->getOrdering());
     FnHash.Hash.update(FI->getSynchScope());
     return;
   }
@@ -488,8 +487,8 @@ void FunctionHashCalculator::instructionHash(const Instruction *V) {
     FnHash.Hash.update(HashKind::TAG_AtomicCmpXchgInst);
     FnHash.Hash.update(CXI->isVolatile());
     FnHash.Hash.update(CXI->isWeak());
-    FnHash.orderingHash(CXI->getSuccessOrdering());
-    FnHash.orderingHash(CXI->getFailureOrdering());
+    FnHash.hashOrdering(CXI->getSuccessOrdering());
+    FnHash.hashOrdering(CXI->getFailureOrdering());
     FnHash.Hash.update(CXI->getSynchScope());
     return;
   }
@@ -497,7 +496,7 @@ void FunctionHashCalculator::instructionHash(const Instruction *V) {
     FnHash.Hash.update(HashKind::TAG_AtomicRMWInst);
     FnHash.Hash.update(RMWI->getOperation());
     FnHash.Hash.update(RMWI->isVolatile());
-    FnHash.orderingHash(RMWI->getOrdering());
+    FnHash.hashOrdering(RMWI->getOrdering());
     FnHash.Hash.update(RMWI->getSynchScope());
     return;
   }
@@ -507,16 +506,16 @@ void FunctionHashCalculator::instructionHash(const Instruction *V) {
     // (checked by the caller of this function), the incoming blocks
     // are also identical.
     for (unsigned I = 0, E = PN->getNumIncomingValues(); I != E; ++I) {
-      FnHash.valueHash(PN->getIncomingBlock(I));
+      FnHash.hashValue(PN->getIncomingBlock(I));
     }
   }
 }
 
-void FunctionHashCalculator::basicBlockHash(const BasicBlock *BB) {
+void FunctionHashCalculator::hashBasicBlock(const BasicBlock *BB) {
   FnHash.Hash.update(HashKind::TAG_BasicBlock);
   BasicBlock::const_iterator Inst = BB->begin(), InstE = BB->end();
   do {
-    instructionHash(&*Inst);
+    hashInstruction(&*Inst);
     ++Inst;
   } while (Inst != InstE);
 }
@@ -524,8 +523,8 @@ void FunctionHashCalculator::basicBlockHash(const BasicBlock *BB) {
 void FunctionHashCalculator::calculateHash(Module &M) {
   FnHash.beginCalculate();
   FnHash.Hash.update(HashKind::TAG_GlobalFunction);
-  moduleHash(M);
-  signatureHash(Fn);
+  hashModule(M);
+  hashSignature(Fn);
 
   // We do a CFG-ordered walk since the actual ordering of the blocks in the
   // linked list is immaterial. Our walk starts at the entry block for both
@@ -539,8 +538,8 @@ void FunctionHashCalculator::calculateHash(Module &M) {
   VisitedBBs.insert(FnBBs[0]);
   while (!FnBBs.empty()) {
     const BasicBlock *BB = FnBBs.pop_back_val();
-    FnHash.valueHash(BB);
-    basicBlockHash(BB);
+    FnHash.hashValue(BB);
+    hashBasicBlock(BB);
 
     const TerminatorInst *Term = BB->getTerminator();
     for (unsigned I = 0, E = Term->getNumSuccessors(); I != E; ++I) {
@@ -556,19 +555,19 @@ MD5::MD5Result FunctionHashCalculator::getHashResult() {
   return FnHash.getHashResult();
 }
 
-void VariableHashCalculator::moduleHash(Module &M) {
+void VariableHashCalculator::hashModule(Module &M) {
   GvHash.Hash.update(HashKind::TAG_Datalayout);
-  GvHash.memHash(M.getDataLayoutStr());
+  GvHash.hashMem(M.getDataLayoutStr());
   GvHash.Hash.update(HashKind::TAG_Triple);
-  GvHash.memHash(M.getTargetTriple());
+  GvHash.hashMem(M.getTargetTriple());
 }
 
 // Calculate the global Variable hash value.
 void VariableHashCalculator::calculateHash(Module &M) {
   GvHash.Hash.update(HashKind::TAG_GlobalVariable);
   GvHash.beginCalculate();
-  moduleHash(M);
-  GvHash.typeHash(Gv->getValueType());
+  hashModule(M);
+  GvHash.hashType(Gv->getValueType());
   // If global variable is constant, accumulate the const attribute.
   GvHash.Hash.update(HashKind::TAG_GVConstant);
   GvHash.Hash.update(Gv->isConstant());
@@ -577,7 +576,7 @@ void VariableHashCalculator::calculateHash(Module &M) {
   GvHash.Hash.update(Gv->getThreadLocalMode());
   // Accumulate the alignment of global variable.
   GvHash.Hash.update(HashKind::TAG_GVAlignment);
-  GvHash.numberHash(Gv->getAlignment());
+  GvHash.hashNumber(Gv->getAlignment());
   // Accumulate an optional unnamed_addr or local_unnamed_addr attribute.
   GvHash.Hash.update(HashKind::TAG_GVUnnamedAddr);
   GvHash.Hash.update(static_cast<uint8_t>(Gv->getUnnamedAddr()));
@@ -586,6 +585,6 @@ void VariableHashCalculator::calculateHash(Module &M) {
     // This accumulation also cover the "llvm.global_ctors",
     // "llvm.global_dtors", "llvm.used" and "llvm.compiler.used" cases.
     GvHash.Hash.update(HashKind::TAG_GVInitValue);
-    GvHash.constantHash(Gv->getInitializer());
+    GvHash.hashConstant(Gv->getInitializer());
   }
 }

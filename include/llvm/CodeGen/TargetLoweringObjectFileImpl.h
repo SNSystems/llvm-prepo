@@ -148,41 +148,6 @@ public:
   MCSection *getSectionForConstant(const DataLayout &DL, SectionKind Kind,
                                    const Constant *C, unsigned &Align,
                                    const GlobalObject *GO) const override;
-#if 0
-  /// Emit the module flags that specify the garbage collection information.
-  void emitModuleFlags(MCStreamer &Streamer,
-                       ArrayRef<Module::ModuleFlagEntry> ModuleFlags,
-                       Mangler &Mang, const TargetMachine &TM) const override;
-
-  MCSection *SelectSectionForGlobal(const GlobalValue *GV, SectionKind Kind,
-                                    Mangler &Mang,
-                                    const TargetMachine &TM) const override;
-
-  MCSection *getExplicitSectionGlobal(const GlobalValue *GV, SectionKind Kind,
-                                      Mangler &Mang,
-                                      const TargetMachine &TM) const override;
-
-  /// The mach-o version of this method defaults to returning a stub reference.
-  const MCExpr *
-  getTTypeGlobalReference(const GlobalValue *GV, unsigned Encoding,
-                          Mangler &Mang, const TargetMachine &TM,
-                          MachineModuleInfo *MMI,
-                          MCStreamer &Streamer) const override;
-
-  // The symbol that gets passed to .cfi_personality.
-  MCSymbol *getCFIPersonalitySymbol(const GlobalValue *GV, Mangler &Mang,
-                                    const TargetMachine &TM,
-                                    MachineModuleInfo *MMI) const override;
-
-  /// Get MachO PC relative GOT entry relocation
-  const MCExpr *getIndirectSymViaGOTPCRel(const MCSymbol *Sym,
-                                          const MCValue &MV, int64_t Offset,
-                                          MachineModuleInfo *MMI,
-                                          MCStreamer &Streamer) const override;
-
-  void getNameWithPrefix(SmallVectorImpl<char> &OutName, const GlobalValue *GV,
-                         Mangler &Mang, const TargetMachine &TM) const override;
-#endif
 };
 
 class TargetLoweringObjectFileCOFF : public TargetLoweringObjectFile {

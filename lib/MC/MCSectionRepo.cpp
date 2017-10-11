@@ -1,4 +1,4 @@
-//===- MCSectionRepo.cpp - Repository Machine Code Sections -----*- C++ -*-===//
+//===- MCSectionRepo.cpp - Repo Code Section Representation -----*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //

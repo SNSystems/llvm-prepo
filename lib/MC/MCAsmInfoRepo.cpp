@@ -1,4 +1,4 @@
-//===-- MCAsmInfoELF.cpp - ELF asm properties -------------------*- C++ -*-===//
+//===-- MCAsmInfoRepo.cpp - Repo asm properties -----------------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -13,8 +13,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/MC/MCAsmInfoRepo.h"
-#include "llvm/MC/MCContext.h"
-#include "llvm/MC/MCSectionRepo.h"
 using namespace llvm;
 
 void MCAsmInfoRepo::anchor() {}
@@ -24,6 +22,5 @@ MCAsmInfoRepo::MCAsmInfoRepo() {
   WeakRefDirective = "\t.weak\t";
   PrivateGlobalPrefix = ".L";
   PrivateLabelPrefix = ".L";
-  UsesNonexecutableStackSection = false;
   HasDotTypeDotSizeDirective = false;
 }

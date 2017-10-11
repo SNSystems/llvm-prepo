@@ -62,12 +62,12 @@ const Constant *Digest::getAliasee(const GlobalAlias *GA) {
 void Digest::createDigestFile(Module const &M, GlobalValueMap const &GVMap,
                               StringRef FileExt) {
   const std::string &MId = M.getModuleIdentifier();
-  std::string hashFName(MId.begin(), find(MId, '.') + 1);
-  hashFName += FileExt;
+  std::string HashFName(MId.begin(), find(MId, '.') + 1);
+  HashFName += FileExt;
   std::error_code EC;
-  raw_fd_ostream OS(hashFName, EC, sys::fs::F_Text);
+  raw_fd_ostream OS(HashFName, EC, sys::fs::F_Text);
   if (EC) {
-    errs() << "Couldn't open " << M.getModuleIdentifier()
+    errs() << "Couldn't open " << HashFName
            << " for generating hash.\nError:" << EC.message() << "\n";
     exit(1);
   }

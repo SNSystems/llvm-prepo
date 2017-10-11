@@ -458,7 +458,7 @@ template <> struct MDNodeKeyImpl<DIDerivedType> {
   }
 };
 
-/// \brief DenseMapInfo for TicketNode.
+/// DenseMapInfo for TicketNode.
 template <> struct MDNodeKeyImpl<TicketNode> {
   Metadata *Name;
   Metadata *Digest;

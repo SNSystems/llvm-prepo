@@ -1,4 +1,4 @@
-//===-- llvm/MC/MCAsmInfoELF.h - ELF Asm info -------------------*- C++ -*-===//
+//===-- llvm/MC/MCAsmInfoRepo.h - Repo Asm info -----------------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -17,10 +17,6 @@ class MCAsmInfoRepo : public MCAsmInfo {
   virtual void anchor();
 
 protected:
-  /// Targets which have non-executable stacks by default can set this to false
-  /// to disable the special section which requests a non-executable stack.
-  bool UsesNonexecutableStackSection;
-
   MCAsmInfoRepo();
 };
 } // namespace llvm

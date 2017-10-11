@@ -60,69 +60,69 @@ public:
     return getHash();
   }
 
-  Digest::DigestType testSignatureHash() {
+  Digest::DigestType testHashSignature() {
     FnHash.beginCalculate();
-    signatureHash(Fn);
+    hashSignature(Fn);
     return getHash();
   }
 
-  Digest::DigestType testBasicBlockHash(const BasicBlock *BB) {
+  Digest::DigestType testHashBasicBlock(const BasicBlock *BB) {
     FnHash.beginCalculate();
-    basicBlockHash(BB);
+    hashBasicBlock(BB);
     return getHash();
   }
 
-  Digest::DigestType testConstantHash(const Constant *V) {
+  Digest::DigestType testHashConstant(const Constant *V) {
     FnHash.beginCalculate();
-    FnHash.constantHash(V);
+    FnHash.hashConstant(V);
     return getHash();
   }
 
-  Digest::DigestType testGlobalValueHash(const GlobalValue *V) {
+  Digest::DigestType testHashGlobalValue(const GlobalValue *V) {
     FnHash.beginCalculate();
-    FnHash.globalValueHash(V);
+    FnHash.hashGlobalValue(V);
     return getHash();
   }
 
-  Digest::DigestType testValueHash(const Value *V) {
+  Digest::DigestType testHashValue(const Value *V) {
     FnHash.beginCalculate();
-    FnHash.valueHash(V);
+    FnHash.hashValue(V);
     return getHash();
   }
 
-  Digest::DigestType testInstructionHash(const Instruction *V) {
+  Digest::DigestType testHashInstruction(const Instruction *V) {
     FnHash.beginCalculate();
-    instructionHash(V);
+    hashInstruction(V);
     return getHash();
   }
 
-  Digest::DigestType testTypeHash(Type *Ty) {
+  Digest::DigestType testHashType(Type *Ty) {
     FnHash.beginCalculate();
-    FnHash.typeHash(Ty);
+    FnHash.hashType(Ty);
     return getHash();
   }
 
-  Digest::DigestType testNumberHash(uint64_t V) {
+  Digest::DigestType testHashNumber(uint64_t V) {
     FnHash.beginCalculate();
-    FnHash.numberHash(V);
+    FnHash.hashNumber(V);
     return getHash();
   }
 
-  Digest::DigestType testAPIntHash(const APInt &V) {
+  Digest::DigestType testHashAPInt(const APInt &V) {
     FnHash.beginCalculate();
-    FnHash.APIntHash(V);
+    FnHash.hashAPInt(V);
     return getHash();
   }
 
-  Digest::DigestType testAPFloatHash(const APFloat &V) {
+  Digest::DigestType testHashAPFloat(const APFloat &V) {
     FnHash.beginCalculate();
-    FnHash.APFloatHash(V);
+    FnHash.hashAPFloat(V);
     return getHash();
   }
 
-  Digest::DigestType testMemHash(StringRef V) {
+  Digest::DigestType testHashMem(StringRef V) {
     FnHash.beginCalculate();
-    FnHash.memHash(V);
+    FnHash.hashMem(V);
     return getHash();
   }
 };
@@ -142,23 +142,23 @@ TEST(HashCalculatorTest, TestAPI) {
   EXPECT_TRUE(F1H.testFunctionAccess(F1.F));
   EXPECT_NE(F1H.testCalculate(M), F2H.testCalculate(M));
   EXPECT_EQ(F1H.testCalculate(M), F3H.testCalculate(M));
-  EXPECT_EQ(F1H.testSignatureHash(), F2H.testSignatureHash());
-  EXPECT_NE(F1H.testBasicBlockHash(F1.BB), F2H.testBasicBlockHash(F2.BB));
-  EXPECT_EQ(F1H.testBasicBlockHash(F1.BB), F3H.testBasicBlockHash(F3.BB));
-  EXPECT_NE(F1H.testConstantHash(F1.C), F2H.testConstantHash(F2.C));
+  EXPECT_EQ(F1H.testHashSignature(), F2H.testHashSignature());
+  EXPECT_NE(F1H.testHashBasicBlock(F1.BB), F2H.testHashBasicBlock(F2.BB));
+  EXPECT_EQ(F1H.testHashBasicBlock(F1.BB), F3H.testHashBasicBlock(F3.BB));
+  EXPECT_NE(F1H.testHashConstant(F1.C), F2H.testHashConstant(F2.C));
 
-  EXPECT_NE(F1H.testGlobalValueHash(F1.F), F2H.testGlobalValueHash(F2.F));
-  EXPECT_NE(F1H.testInstructionHash(F1.I), F2H.testInstructionHash(F2.I));
-  EXPECT_EQ(F1H.testTypeHash(F1.T), F2H.testTypeHash(F2.T));
+  EXPECT_NE(F1H.testHashGlobalValue(F1.F), F2H.testHashGlobalValue(F2.F));
+  EXPECT_NE(F1H.testHashInstruction(F1.I), F2H.testHashInstruction(F2.I));
+  EXPECT_EQ(F1H.testHashType(F1.T), F2H.testHashType(F2.T));
 
-  EXPECT_EQ(F1H.testNumberHash(5), F2H.testNumberHash(5));
-  EXPECT_NE(F1H.testNumberHash(5), F2H.testNumberHash(6));
-  EXPECT_EQ(F1H.testMemHash("Hello World"), F2H.testMemHash("Hello World"));
-  EXPECT_NE(F1H.testMemHash("Hello World"), F2H.testMemHash("Hello-World"));
-  EXPECT_EQ(F1H.testAPIntHash(APInt(32, 2)), F2H.testAPIntHash(APInt(32, 2)));
-  EXPECT_NE(F1H.testAPIntHash(APInt(32, 2)), F2H.testAPIntHash(APInt(32, 5)));
-  EXPECT_EQ(F1H.testAPFloatHash(APFloat(2.0)),
-            F2H.testAPFloatHash(APFloat(2.0)));
-  EXPECT_NE(F1H.testAPFloatHash(APFloat(2.0)),
-            F2H.testAPFloatHash(APFloat(5.0)));
+  EXPECT_EQ(F1H.testHashNumber(5), F2H.testHashNumber(5));
+  EXPECT_NE(F1H.testHashNumber(5), F2H.testHashNumber(6));
+  EXPECT_EQ(F1H.testHashMem("Hello World"), F2H.testHashMem("Hello World"));
+  EXPECT_NE(F1H.testHashMem("Hello World"), F2H.testHashMem("Hello-World"));
+  EXPECT_EQ(F1H.testHashAPInt(APInt(32, 2)), F2H.testHashAPInt(APInt(32, 2)));
+  EXPECT_NE(F1H.testHashAPInt(APInt(32, 2)), F2H.testHashAPInt(APInt(32, 5)));
+  EXPECT_EQ(F1H.testHashAPFloat(APFloat(2.0)),
+            F2H.testHashAPFloat(APFloat(2.0)));
+  EXPECT_NE(F1H.testHashAPFloat(APFloat(2.0)),
+            F2H.testHashAPFloat(APFloat(5.0)));
 }
