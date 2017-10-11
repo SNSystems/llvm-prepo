@@ -22,7 +22,7 @@ namespace llvm {
 
 class MCSectionRepo : public MCSection {
 private:
-  Digest::DigestType Digest;
+  ::llvm::Digest::DigestType Digest;
   unsigned const Index;
   bool IsDummy = false;
 
