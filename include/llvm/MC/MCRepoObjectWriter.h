@@ -13,7 +13,7 @@
 #include "llvm/ADT/Triple.h"
 #include "llvm/MC/MCValue.h"
 #include "llvm/Support/DataTypes.h"
-#include "llvm/Support/REPO.h"
+#include "llvm/Support/Repo.h"
 #include "llvm/Support/raw_ostream.h"
 #include <vector>
 

@@ -1,12 +1,11 @@
-//===-- llvm/Support/REPO.h - REPO constants and data structures --*- C++
-//-*-===//
+//===- llvm/Support/Repo.h - Repo constants and data structures --*- C++-*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
 // This file is distributed under the University of Illinois Open Source
 // License. See LICENSE.TXT for details.
 //
-//===------------------------------------------------------------------------===//
+//===----------------------------------------------------------------------===//
 //
 // This header contains common, non-processor-specific data structures and
 // constants for the REPO file format.
