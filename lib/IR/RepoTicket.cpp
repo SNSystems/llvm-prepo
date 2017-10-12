@@ -59,41 +59,6 @@ const Constant *Digest::getAliasee(const GlobalAlias *GA) {
   return Target;
 }
 
-void Digest::createDigestFile(Module const &M, GlobalValueMap const &GVMap,
-                              StringRef FileExt) {
-  const std::string &MId = M.getModuleIdentifier();
-  std::string HashFName(MId.begin(), find(MId, '.') + 1);
-  HashFName += FileExt;
-  std::error_code EC;
-  raw_fd_ostream OS(HashFName, EC, sys::fs::F_Text);
-  if (EC) {
-    errs() << "Couldn't open " << HashFName
-           << " for generating hash.\nError:" << EC.message() << "\n";
-    exit(1);
-  }
-
-  for (auto const &GO : GVMap) {
-    if (dyn_cast<GlobalVariable>(GO.first)) {
-      OS << "Global variable name: ";
-    } else if (dyn_cast<Function>(GO.first)) {
-      OS << "Global function name: ";
-    } else if (dyn_cast<GlobalAlias>(GO.first)) {
-      auto Target = getAliasee(dyn_cast<GlobalAlias>(GO.first));
-      OS << "Global Alias name ";
-      OS << " (Alias to: ";
-      if (auto GVA = dyn_cast<GlobalVariable>(Target)) {
-        OS << "a global variable: " << Target->getName() << ") : ";
-      } else if (auto GVF = dyn_cast<Function>(Target)) {
-        OS << "a function: " << GVF->getName() << ") : ";
-      } else {
-        assert(false && "Unknown GlobalObject type!");
-      }
-    }
-    OS << '\t' << GO.first->getName() << ": digest:" << GO.second.digest()
-       << '\n';
-  }
-}
-
 #ifndef NDEBUG
 static bool isCanonical(const MDString *S) {
   return !S || !S->getString().empty();

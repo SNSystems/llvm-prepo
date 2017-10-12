@@ -127,9 +127,5 @@ bool ProgramRepositoryPruning::runOnModule(Module &M) {
   DEBUG(dbgs() << "size of removed variables: " << NumVariables << '\n');
   DEBUG(dbgs() << "size of removed aliases: " << NumAliases << '\n');
 
-#if 0
-  Digest::createDigestFile(M, DigestMap, getPassName());
-#endif
-
   return Changed;
 }
