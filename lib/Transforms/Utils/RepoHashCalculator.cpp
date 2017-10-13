@@ -23,7 +23,7 @@
 
 using namespace llvm;
 
-#define DEBUG_TYPE "hashcaculator"
+#define DEBUG_TYPE "repo-hash-calculator"
 
 /// \brief Adds \param V to the hash.
 
@@ -115,7 +115,7 @@ void HashCalculator::hashRangeMetadata(const MDNode *V) {
     return;
   Hash.update(HashKind::TAG_RangeMetadata);
   // Range metadata is a sequence of numbers.
-  for (size_t I = 0; I < V->getNumOperands(); ++I) {
+  for (size_t I = 0, E = V->getNumOperands(); I < E; ++I) {
     ConstantInt *VLow = mdconst::extract<ConstantInt>(V->getOperand(I));
     hashAPInt(VLow->getValue());
   }
@@ -231,29 +231,32 @@ void HashCalculator::hashConstant(const Constant *V) {
   }
   case Value::ConstantArrayVal: {
     const ConstantArray *VA = cast<ConstantArray>(V);
-    for (uint64_t I = 0; I < cast<ArrayType>(Ty)->getNumElements(); ++I) {
+    for (uint64_t I = 0, E = cast<ArrayType>(Ty)->getNumElements(); I < E;
+         ++I) {
       hashConstant(cast<Constant>(VA->getOperand(I)));
     }
     break;
   }
   case Value::ConstantStructVal: {
     const ConstantStruct *VS = cast<ConstantStruct>(V);
-    for (unsigned I = 0; I < cast<StructType>(Ty)->getNumElements(); ++I) {
+    for (unsigned I = 0, E = cast<StructType>(Ty)->getNumElements(); I < E;
+         ++I) {
       hashConstant(cast<Constant>(VS->getOperand(I)));
     }
     break;
   }
   case Value::ConstantVectorVal: {
     const ConstantVector *VV = cast<ConstantVector>(V);
-    for (uint64_t I = 0; I < cast<VectorType>(Ty)->getNumElements(); ++I) {
+    for (uint64_t I = 0, E = cast<VectorType>(Ty)->getNumElements(); I < E;
+         ++I) {
       hashConstant(cast<Constant>(VV->getOperand(I)));
     }
     break;
   }
   case Value::ConstantExprVal: {
     const ConstantExpr *VE = cast<ConstantExpr>(V);
-    for (unsigned i = 0; i < VE->getNumOperands(); ++i) {
-      hashConstant(cast<Constant>(VE->getOperand(i)));
+    for (unsigned I = 0, E = VE->getNumOperands(); I < E; ++I) {
+      hashConstant(cast<Constant>(VE->getOperand(I)));
     }
     break;
   }
