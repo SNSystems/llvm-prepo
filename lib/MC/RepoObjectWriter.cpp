@@ -50,7 +50,7 @@
 using namespace llvm;
 
 #undef DEBUG_TYPE
-#define DEBUG_TYPE "reloc-info"
+#define DEBUG_TYPE "repo-object"
 
 namespace {
 typedef DenseMap<const MCSectionRepo *, uint32_t> SectionIndexMapTy;
@@ -482,7 +482,7 @@ void RepoObjectWriter::writeObject(MCAssembler &Asm,
         "TicketNode: Invalid output file path: " + ErrorCode.message() + ".");
   }
   OutputFile = ResultPath.str();
-  dbgs() << "path: " << OutputFile << "\n";
+  DEBUG(dbgs() << "path: " << OutputFile << "\n");
 
   for (MCSection &Sec : Asm) {
     auto &Section = static_cast<MCSectionRepo &>(Sec);
@@ -503,7 +503,7 @@ void RepoObjectWriter::writeObject(MCAssembler &Asm,
 
   // Insert the names from this module into the global name set.
   for (ModuleNamesContainer::value_type &NameAddress : Names) {
-    dbgs() << "insert name: " << NameAddress.first << '\n';
+    DEBUG(dbgs() << "insert name: " << NameAddress.first << '\n');
     pstore::index::name_index::iterator It =
         NamesIndex->insert(Transaction, NameAddress.first).first;
     NameAddress.second = It.get_address();
@@ -516,7 +516,7 @@ void RepoObjectWriter::writeObject(MCAssembler &Asm,
     auto const Key =
         pstore::index::uint128{Content.first.high(), Content.first.low()};
     if (DigestsIndex->find(Key) != DigestsIndex->end()) {
-      dbgs() << "fragment " << Key << " exists. skipping\n";
+      DEBUG(dbgs() << "fragment " << Key << " exists. skipping\n");
     } else {
       auto Begin = pstore::repo::details::make_section_content_iterator(
           Content.second.begin());
@@ -533,8 +533,8 @@ void RepoObjectWriter::writeObject(MCAssembler &Asm,
         }
       });
 
-      dbgs() << "fragment " << Key << " adding. size="
-             << pstore::repo::fragment::size_bytes(Begin, End) << '\n';
+      DEBUG(dbgs() << "fragment " << Key << " adding. size="
+                   << pstore::repo::fragment::size_bytes(Begin, End) << '\n');
 
       pstore::record FragmentRecord =
           pstore::repo::fragment::alloc(Transaction, Begin, End);
@@ -553,7 +553,8 @@ void RepoObjectWriter::writeObject(MCAssembler &Asm,
 
   for (auto &TicketContent : TicketContents) {
 
-    dbgs() << "Ticket uuid " << TicketContent.first.str() << " adding. \n";
+    DEBUG(dbgs() << "Ticket uuid " << TicketContent.first.str()
+                 << " adding. \n");
 
     // The name field of each of ticket_member is pointing into the 'Names' map.
     // Here we turn that into the pstore address of the string.
@@ -561,8 +562,8 @@ void RepoObjectWriter::writeObject(MCAssembler &Asm,
       auto MNC = reinterpret_cast<ModuleNamesContainer::value_type const *>(
           TicketMember.name.absolute());
       TicketMember.name = MNC->second;
-      dbgs() << "ticket name " << TicketMember.name.absolute() << " digest "
-             << TicketMember.digest << " adding." << '\n';
+      DEBUG(dbgs() << "ticket name " << TicketMember.name.absolute()
+                   << " digest " << TicketMember.digest << " adding." << '\n');
     }
 
     // Store the Ticket into store.
