@@ -149,13 +149,16 @@ public:
   /// identify the same gobals across function calls.
   void hashGlobalValue(const GlobalValue *V);
 
-  // Accumulate the hash of basicblocks, instructions and variables etc in the
-  // function Fn.
-  // HashAccumulator64 H;
-  MD5 Hash;
+  /// Accumulate the hash for the target datalayout and triple.
+  void hashModule(Module &M);
 
   /// Return the computed hash as a string.
   std::string &get(MD5::MD5Result &HashRes);
+
+private:
+  // Accumulate the hash of basicblocks, instructions and variables etc in the
+  // function Fn.
+  MD5 Hash;
 
   /// Assign serial numbers to values from the function.
   /// Explanation:
@@ -191,7 +194,6 @@ public:
   // The global state we will use.
   DenseMap<const GlobalValue *, unsigned> GlobalNumbers;
 
-private:
   std::string TheHash;
 };
 
@@ -210,12 +212,15 @@ public:
   void update(ArrayRef<uint8_t> Data) { FnHash.update(Data); }
 
 protected:
+  /// Return the function for unit test.
+  const Function *function() const { return Fn; }
+
+  /// Return the function hash for unit test.
+  HashCalculator &functionHash() { return FnHash; }
+
   /// Calculate the hash for the signature and other general attributes of the
   /// function.
   void hashSignature(const Function *Fn);
-
-  /// Accumulate the hash for the target datalayout and triple.
-  void hashModule(Module &M);
 
   /// Accumulate the hash for the basic block.
   void hashBasicBlock(const BasicBlock *BB);
@@ -242,6 +247,7 @@ protected:
   /// strings for particular instruction, and could change sometimes.
   void hashInstruction(const Instruction *V);
 
+private:
   // The function undergoing calculation.
   const Function *Fn;
 
@@ -265,9 +271,6 @@ public:
   void update(ArrayRef<uint8_t> Data) { GvHash.update(Data); }
 
 private:
-  /// Accumulate the hash for the target datalayout and triple.
-  void hashModule(Module &M);
-
   // The Variable undergoing calculation.
   const GlobalVariable *Gv;
 

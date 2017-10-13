@@ -43,15 +43,12 @@ struct TestFunction {
 /// A class for testing the RepoHashCalculator API.
 ///
 /// The main purpose is to test if the required protected functions are
-/// accessible from a derived class of FunctionComparator.
+/// accessible from a derived class of FunctionHashCalculator.
 class TestHash : public FunctionHashCalculator {
 public:
   TestHash(const Function *F1) : FunctionHashCalculator(F1) {}
 
-  bool testFunctionAccess(const Function *F1) {
-    // Test if Fn is accessible.
-    return F1 == Fn;
-  }
+  bool testFunctionAccess(const Function *F1) { return F1 == function(); }
 
   Digest::DigestType getHash() { return getHashResult(); }
 
@@ -61,74 +58,74 @@ public:
   }
 
   Digest::DigestType testHashSignature() {
-    FnHash.beginCalculate();
-    hashSignature(Fn);
+    functionHash().beginCalculate();
+    hashSignature(function());
     return getHash();
   }
 
   Digest::DigestType testHashBasicBlock(const BasicBlock *BB) {
-    FnHash.beginCalculate();
+    functionHash().beginCalculate();
     hashBasicBlock(BB);
     return getHash();
   }
 
   Digest::DigestType testHashConstant(const Constant *V) {
-    FnHash.beginCalculate();
-    FnHash.hashConstant(V);
+    functionHash().beginCalculate();
+    functionHash().hashConstant(V);
     return getHash();
   }
 
   Digest::DigestType testHashGlobalValue(const GlobalValue *V) {
-    FnHash.beginCalculate();
-    FnHash.hashGlobalValue(V);
+    functionHash().beginCalculate();
+    functionHash().hashGlobalValue(V);
     return getHash();
   }
 
   Digest::DigestType testHashValue(const Value *V) {
-    FnHash.beginCalculate();
-    FnHash.hashValue(V);
+    functionHash().beginCalculate();
+    functionHash().hashValue(V);
     return getHash();
   }
 
   Digest::DigestType testHashInstruction(const Instruction *V) {
-    FnHash.beginCalculate();
+    functionHash().beginCalculate();
     hashInstruction(V);
     return getHash();
   }
 
   Digest::DigestType testHashType(Type *Ty) {
-    FnHash.beginCalculate();
-    FnHash.hashType(Ty);
+    functionHash().beginCalculate();
+    functionHash().hashType(Ty);
     return getHash();
   }
 
   Digest::DigestType testHashNumber(uint64_t V) {
-    FnHash.beginCalculate();
-    FnHash.hashNumber(V);
+    functionHash().beginCalculate();
+    functionHash().hashNumber(V);
     return getHash();
   }
 
   Digest::DigestType testHashAPInt(const APInt &V) {
-    FnHash.beginCalculate();
-    FnHash.hashAPInt(V);
+    functionHash().beginCalculate();
+    functionHash().hashAPInt(V);
     return getHash();
   }
 
   Digest::DigestType testHashAPFloat(const APFloat &V) {
-    FnHash.beginCalculate();
-    FnHash.hashAPFloat(V);
+    functionHash().beginCalculate();
+    functionHash().hashAPFloat(V);
     return getHash();
   }
 
   Digest::DigestType testHashMem(StringRef V) {
-    FnHash.beginCalculate();
-    FnHash.hashMem(V);
+    functionHash().beginCalculate();
+    functionHash().hashMem(V);
     return getHash();
   }
 };
 
-/// A sanity check for the FunctionComparator API.
-TEST(HashCalculatorTest, TestAPI) {
+/// A test for the FunctionHashCalculator.
+TEST(HashCalculatorTest, TestFunction) {
   LLVMContext C;
   Module M("test", C);
   TestFunction F1(C, M, 27);
@@ -161,4 +158,96 @@ TEST(HashCalculatorTest, TestAPI) {
             F2H.testHashAPFloat(APFloat(2.0)));
   EXPECT_NE(F1H.testHashAPFloat(APFloat(2.0)),
             F2H.testHashAPFloat(APFloat(5.0)));
+}
+
+class VariableHash : public testing::Test {
+protected:
+  VariableHash() {
+    M0.reset(new Module("Module", Ctx));
+    M1.reset(new Module("Module1", Ctx));
+    GV0 = new GlobalVariable(*M0, Type::getInt8Ty(Ctx), true,
+                             GlobalValue::ExternalLinkage, nullptr, "GV0");
+    GV1 = new GlobalVariable(*M1, Type::getInt8Ty(Ctx), true,
+                             GlobalValue::ExternalLinkage, nullptr, "GV1");
+  }
+
+  ~VariableHash() {}
+
+  bool isEqualHash() {
+    VariableHashCalculator GVH0{GV0}, GVH1{GV1};
+    GVH0.calculateHash(*M0);
+    GVH1.calculateHash(*M1);
+    return GVH0.getHashResult() == GVH1.getHashResult();
+  }
+
+  LLVMContext Ctx;
+  std::unique_ptr<Module> M0;
+  std::unique_ptr<Module> M1;
+  GlobalVariable *GV0;
+  GlobalVariable *GV1;
+};
+
+// The triple will affect the hash value.
+TEST_F(VariableHash, CheckTriple) {
+  M0->setTargetTriple("x86_64-unknown-linux-gnu");
+  M1->setTargetTriple("arm-unknown-linux-gnu");
+  EXPECT_FALSE(isEqualHash());
+}
+
+// The target datalayout will affect the hash value.
+TEST_F(VariableHash, CheckDatalayout) {
+  M0->setDataLayout("e-n32");
+  M1->setDataLayout("e");
+  EXPECT_FALSE(isEqualHash());
+}
+
+// The source filename will not affect the hash value.
+TEST_F(VariableHash, CheckSourceFile) {
+  M0->setSourceFileName("file.cpp");
+  M1->setSourceFileName("file1.cpp");
+  EXPECT_TRUE(isEqualHash());
+}
+
+// The name and linkage type will affect the hash value.
+TEST_F(VariableHash, CheckLinkage) {
+  GV0->setLinkage(GlobalValue::ExternalLinkage);
+  GV1->setLinkage(GlobalValue::InternalLinkage);
+  EXPECT_TRUE(isEqualHash());
+}
+
+// The alignment will affect the hash value.
+TEST_F(VariableHash, CheckAlignment) {
+  GV0->setAlignment(1);
+  GV1->setAlignment(4);
+  EXPECT_FALSE(isEqualHash());
+}
+
+// The constant type will affect the hash value.
+TEST_F(VariableHash, CheckConstant) {
+  GV0->setConstant(false);
+  GV1->setConstant(true);
+  EXPECT_FALSE(isEqualHash());
+}
+
+// The initializr will affect the hash value.
+TEST_F(VariableHash, CheckInitializer) {
+  Type *Int8 = Type::getInt8Ty(Ctx);
+
+  Constant *Zero = ConstantInt::get(Int8, 0);
+  GV0->setInitializer(Zero);
+  EXPECT_FALSE(isEqualHash());
+
+  GV1->setInitializer(Zero);
+  EXPECT_TRUE(isEqualHash());
+
+  Constant *One = ConstantInt::get(Int8, 1);
+  GV1->setInitializer(One);
+  EXPECT_FALSE(isEqualHash());
+}
+
+// The value type will affect the hash value.
+TEST_F(VariableHash, CheckType) {
+  GV1 = new GlobalVariable(*M1, Type::getInt32Ty(Ctx), true,
+                           GlobalValue::ExternalLinkage, nullptr);
+  EXPECT_FALSE(isEqualHash());
 }

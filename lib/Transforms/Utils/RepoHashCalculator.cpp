@@ -318,6 +318,13 @@ void HashCalculator::hashGlobalValue(const GlobalValue *V) {
   }
 }
 
+void HashCalculator::hashModule(Module &M) {
+  Hash.update(HashKind::TAG_Datalayout);
+  hashMem(M.getDataLayoutStr());
+  Hash.update(HashKind::TAG_Triple);
+  hashMem(M.getTargetTriple());
+}
+
 std::string &HashCalculator::get(MD5::MD5Result &HashRes) {
   SmallString<32> Result;
   MD5::stringifyResult(HashRes, Result);
@@ -326,20 +333,20 @@ std::string &HashCalculator::get(MD5::MD5Result &HashRes) {
 }
 
 void FunctionHashCalculator::hashSignature(const Function *F) {
-  FnHash.Hash.update(HashKind::TAG_Signature);
+  update(HashKind::TAG_Signature);
   // TODO: review all the attributes to find the stardard c++ attributes to
   // affect the generated codes.
   FnHash.hashAttributeList(F->getAttributes());
   if (F->hasGC()) {
-    FnHash.Hash.update(HashKind::TAG_Signature_GC);
+    update(HashKind::TAG_Signature_GC);
     FnHash.hashMem(F->getGC());
   }
   if (F->hasSection()) {
-    FnHash.Hash.update(HashKind::TAG_Signature_Sec);
+    update(HashKind::TAG_Signature_Sec);
     FnHash.hashMem(F->getSection());
   }
-  FnHash.Hash.update(HashKind::TAG_Signature_VarArg);
-  FnHash.Hash.update(F->isVarArg());
+  update(HashKind::TAG_Signature_VarArg);
+  update(F->isVarArg());
 
   // Calling conventions may differ in where parameters, return values and
   // return addresses are placed (in registers, on the call stack, a mix of
@@ -350,32 +357,24 @@ void FunctionHashCalculator::hashSignature(const Function *F) {
   // conventions need to be considered.
   if (F->getFunctionType()->getNumParams() != 0 ||
       F->getReturnType()->getTypeID() == Type::VoidTyID) {
-    FnHash.Hash.update(HashKind::TAG_Signature_CC);
+    update(HashKind::TAG_Signature_CC);
     CallingConv::ID CC = F->getCallingConv();
-    FnHash.Hash.update(
-        ArrayRef<uint8_t>((uint8_t *)&CC, sizeof(CallingConv::ID)));
+    update(ArrayRef<uint8_t>((uint8_t *)&CC, sizeof(CallingConv::ID)));
   }
 
   FnHash.hashType(F->getFunctionType());
   // Visit the arguments so that they get enumerated in the order they're
   // passed in.
-  FnHash.Hash.update(HashKind::TAG_Signature_Arg);
+  update(HashKind::TAG_Signature_Arg);
   for (Function::const_arg_iterator ArgI = F->arg_begin(), ArgE = F->arg_end();
        ArgI != ArgE; ++ArgI) {
     FnHash.hashValue(&*ArgI);
   }
 }
 
-void FunctionHashCalculator::hashModule(Module &M) {
-  FnHash.Hash.update(HashKind::TAG_Datalayout);
-  FnHash.hashMem(M.getDataLayoutStr());
-  FnHash.Hash.update(HashKind::TAG_Triple);
-  FnHash.hashMem(M.getTargetTriple());
-}
-
 // Calculate either CallInst or InvokeInst instruction hash.
 void FunctionHashCalculator::hashOperandBundles(const Instruction *V) {
-  FnHash.Hash.update(HashKind::TAG_OperandBundles);
+  update(HashKind::TAG_OperandBundles);
   ImmutableCallSite VCS(V);
   assert(VCS && "Must not be empty!");
   assert((VCS.isCall() || VCS.isInvoke()) && "Must be calls or invokes!");
@@ -392,7 +391,7 @@ void FunctionHashCalculator::hashOperandBundles(const Instruction *V) {
 /// Accumulate the instruction hash. The opcodes, type, operand types, operands
 /// value and any other factors affecting the operation must be considered.
 void FunctionHashCalculator::hashInstruction(const Instruction *V) {
-  FnHash.Hash.update(HashKind::TAG_Instruction);
+  update(HashKind::TAG_Instruction);
   // Accumulate the hash of the instruction opcode.
   FnHash.hashNumber(V->getOpcode());
   // Instruction return type.
@@ -407,43 +406,43 @@ void FunctionHashCalculator::hashInstruction(const Instruction *V) {
 
   // special GetElementPtrInst instruction.
   if (const GetElementPtrInst *GEP = dyn_cast<GetElementPtrInst>(V)) {
-    FnHash.Hash.update(HashKind::TAG_GetElementPtrInst);
+    update(HashKind::TAG_GetElementPtrInst);
     FnHash.hashType(GEP->getSourceElementType());
     return;
   }
   // Check special state that is a part of some instructions.
   if (const AllocaInst *AI = dyn_cast<AllocaInst>(V)) {
-    FnHash.Hash.update(HashKind::TAG_AllocaInst);
+    update(HashKind::TAG_AllocaInst);
     FnHash.hashType(AI->getAllocatedType());
     FnHash.hashNumber(AI->getAlignment());
     return;
   }
   if (const LoadInst *LI = dyn_cast<LoadInst>(V)) {
-    FnHash.Hash.update(HashKind::TAG_LoadInst);
-    FnHash.Hash.update(LI->isVolatile());
+    update(HashKind::TAG_LoadInst);
+    update(LI->isVolatile());
     FnHash.hashNumber(LI->getAlignment());
     FnHash.hashOrdering(LI->getOrdering());
-    FnHash.Hash.update(LI->getSynchScope());
+    update(LI->getSynchScope());
     // FIXME: Is there any other Metadata need to be considered??
     FnHash.hashRangeMetadata(LI->getMetadata(LLVMContext::MD_range));
     return;
   }
   if (const StoreInst *SI = dyn_cast<StoreInst>(V)) {
-    FnHash.Hash.update(HashKind::TAG_StoreInst);
-    FnHash.Hash.update(SI->isVolatile());
+    update(HashKind::TAG_StoreInst);
+    update(SI->isVolatile());
     FnHash.hashNumber(SI->getAlignment());
     FnHash.hashOrdering(SI->getOrdering());
-    FnHash.Hash.update(SI->getSynchScope());
+    update(SI->getSynchScope());
     return;
   }
   if (const CmpInst *CI = dyn_cast<CmpInst>(V)) {
-    FnHash.Hash.update(HashKind::TAG_CmpInst);
-    FnHash.Hash.update(CI->getPredicate());
+    update(HashKind::TAG_CmpInst);
+    update(CI->getPredicate());
     return;
   }
   if (const CallInst *CI = dyn_cast<CallInst>(V)) {
-    FnHash.Hash.update(HashKind::TAG_CallInst);
-    FnHash.Hash.update(CI->isTailCall());
+    update(HashKind::TAG_CallInst);
+    update(CI->isTailCall());
     FnHash.hashAttributeList(CI->getAttributes());
     hashOperandBundles(CI);
     FnHash.hashRangeMetadata(CI->getMetadata(LLVMContext::MD_range));
@@ -453,7 +452,7 @@ void FunctionHashCalculator::hashInstruction(const Instruction *V) {
     return;
   }
   if (const InvokeInst *II = dyn_cast<InvokeInst>(V)) {
-    FnHash.Hash.update(HashKind::TAG_InvokeInst);
+    update(HashKind::TAG_InvokeInst);
     FnHash.hashNumber(II->getCallingConv());
     FnHash.hashAttributeList(II->getAttributes());
     hashOperandBundles(II);
@@ -464,44 +463,44 @@ void FunctionHashCalculator::hashInstruction(const Instruction *V) {
     return;
   }
   if (const InsertValueInst *IVI = dyn_cast<InsertValueInst>(V)) {
-    FnHash.Hash.update(HashKind::TAG_InsertValueInst);
+    update(HashKind::TAG_InsertValueInst);
     ArrayRef<unsigned> Indices = IVI->getIndices();
-    FnHash.Hash.update(ArrayRef<uint8_t>((uint8_t *)&Indices,
-                                         sizeof(unsigned) * Indices.size()));
+    update(ArrayRef<uint8_t>((uint8_t *)&Indices,
+                             sizeof(unsigned) * Indices.size()));
     return;
   }
   if (const ExtractValueInst *EVI = dyn_cast<ExtractValueInst>(V)) {
-    FnHash.Hash.update(HashKind::TAG_ExtractValueInst);
+    update(HashKind::TAG_ExtractValueInst);
     ArrayRef<unsigned> Indices = EVI->getIndices();
-    FnHash.Hash.update(ArrayRef<uint8_t>((uint8_t *)&Indices,
-                                         sizeof(unsigned) * Indices.size()));
+    update(ArrayRef<uint8_t>((uint8_t *)&Indices,
+                             sizeof(unsigned) * Indices.size()));
     return;
   }
   if (const FenceInst *FI = dyn_cast<FenceInst>(V)) {
-    FnHash.Hash.update(HashKind::TAG_FenceInst);
+    update(HashKind::TAG_FenceInst);
     FnHash.hashOrdering(FI->getOrdering());
-    FnHash.Hash.update(FI->getSynchScope());
+    update(FI->getSynchScope());
     return;
   }
   if (const AtomicCmpXchgInst *CXI = dyn_cast<AtomicCmpXchgInst>(V)) {
-    FnHash.Hash.update(HashKind::TAG_AtomicCmpXchgInst);
-    FnHash.Hash.update(CXI->isVolatile());
-    FnHash.Hash.update(CXI->isWeak());
+    update(HashKind::TAG_AtomicCmpXchgInst);
+    update(CXI->isVolatile());
+    update(CXI->isWeak());
     FnHash.hashOrdering(CXI->getSuccessOrdering());
     FnHash.hashOrdering(CXI->getFailureOrdering());
-    FnHash.Hash.update(CXI->getSynchScope());
+    update(CXI->getSynchScope());
     return;
   }
   if (const AtomicRMWInst *RMWI = dyn_cast<AtomicRMWInst>(V)) {
-    FnHash.Hash.update(HashKind::TAG_AtomicRMWInst);
-    FnHash.Hash.update(RMWI->getOperation());
-    FnHash.Hash.update(RMWI->isVolatile());
+    update(HashKind::TAG_AtomicRMWInst);
+    update(RMWI->getOperation());
+    update(RMWI->isVolatile());
     FnHash.hashOrdering(RMWI->getOrdering());
-    FnHash.Hash.update(RMWI->getSynchScope());
+    update(RMWI->getSynchScope());
     return;
   }
   if (const PHINode *PN = dyn_cast<PHINode>(V)) {
-    FnHash.Hash.update(HashKind::TAG_PHINode);
+    update(HashKind::TAG_PHINode);
     // Ensure that in addition to the incoming values being identical
     // (checked by the caller of this function), the incoming blocks
     // are also identical.
@@ -512,7 +511,7 @@ void FunctionHashCalculator::hashInstruction(const Instruction *V) {
 }
 
 void FunctionHashCalculator::hashBasicBlock(const BasicBlock *BB) {
-  FnHash.Hash.update(HashKind::TAG_BasicBlock);
+  update(HashKind::TAG_BasicBlock);
   BasicBlock::const_iterator Inst = BB->begin(), InstE = BB->end();
   do {
     hashInstruction(&*Inst);
@@ -522,8 +521,8 @@ void FunctionHashCalculator::hashBasicBlock(const BasicBlock *BB) {
 
 void FunctionHashCalculator::calculateHash(Module &M) {
   FnHash.beginCalculate();
-  FnHash.Hash.update(HashKind::TAG_GlobalFunction);
-  hashModule(M);
+  update(HashKind::TAG_GlobalFunction);
+  FnHash.hashModule(M);
   hashSignature(Fn);
 
   // We do a CFG-ordered walk since the actual ordering of the blocks in the
@@ -555,36 +554,29 @@ MD5::MD5Result FunctionHashCalculator::getHashResult() {
   return FnHash.getHashResult();
 }
 
-void VariableHashCalculator::hashModule(Module &M) {
-  GvHash.Hash.update(HashKind::TAG_Datalayout);
-  GvHash.hashMem(M.getDataLayoutStr());
-  GvHash.Hash.update(HashKind::TAG_Triple);
-  GvHash.hashMem(M.getTargetTriple());
-}
-
 // Calculate the global Variable hash value.
 void VariableHashCalculator::calculateHash(Module &M) {
-  GvHash.Hash.update(HashKind::TAG_GlobalVariable);
+  update(HashKind::TAG_GlobalVariable);
   GvHash.beginCalculate();
-  hashModule(M);
+  GvHash.hashModule(M);
   GvHash.hashType(Gv->getValueType());
   // If global variable is constant, accumulate the const attribute.
-  GvHash.Hash.update(HashKind::TAG_GVConstant);
-  GvHash.Hash.update(Gv->isConstant());
+  update(HashKind::TAG_GVConstant);
+  update(Gv->isConstant());
   // Accumulate the thread local mode.
-  GvHash.Hash.update(HashKind::TAG_GVThreadLocalMode);
-  GvHash.Hash.update(Gv->getThreadLocalMode());
+  update(HashKind::TAG_GVThreadLocalMode);
+  update(Gv->getThreadLocalMode());
   // Accumulate the alignment of global variable.
-  GvHash.Hash.update(HashKind::TAG_GVAlignment);
+  update(HashKind::TAG_GVAlignment);
   GvHash.hashNumber(Gv->getAlignment());
   // Accumulate an optional unnamed_addr or local_unnamed_addr attribute.
-  GvHash.Hash.update(HashKind::TAG_GVUnnamedAddr);
-  GvHash.Hash.update(static_cast<uint8_t>(Gv->getUnnamedAddr()));
+  update(HashKind::TAG_GVUnnamedAddr);
+  update(static_cast<uint8_t>(Gv->getUnnamedAddr()));
   if (Gv->hasName() && Gv->hasDefinitiveInitializer()) {
     // Global variable is constant type. Accumulate the initial value.
     // This accumulation also cover the "llvm.global_ctors",
     // "llvm.global_dtors", "llvm.used" and "llvm.compiler.used" cases.
-    GvHash.Hash.update(HashKind::TAG_GVInitValue);
+    update(HashKind::TAG_GVInitValue);
     GvHash.hashConstant(Gv->getInitializer());
   }
 }
