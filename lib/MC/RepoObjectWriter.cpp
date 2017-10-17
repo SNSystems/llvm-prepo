@@ -433,7 +433,7 @@ namespace {
 pstore::database &getDatabase() {
   static std::unique_ptr<pstore::database> Repository;
   if (!Repository) {
-    Repository.reset(new pstore::database("./clang.db", true /*writable*/));
+    Repository.reset(new pstore::database("./clang.db", pstore::database::access_mode::writable));
   }
   return *Repository;
 }
