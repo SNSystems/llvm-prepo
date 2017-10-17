@@ -15,6 +15,7 @@
 #include "llvm/IR/MDBuilder.h"
 #include "llvm/IR/Metadata.h"
 #include "llvm/IR/Module.h"
+#include "llvm/IR/RepoGlobals.h"
 #include "llvm/IR/RepoTicket.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/Error.h"
@@ -73,9 +74,7 @@ bool ProgramRepositoryPruning::runOnModule(Module &M) {
   bool Changed = false;
   MDBuilder MDB(M.getContext());
 
-  // FIXME: share an instance with the repo-writer back-end!
-  static pstore::database Repository(
-      "./clang.db", pstore::database::access_mode::writable);
+  pstore::database & Repository = getRepoDatabase ();
 
   MDNode *MD = nullptr;
   pstore::index::digest_index *Digests = Repository.get_digest_index(false);

@@ -46,6 +46,7 @@ add_llvm_library(LLVMCore
   PassRegistry.cpp
   SafepointIRVerifier.cpp
   ProfileSummary.cpp
+  RepoGlobals.cpp
   RepoTicket.cpp
   Statepoint.cpp
   Type.cpp
@@ -62,3 +63,5 @@ add_llvm_library(LLVMCore
   DEPENDS
   intrinsics_gen
   )
+
+target_link_libraries (LLVMCore PRIVATE pstore)

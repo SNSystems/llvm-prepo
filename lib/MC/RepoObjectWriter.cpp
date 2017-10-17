@@ -18,7 +18,7 @@
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringMap.h"
-
+#include "llvm/IR/RepoGlobals.h"
 #include "llvm/MC/MCAsmBackend.h"
 #include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/MCAsmLayout.h"
@@ -55,7 +55,6 @@ using namespace llvm;
 namespace {
 typedef DenseMap<const MCSectionRepo *, uint32_t> SectionIndexMapTy;
 
-using TransactionType = pstore::transaction<pstore::transaction_lock>;
 
 auto StringHash = [](StringRef s) { return HashString(s); };
 
@@ -430,16 +429,12 @@ void RepoObjectWriter::writeTicketNodes(const MCAssembler &Asm,
 
 namespace {
 
-pstore::database &getDatabase() {
-  static std::unique_ptr<pstore::database> Repository;
-  if (!Repository) {
-    Repository.reset(new pstore::database("./clang.db", pstore::database::access_mode::writable));
-  }
-  return *Repository;
-}
+using TransactionType = pstore::transaction<pstore::transaction_lock>;
 
-std::pair<pstore::database &, TransactionType &> getTransaction() {
-  pstore::database &Repository = getDatabase();
+/// Returns an active transaction on the pstore database, creating it if
+/// not already open.
+std::pair<pstore::database &, TransactionType &> getRepoTransaction() {
+  pstore::database &Repository = llvm::getRepoDatabase();
   static auto Transaction = pstore::begin(Repository);
   return {Repository, Transaction};
 }
@@ -494,7 +489,7 @@ void RepoObjectWriter::writeObject(MCAssembler &Asm,
   Names.insert(std::make_pair(OutputFile, pstore::address::null()));
 
   std::pair<pstore::database &, TransactionType &> DbTransact =
-      getTransaction();
+      getRepoTransaction();
   auto &Db = DbTransact.first;
   auto &Transaction = DbTransact.second;
 
