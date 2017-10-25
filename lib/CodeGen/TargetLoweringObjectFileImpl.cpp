@@ -715,11 +715,6 @@ static MCSectionRepo *selectRepoSectionForGlobal(MCContext &Ctx,
     assert(0);
   }
 
-  // Record the TicketNode.
-  if (const TicketNode *TN = getTicketNode(GO)) {
-    Ctx.addTicketNode(TN);
-  }
-
   return Ctx.getRepoSection(K, Digest);
 }
 

@@ -264,6 +264,21 @@ bool AsmPrinter::doInitialization(Module &M) {
   const Triple &Target = TM.getTargetTriple();
   OutStreamer->EmitVersionForTarget(Target);
 
+  // Pass global metadata 'repo.metadata' to OutContext.
+  if (TT.isOSBinFormatRepo()) {
+    if (NamedMDNode *Globals = M.getNamedMetadata("repo.tickets")) {
+      for (auto MDN : Globals->operands()) {
+        if (const TicketNode *TN = dyn_cast<TicketNode>(MDN)) {
+          OutContext.addTicketNode(TN);
+        } else {
+          report_fatal_error("Failed to get TicketNode metadata!");
+        }
+      }
+    } else {
+      report_fatal_error("Failed to get 'repo.tickets' module metadata!");
+    }
+  }
+
   // Allow the target to emit any magic that it wants at the start of the file.
   EmitStartOfAsmFile(M);
 

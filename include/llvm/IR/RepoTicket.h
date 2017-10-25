@@ -26,8 +26,9 @@ struct Digest {
   static constexpr size_t DigestSize = 16;
   using GlobalValueMap = std::map<const GlobalValue *, const DigestType>;
   static const Constant *getAliasee(const GlobalAlias *GA);
-  /// Set global object digest metadata value.
-  static void set(Module const &M, GlobalObject *GO, DigestType const &D);
+  /// Set global object ticket metadata value and add the metadata to
+  /// the module level metadta named repo.tickets.
+  static void set(Module &M, GlobalObject *GO, DigestType const &D);
   /// Get global object digest metadata value.
   static DigestType get(const GlobalObject *GO);
 };

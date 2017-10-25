@@ -384,6 +384,7 @@ public:
 
     visitModuleFlags(M);
     visitModuleIdents(M);
+    visitModuleTickets(M);
 
     verifyCompileUnits();
 
@@ -411,6 +412,7 @@ private:
                        DenseMap<const MDString *, const MDNode *> &SeenIDs,
                        SmallVectorImpl<const MDNode *> &Requirements);
   void visitModuleFlagCGProfileEntry(const MDOperand &MDO);
+  void visitModuleTickets(const Module &M);
   void visitFunction(const Function &F);
   void visitBasicBlock(BasicBlock &BB);
   void visitRangeMetadata(Instruction &I, MDNode *Range, Type *Ty);
@@ -1470,6 +1472,21 @@ void Verifier::visitModuleFlagCGProfileEntry(const MDOperand &MDO) {
   auto Count = dyn_cast_or_null<ConstantAsMetadata>(Node->getOperand(2));
   Assert(Count && Count->getType()->isIntegerTy(),
          "expected an integer constant", Node->getOperand(2));
+}
+
+void Verifier::visitModuleTickets(const Module &M) {
+  const NamedMDNode *Tickets = M.getNamedMetadata("repo.tickets");
+  if (!Tickets)
+    return;
+
+  // repo.tickets takes a list of metadata entry. Each entry has one TicketNode.
+  // Scan each repo.tickets entry and make sure that this requirement is met.
+  for (const MDNode *N : Tickets->operands()) {
+    Assert(dyn_cast_or_null<TicketNode>(N),
+           ("invalid value for repo.tickets metadata entry operand"
+            " (the operand should be a ticket node)"),
+           N);
+  }
 }
 
 /// Return true if this attribute kind only applies to functions.
