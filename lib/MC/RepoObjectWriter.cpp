@@ -56,8 +56,6 @@ namespace {
 typedef DenseMap<const MCSectionRepo *, uint32_t> SectionIndexMapTy;
 
 
-auto StringHash = [](StringRef s) { return HashString(s); };
-
 class RepoObjectWriter : public MCObjectWriter {
 
   /// The target specific repository writer instance.
@@ -69,8 +67,11 @@ class RepoObjectWriter : public MCObjectWriter {
 
   // Note that I don't use StringMap because we take pointers into this
   // structure that must survive insertion.
-  using ModuleNamesContainer =
-      std::unordered_map<StringRef, pstore::address, decltype(StringHash)>;
+  // TODO: Compare the performance between std::map and std::unordered_map. If
+  // the std::unordered_map operation is faster than std::unordered_map, we
+  // should use the std::unordered_map and store the ordered module string set
+  // into the database later.
+  using ModuleNamesContainer = std::map<StringRef, pstore::address>;
 
   std::map<Digest::DigestType,
            SmallVector<std::unique_ptr<pstore::repo::section_content>, 4>>
@@ -464,7 +465,7 @@ void RepoObjectWriter::writeObject(MCAssembler &Asm,
   // Write out the ticket file ...
   writeTicketFile(Asm);
 
-  ModuleNamesContainer Names{100, StringHash};
+  ModuleNamesContainer Names;
 
   raw_fd_ostream &TempStream = static_cast<raw_fd_ostream &>(getStream());
 
