@@ -55,9 +55,9 @@
 ; Next we break out of the main Function passes inside the CGSCC pipeline with
 ; a barrier pass.
 ; CHECK-O2: A No-Op Barrier Pass
-; Calculate program repository digest ASAP after the inliner.
-; CHECK-O2-NEXT: PrepoDigestPass
-; CHECK-O2-NEXT: PrepoPruningPass
+; Calculate program repository ticket ASAP after the inliner.
+; CHECK-O2-NEXT: RepoTicketGenerationPass
+; CHECK-O2-NEXT: RepoPruningPass
 ; Reduce the size of the IR ASAP after the inliner.
 ; CHECK-O2-NEXT: Eliminate Available Externally
 ; Inferring function attribute should be right after the CGSCC pipeline, before

@@ -432,8 +432,8 @@ void PassManagerBuilder::populateModulePassManager(
       Inliner = nullptr;
     }
 
-    MPM.add(createProgramRepositoryPass());
-    MPM.add(createProgramRepositoryPruningPass());
+    MPM.add(createRepoTicketGenerationPass());
+    MPM.add(createRepoPruningPass());
 
     // FIXME: The BarrierNoopPass is a HACK! The inliner pass above implicitly
     // creates a CGSCC pass manager, but we don't want to add extensions into
@@ -546,8 +546,8 @@ void PassManagerBuilder::populateModulePassManager(
   if (RunPartialInlining)
     MPM.add(createPartialInliningPass());
 
-  MPM.add(createProgramRepositoryPass());
-  MPM.add(createProgramRepositoryPruningPass());
+  MPM.add(createRepoTicketGenerationPass());
+  MPM.add(createRepoPruningPass());
 
   if (OptLevel > 1 && !PrepareForLTO && !PrepareForThinLTO)
     // Remove avail extern fns and globals definitions if we aren't

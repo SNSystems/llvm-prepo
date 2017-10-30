@@ -26,9 +26,9 @@ add_llvm_library(LLVMipo
   MergeFunctions.cpp
   PartialInlining.cpp
   PassManagerBuilder.cpp
-  ProgramRepository.cpp
-  ProgramRepositoryPruning.cpp
   PruneEH.cpp
+  RepoPruning.cpp
+  RepoTicketGeneration.cpp
   SampleProfile.cpp
   SCCP.cpp
   StripDeadPrototypes.cpp

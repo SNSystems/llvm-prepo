@@ -1,4 +1,4 @@
-//===- ProgramRepository.cpp - Create a program repository ----------------===//
+//===----    RepoTicketGeneration.cpp - Create a program repository   -----===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -32,23 +32,20 @@ STATISTIC(NumAliases, "Number of aliases hashed");
 
 namespace {
 
-/// ProgramRepository finds functions, gloabal variables and calculate the hash
-/// values.
-class ProgramRepository : public ModulePass {
+/// RepoTicketGeneration finds functions, gloabal variables and calculate the 
+/// hash values.
+class RepoTicketGeneration : public ModulePass {
 public:
   static char ID;
-  ProgramRepository() : ModulePass(ID), HasGlobalAliases(false) {
-    initializeProgramRepositoryPass(*PassRegistry::getPassRegistry());
+  RepoTicketGeneration() : ModulePass(ID) {
+    initializeRepoTicketGenerationPass(*PassRegistry::getPassRegistry());
   }
 
-  StringRef getPassName() const override { return "PrepoDigestPass"; }
+  StringRef getPassName() const override { return "RepoTicketGenerationPass"; }
 
   bool runOnModule(Module &M) override;
 
 private:
-  /// Whether or not the target supports global aliases.
-  bool HasGlobalAliases;
-
   bool isObjFormatRepo(Module &M) const {
     return Triple(M.getTargetTriple()).isOSBinFormatRepo();
   }
@@ -56,12 +53,12 @@ private:
 
 } // end anonymous namespace
 
-char ProgramRepository::ID = 0;
-INITIALIZE_PASS(ProgramRepository, "prepo", "Create Program Repository", false,
-                false)
+char RepoTicketGeneration::ID = 0;
+INITIALIZE_PASS(RepoTicketGeneration, "prepo",
+                "Generate Program Repository Tickets", false, false)
 
-ModulePass *llvm::createProgramRepositoryPass() {
-  return new ProgramRepository();
+ModulePass *llvm::createRepoTicketGenerationPass() {
+  return new RepoTicketGeneration();
 }
 
 using GlobalValueMap = Digest::GlobalValueMap;
@@ -96,7 +93,7 @@ static void setMetadata(Module &M, T &GO, GlobalValueMap &DigestMap,
   ++Num;
 }
 
-bool ProgramRepository::runOnModule(Module &M) {
+bool RepoTicketGeneration::runOnModule(Module &M) {
   if (skipModule(M) || !isObjFormatRepo(M))
     return false;
 

@@ -1,4 +1,4 @@
-//===----  ProgramRepositoryPruning.cpp - Program repository pruning  ----===//
+//===----  RepoPruning.cpp - Program repository pruning  ----===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -35,15 +35,15 @@ STATISTIC(NumVariables, "Number of variables removed");
 
 namespace {
 
-/// ProgramRepositoryPruning removes the redundant global objects.
-class ProgramRepositoryPruning : public ModulePass {
+/// RepoPruning removes the redundant global objects.
+class RepoPruning : public ModulePass {
 public:
   static char ID;
-  ProgramRepositoryPruning() : ModulePass(ID) {
-    initializeProgramRepositoryPass(*PassRegistry::getPassRegistry());
+  RepoPruning() : ModulePass(ID) {
+    initializeRepoPruningPass(*PassRegistry::getPassRegistry());
   }
 
-  StringRef getPassName() const override { return "PrepoPruningPass"; }
+  StringRef getPassName() const override { return "RepoPruningPass"; }
 
   bool runOnModule(Module &M) override;
 
@@ -55,26 +55,24 @@ private:
 
 } // end anonymous namespace
 
-char ProgramRepositoryPruning::ID = 0;
-INITIALIZE_PASS(ProgramRepositoryPruning, "prepo-pruning",
+char RepoPruning::ID = 0;
+INITIALIZE_PASS(RepoPruning, "prepo-pruning",
                 "Program Repository Global Object Pruning", false, false)
 
-ModulePass *llvm::createProgramRepositoryPruningPass() {
-  return new ProgramRepositoryPruning();
-}
+ModulePass *llvm::createRepoPruningPass() { return new RepoPruning(); }
 
 using GlobalObjectMap =
     std::map<const GlobalObject *, const Digest::DigestType>;
 using GlobalValueMap = Digest::GlobalValueMap;
 
-bool ProgramRepositoryPruning::runOnModule(Module &M) {
+bool RepoPruning::runOnModule(Module &M) {
   if (skipModule(M) || !isObjFormatRepo(M))
     return false;
 
   bool Changed = false;
   MDBuilder MDB(M.getContext());
 
-  pstore::database & Repository = getRepoDatabase ();
+  pstore::database &Repository = getRepoDatabase();
 
   MDNode *MD = nullptr;
   pstore::index::digest_index *Digests = Repository.get_digest_index(false);

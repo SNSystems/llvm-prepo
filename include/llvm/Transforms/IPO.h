@@ -204,12 +204,12 @@ ModulePass *createMergeFunctionsPass();
 //===----------------------------------------------------------------------===//
 /// This pass generates ticket metadata nodes for the program repository.
 ///
-ModulePass *createProgramRepositoryPass();
+ModulePass *createRepoTicketGenerationPass();
 
 //===----------------------------------------------------------------------===//
 /// This pass prunes global objects which are already in the program repository.
 ///
-ModulePass *createProgramRepositoryPruningPass();
+ModulePass *createRepoPruningPass();
 
 //===----------------------------------------------------------------------===//
 /// createPartialInliningPass - This pass inlines parts of functions.
