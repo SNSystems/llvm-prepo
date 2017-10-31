@@ -55,7 +55,6 @@ using namespace llvm;
 namespace {
 typedef DenseMap<const MCSectionRepo *, uint32_t> SectionIndexMapTy;
 
-
 class RepoObjectWriter : public MCObjectWriter {
 
   /// The target specific repository writer instance.
@@ -139,6 +138,9 @@ public:
                         const MCAsmLayout &Layout, ModuleNamesContainer &Names);
 
   void writeTicketNodes(const MCAssembler &Asm, ModuleNamesContainer &Names);
+
+  static pstore::repo::linkage_type
+  toPstoreLinkage(GlobalValue::LinkageTypes L);
 
   bool isSymbolRefDifferenceFullyResolvedImpl(const MCAssembler &Asm,
                                               const MCSymbol &SymA,
@@ -321,11 +323,11 @@ void RepoObjectWriter::writeSectionData(const MCAssembler &Asm, MCSection &Sec,
                                         const MCAsmLayout &Layout,
                                         ModuleNamesContainer &Names) {
   auto &Section = static_cast<MCSectionRepo &>(Sec);
-  // A "dummy" section is created to provide a default for the assembler but we don't
-  // write it to the repository.
-  if (Section.isDummy ()) {
-      // TODO: warn if the dummy section is not empty.
-      return;
+  // A "dummy" section is created to provide a default for the assembler but we
+  // don't write it to the repository.
+  if (Section.isDummy()) {
+    // TODO: warn if the dummy section is not empty.
+    return;
   }
 
   auto St = pstore::repo::section_type::Data;
@@ -409,22 +411,40 @@ void RepoObjectWriter::writeSectionData(const MCAssembler &Asm, MCSection &Sec,
   }
 }
 
+pstore::repo::linkage_type
+RepoObjectWriter::toPstoreLinkage(GlobalValue::LinkageTypes L) {
+  switch (L) {
+  case GlobalValue::ExternalLinkage:
+    return pstore::repo::linkage_type::external;
+  case GlobalValue::LinkOnceAnyLinkage:
+  case GlobalValue::LinkOnceODRLinkage:
+    return pstore::repo::linkage_type::linkonce;
+  case GlobalValue::InternalLinkage:
+    return pstore::repo::linkage_type::internal;
+  case GlobalValue::CommonLinkage:
+    return pstore::repo::linkage_type::common;
+  default:
+    report_fatal_error("Unsupported linkage type");
+  }
+}
+
 void RepoObjectWriter::writeTicketNodes(const MCAssembler &Asm,
                                         ModuleNamesContainer &Names) {
   // Record the TicketMember for this RepoSection.
   auto &TC = TicketContents[Header.uuid];
   for (const TicketNode *Ticket : Asm.getContext().getTickets()) {
+    Digest::DigestType D = Ticket->getDigest();
+    // Insert this name into the module-wide string set. This set is later added
+    // to the whole-program string set and the ticket name addresses corrected at
+    // that time.
     auto It = Names
                   .insert(std::make_pair(Ticket->getNameAsString(),
                                          pstore::address::null()))
                   .first;
+    // We're storing pointer to the string address into the ticket.
     auto NamePtr = reinterpret_cast<std::uintptr_t>(&(*It));
-    TC.push_back(pstore::repo::ticket_member{
-        pstore::index::uint128{Ticket->getDigest().high(),
-                               Ticket->getDigest().low()},
-        {NamePtr},
-        static_cast<uint8_t>(Ticket->getLinkage()),
-        Ticket->isComdat()});
+    TC.emplace_back(pstore::index::uint128{D.high(), D.low()}, pstore::address{NamePtr},
+                    toPstoreLinkage(Ticket->getLinkage()));
   }
 }
 
@@ -474,8 +494,8 @@ void RepoObjectWriter::writeObject(MCAssembler &Asm,
   std::error_code ErrorCode =
       sys::fs::getPathFromOpenFD(TempStream.get_fd(), ResultPath);
   if (ErrorCode) {
-    report_fatal_error(
-        "TicketNode: Invalid output file path: " + ErrorCode.message() + ".");
+    report_fatal_error("TicketNode: Invalid output file path: " +
+                       ErrorCode.message() + ".");
   }
   OutputFile = ResultPath.str();
   DEBUG(dbgs() << "path: " << OutputFile << "\n");

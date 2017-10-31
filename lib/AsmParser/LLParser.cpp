@@ -4825,20 +4825,19 @@ bool LLParser::ParseDIImportedEntity(MDNode *&Result, bool IsDistinct) {
 }
 
 /// ParseTicketNode:
-///   ::= !TicketNode(name: "foo", digest: !0, linkage: 0, isComdat: false)
+///   ::= !TicketNode(name: "foo", digest: !0, linkage: 0)
 bool LLParser::ParseTicketNode(MDNode *&Result, bool IsDistinct) {
 #define VISIT_MD_FIELDS(OPTIONAL, REQUIRED)                                    \
   REQUIRED(name, MDStringField, );                                             \
   REQUIRED(digest, MDField, );                                                 \
-  REQUIRED(linkage, LinkageField, );                                           \
-  REQUIRED(isComdat, ComdatField, );
+  REQUIRED(linkage, LinkageField, );
   PARSE_MD_FIELDS();
 #undef VISIT_MD_FIELDS
 
   Result = GET_OR_DISTINCT(
       TicketNode,
       (Context, name.Val, dyn_cast<ConstantAsMetadata>(digest.Val),
-       static_cast<GlobalValue::LinkageTypes>(linkage.Val), isComdat.Val));
+       static_cast<GlobalValue::LinkageTypes>(linkage.Val)));
   return false;
 }
 

@@ -1864,7 +1864,6 @@ void ModuleBitcodeWriter::writeTicketNode(const TicketNode *N,
   Record.push_back(VE.getMetadataID(N->getNameAsMD()));
   Record.push_back(VE.getMetadataID(N->getDigestAsMD()));
   Record.push_back(N->getLinkage());
-  Record.push_back(N->isComdat());
 
   Stream.EmitRecord(bitc::METADATA_TICKETNODE, Record, Abbrev);
   Record.clear();

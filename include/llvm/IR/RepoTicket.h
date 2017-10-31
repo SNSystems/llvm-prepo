@@ -51,91 +51,84 @@ class TicketNode : public MDNode {
   };
 
   TicketNode(LLVMContext &C, StorageType Storage,
-             GlobalValue::LinkageTypes Linkage, bool IsComdat,
+             GlobalValue::LinkageTypes Linkage,
              ArrayRef<Metadata *> MDs)
       : MDNode(C, TicketNodeKind, Storage, MDs) {
     assert(MDs.size() == 2 && "Expected a hash and name.");
     static_assert(CheckLinkageType::isSafeCast(),
                   "Linkage type will overflow!");
     SubclassData32 = static_cast<unsigned>(Linkage);
-    SubclassData16 = static_cast<unsigned short>(IsComdat);
   }
   ~TicketNode() { dropAllReferences(); }
 
   static TicketNode *getImpl(LLVMContext &Context, MDString *Name,
                              ConstantAsMetadata *GVHash,
-                             GlobalValue::LinkageTypes Linkage, bool IsComdat,
+                             GlobalValue::LinkageTypes Linkage,
                              StorageType Storage, bool ShouldCreate = true);
 
   static TicketNode *getImpl(LLVMContext &Context, StringRef Name,
                              Digest::DigestType const &Digest,
-                             GlobalValue::LinkageTypes Linkage, bool IsComdat,
+                             GlobalValue::LinkageTypes Linkage,
                              StorageType Storage, bool ShouldCreate = true);
 
   TempTicketNode cloneImpl() const {
     // Get the raw name/hash since it is possible to invoke this on
     // a TicketNode containing temporary metadata.
     return getTemporary(getContext(), getNameAsString(), getDigest(),
-                        getLinkage(), isComdat());
+                        getLinkage());
   }
 
 public:
   static TicketNode *get(LLVMContext &Context, MDString *Name,
                          ConstantAsMetadata *GVHash,
-                         GlobalValue::LinkageTypes Linkage, bool IsComdat) {
-    return getImpl(Context, Name, GVHash, Linkage, IsComdat, Uniqued);
+                         GlobalValue::LinkageTypes Linkage) {
+    return getImpl(Context, Name, GVHash, Linkage, Uniqued);
   }
 
   static TicketNode *get(LLVMContext &Context, StringRef Name,
                          Digest::DigestType const &Digest,
-                         GlobalValue::LinkageTypes Linkage, bool IsComdat) {
-    return getImpl(Context, Name, Digest, Linkage, IsComdat, Uniqued);
+                         GlobalValue::LinkageTypes Linkage) {
+    return getImpl(Context, Name, Digest, Linkage, Uniqued);
   }
 
   static TicketNode *getIfExists(LLVMContext &Context, MDString *Name,
                                  ConstantAsMetadata *GVHash,
-                                 GlobalValue::LinkageTypes Linkage,
-                                 bool IsComdat) {
-    return getImpl(Context, Name, GVHash, Linkage, IsComdat, Uniqued,
+                                 GlobalValue::LinkageTypes Linkage) {
+    return getImpl(Context, Name, GVHash, Linkage, Uniqued,
                    /* ShouldCreate */ false);
   }
 
   static TicketNode *getIfExists(LLVMContext &Context, StringRef Name,
                                  Digest::DigestType const &Digest,
-                                 GlobalValue::LinkageTypes Linkage,
-                                 bool IsComdat) {
-    return getImpl(Context, Name, Digest, Linkage, IsComdat, Uniqued,
+                                 GlobalValue::LinkageTypes Linkage) {
+    return getImpl(Context, Name, Digest, Linkage, Uniqued,
                    /* ShouldCreate */ false);
   }
 
   static TicketNode *getDistinct(LLVMContext &Context, MDString *Name,
                                  ConstantAsMetadata *GVHash,
-                                 GlobalValue::LinkageTypes Linkage,
-                                 bool IsComdat) {
-    return getImpl(Context, Name, GVHash, Linkage, IsComdat, Distinct);
+                                 GlobalValue::LinkageTypes Linkage) {
+    return getImpl(Context, Name, GVHash, Linkage, Distinct);
   }
 
   static TicketNode *getDistinct(LLVMContext &Context, StringRef Name,
                                  Digest::DigestType const &Digest,
-                                 GlobalValue::LinkageTypes Linkage,
-                                 bool IsComdat) {
-    return getImpl(Context, Name, Digest, Linkage, IsComdat, Distinct);
+                                 GlobalValue::LinkageTypes Linkage) {
+    return getImpl(Context, Name, Digest, Linkage, Distinct);
   }
 
   static TempTicketNode getTemporary(LLVMContext &Context, MDString *Name,
                                      ConstantAsMetadata *GVHash,
-                                     GlobalValue::LinkageTypes Linkage,
-                                     bool IsComdat) {
+                                     GlobalValue::LinkageTypes Linkage) {
     return TempTicketNode(
-        getImpl(Context, Name, GVHash, Linkage, IsComdat, Temporary));
+        getImpl(Context, Name, GVHash, Linkage, Temporary));
   }
 
   static TempTicketNode getTemporary(LLVMContext &Context, StringRef Name,
                                      Digest::DigestType const &Digest,
-                                     GlobalValue::LinkageTypes Linkage,
-                                     bool IsComdat) {
+                                     GlobalValue::LinkageTypes Linkage) {
     return TempTicketNode(
-        getImpl(Context, Name, Digest, Linkage, IsComdat, Temporary));
+        getImpl(Context, Name, Digest, Linkage, Temporary));
   }
 
   /// Return a (temporary) clone of this.
@@ -144,7 +137,6 @@ public:
   GlobalValue::LinkageTypes getLinkage() const {
     return static_cast<GlobalValue::LinkageTypes>(SubclassData32);
   }
-  bool isComdat() const { return static_cast<bool>(SubclassData16); }
 
   Metadata *getNameAsMD() const { return getOperand(0); }
   MDString *getNameAsMDString() const { return cast<MDString>(getNameAsMD()); }

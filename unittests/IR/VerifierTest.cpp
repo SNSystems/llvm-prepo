@@ -223,8 +223,7 @@ TEST(VerifierTest, TicketNodeVariable) {
   // Valid TicketNode.
   GV->setMetadata(LLVMContext::MD_fragment,
                   MDB.createTicketNode(GV->getName(), Digest::DigestType(),
-                                       GV->getLinkage(),
-                                       GV->getComdat() != nullptr));
+                                       GV->getLinkage()));
   EXPECT_FALSE(verifyModule(M));
 }
 
@@ -237,8 +236,7 @@ TEST(VerifierTest, TicketNodeFunction) {
   // Valid global variable name.
   Func->setMetadata(LLVMContext::MD_fragment,
                     MDB.createTicketNode(Func->getName(), Digest::DigestType(),
-                                         Func->getLinkage(),
-                                         Func->getComdat() != nullptr));
+                                         Func->getLinkage()));
   EXPECT_FALSE(verifyModule(M));
 }
 

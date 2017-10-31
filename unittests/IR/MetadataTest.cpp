@@ -2260,9 +2260,8 @@ typedef MetadataTest TicketNodeTest;
 TEST_F(TicketNodeTest, get) {
   Digest::DigestType Digest = getDigest();
   TicketNode *D = TicketNode::get(Context, "foo", Digest,
-                                  GlobalValue::ExternalLinkage, false);
+                                  GlobalValue::ExternalLinkage);
   EXPECT_EQ(GlobalValue::ExternalLinkage, D->getLinkage());
-  EXPECT_EQ(false, D->isComdat());
   EXPECT_EQ("foo", D->getNameAsString());
   EXPECT_EQ(Digest, D->getDigest());
   EXPECT_TRUE(D->isUniqued());
@@ -2271,21 +2270,21 @@ TEST_F(TicketNodeTest, get) {
 TEST_F(TicketNodeTest, getDistinct) {
   Digest::DigestType Digest = getDigest();
   TicketNode *L0 = TicketNode::getDistinct(
-      Context, "foo", Digest, GlobalValue::LinkageTypes::InternalLinkage, true);
+      Context, "foo", Digest, GlobalValue::LinkageTypes::InternalLinkage);
   EXPECT_TRUE(L0->isDistinct());
   TicketNode *L1 = TicketNode::get(
-      Context, "foo", Digest, GlobalValue::LinkageTypes::InternalLinkage, true);
+      Context, "foo", Digest, GlobalValue::LinkageTypes::InternalLinkage);
   EXPECT_FALSE(L1->isDistinct());
   EXPECT_NE(L1, L0);
   EXPECT_EQ(L1,
             TicketNode::get(Context, "foo", Digest,
-                            GlobalValue::LinkageTypes::InternalLinkage, true));
+                            GlobalValue::LinkageTypes::InternalLinkage));
 }
 
 TEST_F(TicketNodeTest, getTemporary) {
   Digest::DigestType Digest = getDigest();
   auto L = TicketNode::getTemporary(
-      Context, "foo", Digest, GlobalValue::LinkageTypes::InternalLinkage, true);
+      Context, "foo", Digest, GlobalValue::LinkageTypes::InternalLinkage);
   EXPECT_TRUE(L->isTemporary());
   EXPECT_FALSE(L->isResolved());
 }
@@ -2293,7 +2292,7 @@ TEST_F(TicketNodeTest, getTemporary) {
 TEST_F(TicketNodeTest, cloneTemporary) {
   Digest::DigestType Digest = getDigest();
   auto L = TicketNode::getTemporary(
-      Context, "foo", Digest, GlobalValue::LinkageTypes::InternalLinkage, true);
+      Context, "foo", Digest, GlobalValue::LinkageTypes::InternalLinkage);
   EXPECT_TRUE(L->isTemporary());
   auto L2 = L->clone();
   EXPECT_TRUE(L2->isTemporary());
