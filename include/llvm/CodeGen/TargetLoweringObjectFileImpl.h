@@ -136,8 +136,7 @@ public:
 
 class TargetLoweringObjectFileRepo : public TargetLoweringObjectFile {
 public:
-  ~TargetLoweringObjectFileRepo() override;
-  TargetLoweringObjectFileRepo();
+  ~TargetLoweringObjectFileRepo() override = default;
 
   MCSection *getExplicitSectionGlobal(const GlobalObject *GO, SectionKind Kind,
                                       const TargetMachine &TM) const override;

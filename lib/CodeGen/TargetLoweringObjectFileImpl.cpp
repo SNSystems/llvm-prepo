@@ -665,8 +665,16 @@ TargetLoweringObjectFileELF::InitializeELF(bool UseInitArray_) {
 //                                 Program Repository
 //===----------------------------------------------------------------------===//
 
-TargetLoweringObjectFileRepo::~TargetLoweringObjectFileRepo() {}
-TargetLoweringObjectFileRepo::TargetLoweringObjectFileRepo() {}
+static const TicketNode *getTicketNode(const GlobalObject *GO) {
+  // Read the fragment metadata from global object.
+  llvm::MDNode *MD = GO->getMetadata(LLVMContext::MD_fragment);
+  if (!MD)
+    return nullptr;
+  const TicketNode *TN = dyn_cast<TicketNode>(MD);
+  if (!TN)
+    report_fatal_error("MD_fragment type is not TicketNode!");
+  return TN;
+}
 
 MCSection *TargetLoweringObjectFileRepo::getExplicitSectionGlobal(
     const GlobalObject *GO, SectionKind Kind, const TargetMachine &TM) const {
