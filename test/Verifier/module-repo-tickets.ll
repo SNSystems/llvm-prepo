@@ -5,7 +5,7 @@
 
 !repo.tickets = !{!0, !1}
 
-!0 = !TicketNode(name: "factorial", digest: [16 x i8] c"+Th8\90\1D\9E/\A3\CF=\01\B3<v\DB", linkage: external, isComdat: false)
+!0 = !TicketNode(name: "factorial", digest: [16 x i8] c"+Th8\90\1D\9E/\A3\CF=\01\B3<v\DB", linkage: external)
 
 !1 = !{i32 1}
 ; CHECK: assembly parsed, but does not verify as correct!
