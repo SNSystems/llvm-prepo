@@ -26,10 +26,8 @@ class MCInst;
 
 class MCRepoStreamer : public MCObjectStreamer {
 public:
-  MCRepoStreamer::MCRepoStreamer(MCContext &Context,
-                                 std::unique_ptr<MCAsmBackend> TAB,
-                                 raw_pwrite_stream &OS,
-                                 std::unique_ptr<MCCodeEmitter> Emitter)
+  MCRepoStreamer(MCContext &Context, std::unique_ptr<MCAsmBackend> TAB,
+                 raw_pwrite_stream &OS, std::unique_ptr<MCCodeEmitter> Emitter)
       : MCObjectStreamer(Context, std::move(TAB), OS, std::move(Emitter)) {}
 
   ~MCRepoStreamer() override;
