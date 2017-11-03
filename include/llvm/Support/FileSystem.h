@@ -844,6 +844,12 @@ std::error_code
 getPotentiallyUniqueTempFileName(const Twine &Prefix, StringRef Suffix,
                                  SmallVectorImpl<char> &ResultPath);
 
+/// @brief Fetch a path to an open file, as specified by a file descriptor
+///
+/// @param FD File descriptor to a currently open file
+/// @param ResultPath The buffer into which to write the path
+std::error_code getPathFromOpenFD(int FD, SmallVectorImpl<char> &ResultPath);
+
 inline OpenFlags operator|(OpenFlags A, OpenFlags B) {
   return OpenFlags(unsigned(A) | unsigned(B));
 }

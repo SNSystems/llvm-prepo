@@ -12,6 +12,7 @@
 #include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCExpr.h"
+#include "llvm/MC/MCObjectWriter.h"
 #include "llvm/MC/MCRepoObjectWriter.h"
 #include "llvm/MC/MCValue.h"
 #include "llvm/Support/ErrorHandling.h"
@@ -89,6 +90,7 @@ static unsigned getRelocType64(MCContext &Ctx, SMLoc Loc,
   default:
     llvm_unreachable("Unimplemented");
   case MCSymbolRefExpr::VK_None:
+  case MCSymbolRefExpr::VK_X86_ABS8:
     switch (Type) {
     case RT64_64:
       return IsPCRel ? ELF::R_X86_64_PC64 : ELF::R_X86_64_64;
@@ -212,6 +214,7 @@ static unsigned getRelocType32(MCContext &Ctx,
   default:
     llvm_unreachable("Unimplemented");
   case MCSymbolRefExpr::VK_None:
+  case MCSymbolRefExpr::VK_X86_ABS8:
     switch (Type) {
     case RT32_32:
       return IsPCRel ? ELF::R_386_PC32 : ELF::R_386_32;
@@ -289,8 +292,8 @@ unsigned X86RepoObjectWriter::getRelocType(MCContext &Ctx,
   return getRelocType32(Ctx, Modifier, getType32(Type), IsPCRel, Kind);
 }
 
-MCObjectWriter *llvm::createX86RepoObjectWriter(raw_pwrite_stream &OS,
-                                                uint16_t EMachine) {
-  auto *MOTW = new X86RepoObjectWriter(EMachine);
-  return createRepoObjectWriter(MOTW, OS, /*IsLittleEndian=*/true);
+std::unique_ptr<MCObjectWriter>
+llvm::createX86RepoObjectWriter(raw_pwrite_stream &OS, uint16_t EMachine) {
+  auto MOTW = llvm::make_unique<X86RepoObjectWriter>(EMachine);
+  return createRepoObjectWriter(std::move(MOTW), OS, /*IsLittleEndian=*/true);
 }

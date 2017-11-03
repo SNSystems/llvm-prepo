@@ -10,7 +10,8 @@
 #ifndef LLVM_MC_MCREPOSTREAMER_H
 #define LLVM_MC_MCREPOSTREAMER_H
 
-#include "llvm/ADT/SmallPtrSet.h"
+#include "llvm/ADT/SmallVector.h"
+#include "llvm/MC/MCAsmBackend.h"
 #include "llvm/MC/MCDirectives.h"
 #include "llvm/MC/MCObjectStreamer.h"
 #include "llvm/MC/SectionKind.h"
@@ -19,17 +20,17 @@
 namespace llvm {
 
 class MCAsmBackend;
-class MCAssembler;
 class MCCodeEmitter;
 class MCExpr;
 class MCInst;
-class raw_ostream;
 
 class MCRepoStreamer : public MCObjectStreamer {
 public:
-  MCRepoStreamer(MCContext &Context, MCAsmBackend &TAB, raw_pwrite_stream &OS,
-                 MCCodeEmitter *Emitter)
-      : MCObjectStreamer(Context, TAB, OS, Emitter) {}
+  MCRepoStreamer::MCRepoStreamer(MCContext &Context,
+                                 std::unique_ptr<MCAsmBackend> TAB,
+                                 raw_pwrite_stream &OS,
+                                 std::unique_ptr<MCCodeEmitter> Emitter)
+      : MCObjectStreamer(Context, std::move(TAB), OS, std::move(Emitter)) {}
 
   ~MCRepoStreamer() override;
 

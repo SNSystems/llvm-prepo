@@ -447,7 +447,8 @@ public:
   RepoX86_64AsmBackend(const Target &T, StringRef CPU)
       : RepoX86AsmBackend(T, CPU) {}
 
-  MCObjectWriter *createObjectWriter(raw_pwrite_stream &OS) const override {
+  std::unique_ptr<MCObjectWriter>
+  createObjectWriter(raw_pwrite_stream &OS) const override {
     return createX86RepoObjectWriter(OS, ELF::EM_X86_64);
   }
 };

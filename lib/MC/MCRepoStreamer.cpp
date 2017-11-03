@@ -59,9 +59,14 @@ void MCRepoStreamer::EmitInstToData(const MCInst &Inst,
   DF->getContents().append(Code.begin(), Code.end());
 }
 
-MCStreamer *llvm::createRepoStreamer(MCContext &Context, MCAsmBackend &MAB,
-                                     raw_pwrite_stream &OS, MCCodeEmitter *CE) {
-
-  MCRepoStreamer *S = new MCRepoStreamer(Context, MAB, OS, CE);
+MCStreamer *llvm::createRepoStreamer(MCContext &Context,
+                                     std::unique_ptr<MCAsmBackend> &&MAB,
+                                     raw_pwrite_stream &OS,
+                                     std::unique_ptr<MCCodeEmitter> &&CE,
+                                     bool RelaxAll) {
+  MCRepoStreamer *S =
+      new MCRepoStreamer(Context, std::move(MAB), OS, std::move(CE));
+  if (RelaxAll)
+    S->getAssembler().setRelaxAll(true);
   return S;
 }

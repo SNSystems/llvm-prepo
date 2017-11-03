@@ -1,7 +1,7 @@
 LLVM with Program Repository Support
 ====
 
-This repository contains a copy of LLVM with work-in-progress modifications to output to a Program Repository. 
+This repository contains a copy of LLVM (forked from commit: 81b03a38899a9e94b2a8cbf07dac58473b97cedc) with work-in-progress modifications to output to a Program Repository. 
 
 The changes are to add support for the Program Repository that was first shown at the 2016 US LLVM Developers’ meeting in the catchily titled “Demo of a repository for statically compiled programs”. You can relive the highs and lows of that talk by [watching it on YouTube](https://youtu.be/-pL94rqyQ6c). The implementation demonstrated in that talk has its own Github repository at <https://github.com/SNSystems/Toy-tools>: in essence, this work re-implements the same thing in LLVM to give you the build-time improvements in a C++ compiler.
 
@@ -18,7 +18,7 @@ The process to follow is the same as that for a conventional build of Clang+LLVM
         $ cd llvm/tools
         $ git clone http://llvm.org/git/clang.git
         $ cd clang
-        $ git reset —hard 91321d9884b7ce357cac1d128244d22dbe2a0cc7
+        $ git reset —hard 2276925224353681293a6a8ff6758a984d9c2e1c
 
 1. Clone pstore:
 

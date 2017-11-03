@@ -11,11 +11,11 @@
 // constants for the REPO file format.
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_SUPPORT_REPO_H
-#define LLVM_SUPPORT_REPO_H
+#ifndef LLVM_BINARYFORMAT_REPO_H
+#define LLVM_BINARYFORMAT_REPO_H
 
 #include "pstore/uuid.hpp"
-#include "llvm/Support/ELF.h"
+#include "llvm/BinaryFormat/ELF.h"
 
 namespace llvm {
 

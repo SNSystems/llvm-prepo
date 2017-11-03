@@ -23,7 +23,6 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
-#include <iostream>
 
 namespace llvm {
 
@@ -157,7 +156,6 @@ protected:
         IsRegistered(false), IsExternal(false), IsPrivateExtern(false),
         Kind(Kind), IsUsedInReloc(false), SymbolContents(SymContentsUnset),
         CommonAlignLog2(0), Flags(0) {
-
     Offset = 0;
     FragmentAndHasName.setInt(!!Name);
     if (Name)

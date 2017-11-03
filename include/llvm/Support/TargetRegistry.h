@@ -102,8 +102,11 @@ MCStreamer *createWasmStreamer(MCContext &Ctx,
                                std::unique_ptr<MCCodeEmitter> &&CE,
                                bool RelaxAll);
 
-MCStreamer *createRepoStreamer(MCContext &Context, MCAsmBackend &MAB,
-                               raw_pwrite_stream &OS, MCCodeEmitter *CE);
+MCStreamer *createRepoStreamer(MCContext &Ctx,
+                               std::unique_ptr<MCAsmBackend> &&TAB,
+                               raw_pwrite_stream &OS,
+                               std::unique_ptr<MCCodeEmitter> &&CE,
+                               bool RelaxAll);
 
 MCRelocationInfo *createMCRelocationInfo(const Triple &TT, MCContext &Ctx);
 
@@ -180,6 +183,11 @@ public:
       MCStreamer *(*)(const Triple &T, MCContext &Ctx,
                       std::unique_ptr<MCAsmBackend> &&TAB,
                       std::unique_ptr<MCObjectWriter> &&OW,
+                      std::unique_ptr<MCCodeEmitter> &&Emitter, bool RelaxAll);
+  using RepoStreamerCtorTy =
+      MCStreamer *(*)(const Triple &T, MCContext &Ctx,
+                      std::unique_ptr<MCAsmBackend> &&TAB,
+                      raw_pwrite_stream &OS,
                       std::unique_ptr<MCCodeEmitter> &&Emitter, bool RelaxAll);
   using NullTargetStreamerCtorTy = MCTargetStreamer *(*)(MCStreamer &S);
   using AsmTargetStreamerCtorTy = MCTargetStreamer *(*)(
@@ -268,6 +276,7 @@ private:
   MachOStreamerCtorTy MachOStreamerCtorFn = nullptr;
   ELFStreamerCtorTy ELFStreamerCtorFn = nullptr;
   WasmStreamerCtorTy WasmStreamerCtorFn = nullptr;
+  RepoStreamerCtorTy RepoStreamerCtorFn = nullptr;
 
   /// Construction function for this target's null TargetStreamer, if
   /// registered (default = nullptr).
@@ -509,7 +518,12 @@ public:
                                std::move(Emitter), RelaxAll);
       break;
     case Triple::Repo:
-      S = createRepoStreamer(Ctx, TAB, OS, Emitter);
+      if (RepoStreamerCtorFn)
+        S = RepoStreamerCtorFn(T, Ctx, std::move(TAB), OS, std::move(Emitter),
+                               RelaxAll);
+      else
+        S = createRepoStreamer(Ctx, std::move(TAB), OS, std::move(Emitter),
+                               RelaxAll);
       break;
     }
     if (ObjectTargetStreamerCtorFn)
@@ -856,6 +870,10 @@ struct TargetRegistry {
 
   static void RegisterWasmStreamer(Target &T, Target::WasmStreamerCtorTy Fn) {
     T.WasmStreamerCtorFn = Fn;
+  }
+
+  static void RegisterRepoStreamer(Target &T, Target::RepoStreamerCtorTy Fn) {
+    T.RepoStreamerCtorFn = Fn;
   }
 
   static void RegisterNullTargetStreamer(Target &T,

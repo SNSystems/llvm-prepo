@@ -13,7 +13,7 @@
 #include "llvm/ADT/Triple.h"
 #include "llvm/MC/MCValue.h"
 #include "llvm/Support/DataTypes.h"
-#include "llvm/Support/Repo.h"
+#include "llvm/BinaryFormat/Repo.h"
 #include "llvm/Support/raw_ostream.h"
 #include <vector>
 
@@ -94,9 +94,9 @@ public:
 /// \param MOTW - The target specific writer subclass.
 /// \param OS - The stream to write to.
 /// \returns The constructed object writer.
-MCObjectWriter *createRepoObjectWriter(MCRepoObjectTargetWriter *MOTW,
-                                       raw_pwrite_stream &OS,
-                                       bool IsLittleEndian);
+std::unique_ptr<MCObjectWriter>
+createRepoObjectWriter(std::unique_ptr<MCRepoObjectTargetWriter> MOTW,
+                       raw_pwrite_stream &OS, bool IsLittleEndian);
 } // namespace llvm
 
 #endif // LLVM_MC_MCREPOOBJECTWRITER_H

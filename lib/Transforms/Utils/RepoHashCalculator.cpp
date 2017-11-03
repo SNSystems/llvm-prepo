@@ -425,7 +425,7 @@ void FunctionHashCalculator::hashInstruction(const Instruction *V) {
     update(LI->isVolatile());
     FnHash.hashNumber(LI->getAlignment());
     FnHash.hashOrdering(LI->getOrdering());
-    update(LI->getSynchScope());
+    update(LI->getSyncScopeID());
     // FIXME: Is there any other Metadata need to be considered??
     FnHash.hashRangeMetadata(LI->getMetadata(LLVMContext::MD_range));
     return;
@@ -435,7 +435,7 @@ void FunctionHashCalculator::hashInstruction(const Instruction *V) {
     update(SI->isVolatile());
     FnHash.hashNumber(SI->getAlignment());
     FnHash.hashOrdering(SI->getOrdering());
-    update(SI->getSynchScope());
+    update(SI->getSyncScopeID());
     return;
   }
   if (const CmpInst *CI = dyn_cast<CmpInst>(V)) {
@@ -482,7 +482,7 @@ void FunctionHashCalculator::hashInstruction(const Instruction *V) {
   if (const FenceInst *FI = dyn_cast<FenceInst>(V)) {
     update(HashKind::TAG_FenceInst);
     FnHash.hashOrdering(FI->getOrdering());
-    update(FI->getSynchScope());
+    update(FI->getSyncScopeID());
     return;
   }
   if (const AtomicCmpXchgInst *CXI = dyn_cast<AtomicCmpXchgInst>(V)) {
@@ -491,7 +491,7 @@ void FunctionHashCalculator::hashInstruction(const Instruction *V) {
     update(CXI->isWeak());
     FnHash.hashOrdering(CXI->getSuccessOrdering());
     FnHash.hashOrdering(CXI->getFailureOrdering());
-    update(CXI->getSynchScope());
+    update(CXI->getSyncScopeID());
     return;
   }
   if (const AtomicRMWInst *RMWI = dyn_cast<AtomicRMWInst>(V)) {
@@ -499,7 +499,7 @@ void FunctionHashCalculator::hashInstruction(const Instruction *V) {
     update(RMWI->getOperation());
     update(RMWI->isVolatile());
     FnHash.hashOrdering(RMWI->getOrdering());
-    update(RMWI->getSynchScope());
+    update(RMWI->getSyncScopeID());
     return;
   }
   if (const PHINode *PN = dyn_cast<PHINode>(V)) {
