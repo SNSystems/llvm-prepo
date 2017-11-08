@@ -422,6 +422,7 @@ RepoObjectWriter::toPstoreLinkage(GlobalValue::LinkageTypes L) {
   case GlobalValue::LinkOnceAnyLinkage:
   case GlobalValue::LinkOnceODRLinkage:
     return pstore::repo::linkage_type::linkonce;
+  case GlobalValue::PrivateLinkage:
   case GlobalValue::InternalLinkage:
     return pstore::repo::linkage_type::internal;
   case GlobalValue::CommonLinkage:
