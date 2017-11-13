@@ -385,8 +385,8 @@ public:
     SymbolTable (SymbolTable const &) = delete;
     SymbolTable & operator= (SymbolTable const &) = delete;
 
-    struct Target {
-        Target (unsigned SectionIndex_, pstore::repo::section_type SectionType_,
+    struct SymbolTarget {
+        SymbolTarget (unsigned SectionIndex_, pstore::repo::section_type SectionType_,
                 std::uint64_t Offset_, pstore::repo::linkage_type Linkage_)
                 : SectionIndex{SectionIndex_}
                 , SectionType{SectionType_}
@@ -400,13 +400,13 @@ public:
         pstore::repo::linkage_type Linkage;
     };
 
-    std::uint64_t insertSymbol (pstore::address Name, llvm::Optional<Target> const & Target);
+    std::uint64_t insertSymbol (pstore::address Name, llvm::Optional<SymbolTarget> const & Target);
 
     /// Creates a definition in the symbol table.
     std::uint64_t insertSymbol (pstore::address Name, unsigned SectionIndex,
                                 pstore::repo::section_type Type, std::uint64_t Offset,
                                 pstore::repo::linkage_type Linkage) {
-        return this->insertSymbol (Name, Target{SectionIndex, Type, Offset, Linkage});
+        return this->insertSymbol (Name, SymbolTarget{SectionIndex, Type, Offset, Linkage});
     }
 
     // If not already in the symbol table, an undef entry is created. This may be later turned into
@@ -423,7 +423,7 @@ private:
     struct Value {
         std::size_t SymbolIndex;
         std::uint64_t NameOffset;
-        llvm::Optional<Target> Target;
+        llvm::Optional<SymbolTarget> Target;
     };
     // FIXME: this pair of fields is replicated for the section table. Refactoring?
     std::vector<Value> Symbols_;
@@ -453,7 +453,7 @@ unsigned SymbolTable<ELFT>::linkageToELFBinding (pstore::repo::linkage_type L) {
 
 template <typename ELFT>
 std::uint64_t SymbolTable<ELFT>::insertSymbol (pstore::address Name,
-                                               llvm::Optional<Target> const & Target) {
+                                               llvm::Optional<SymbolTarget> const & Target) {
     typename decltype (SymbolMap_)::iterator Pos;
     bool DidInsert;
     std::tie (Pos, DidInsert) = SymbolMap_.emplace (Name, 0);
@@ -491,7 +491,7 @@ std::tuple<std::uint64_t, std::uint64_t> SymbolTable<ELFT>::write (raw_ostream &
         Symbol.st_name = SV.NameOffset;
 
         if (SV.Target) {
-            Target const & T = SV.Target.getValue ();
+            SymbolTarget const & T = SV.Target.getValue ();
             Symbol.st_value = T.Offset;
 
             unsigned const Binding = linkageToELFBinding (T.Linkage);
@@ -556,7 +556,7 @@ void OutputSection<ELFT>::append (pstore::repo::ticket_member const & TM,
     // to the symbol table.
     dbgs() << "generating relocations FROM " << getString (*Db_, TM.name) << '\n';
     Symbols.insertSymbol (
-        TM.name, typename SymbolTable<ELFT>::Target{Index_, SectionType, SectionSize_, TM.linkage});
+        TM.name, typename SymbolTable<ELFT>::SymbolTarget{Index_, SectionType, SectionSize_, TM.linkage});
 
     auto const InitialSectionSize = SectionSize_;
     SectionSize_ += SectionData->data ().size (); // TODO: account for alignment
