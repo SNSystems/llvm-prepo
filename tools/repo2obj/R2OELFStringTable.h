@@ -128,7 +128,7 @@ StringTable<T, Traits>::write (llvm::raw_ostream & OS) const {
     }
     std::uint64_t End = OS.tell ();
     assert (End >= Start);
-    return {Start, End - Start};
+    return std::make_tuple(Start, End - Start);
 }
 
 
