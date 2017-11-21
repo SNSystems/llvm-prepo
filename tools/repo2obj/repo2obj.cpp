@@ -347,8 +347,8 @@ int main (int argc, char * argv[]) {
     writeRaw (OS, Header);
 
     for (auto & S : State.Sections) {
-        S.second.write (OS, State.SectionNames, State.SectionHeaders.size (),
-                        std::back_inserter (State.SectionHeaders));
+        S.second.setIndex (State.SectionHeaders.size ());
+        S.second.write (OS, State.SectionNames, std::back_inserter (State.SectionHeaders));
     }
 
     State.writeGroupSections (OS, FirstGroupIndex);

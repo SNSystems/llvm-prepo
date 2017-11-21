@@ -32,16 +32,22 @@ public:
     SymbolTable & operator= (SymbolTable const &) = delete;
 
     struct SymbolTarget {
-        SymbolTarget (OutputSection<ELFT> const * Section_, std::uint64_t Offset_,
+        /// \param Section_  The ELF output section in which the symbol's data resides.
+        /// \param Offset_  The offset within Section which contains the first byte of the object.
+        /// \param Size_  The object's size (in bytes).
+        /// \param Linkage_  The symbol's linkage.
+        SymbolTarget (OutputSection<ELFT> const * Section_, std::uint64_t Offset_, std::uint64_t Size_,
                       pstore::repo::linkage_type Linkage_)
                 : Section{Section_}
                 , Offset{Offset_}
+                , Size{Size_}
                 , Linkage{Linkage_} {
             assert (Section != nullptr);
         }
 
         OutputSection<ELFT> const * Section;
         std::uint64_t Offset;
+        std::uint64_t Size;
         pstore::repo::linkage_type Linkage;
     };
 
@@ -50,13 +56,13 @@ public:
     /// \param Name  The symbol name.
     /// \param Section  The ELF output section in which the symbol's data resides.
     /// \param Offset  The offset within Section which contains the first byte of the object.
+    /// \param Size  The object's size (in bytes).
     /// \param Linkage  The symbol's linkage.
     /// \returns The index of the newly created or pre-existing entry for this name in the symbol
     /// table.
     std::uint64_t insertSymbol (pstore::address Name, OutputSection<ELFT> const * Section,
-                                std::uint64_t Offset, pstore::repo::linkage_type Linkage) {
-        assert (Section != nullptr);
-        return this->insertSymbol (Name, SymbolTarget (Section, Offset, Linkage));
+                                std::uint64_t Offset, std::uint64_t Size, pstore::repo::linkage_type Linkage) {
+        return this->insertSymbol (Name, SymbolTarget (Section, Offset, Size, Linkage));
     }
 
     /// If not already in the symbol table, an undef entry is created. This may be later turned into
@@ -187,7 +193,7 @@ std::tuple<std::uint64_t, std::uint64_t> SymbolTable<ELFT>::write (llvm::raw_ost
                                       sectionToSymbolType (T.Section->getType ()));
             // The section (header table index) in which this value is defined.
             Symbol.st_shndx = T.Section->getIndex ();
-            Symbol.st_size = 0; // FIXME: this code has no idea what the size is (yet).
+            Symbol.st_size = T.Size;
         } else {
             // There's no definition for this name.
             Symbol.setBindingAndType (ELF::STB_GLOBAL, ELF::STT_NOTYPE);
