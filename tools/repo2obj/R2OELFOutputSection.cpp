@@ -10,18 +10,16 @@
 #include "R2OELFOutputSection.h"
 
 using namespace llvm;
+using namespace pstore::repo;
 
 namespace details {
 
     SectionMap const SectionAttributes{
-        // X (BSS)
+        {section_type::BSS, {".bss", ELF::SHT_NOBITS, ELF::SHF_ALLOC | ELF::SHF_WRITE}},
         // X (Common)
-        // X (Data)
-        {pstore::repo::section_type::Data,
-         {".data", ELF::SHT_PROGBITS, (unsigned) (ELF::SHF_ALLOC | ELF::SHF_WRITE)}},
+        {section_type::Data, {".data", ELF::SHT_PROGBITS, ELF::SHF_ALLOC | ELF::SHF_WRITE}},
         // X (RelRo)
-        {pstore::repo::section_type::Text,
-         {".text", ELF::SHT_PROGBITS, (unsigned) ELF::SHF_ALLOC | ELF::SHF_EXECINSTR}},
+        {section_type::Text, {".text", ELF::SHT_PROGBITS, ELF::SHF_ALLOC | ELF::SHF_EXECINSTR}},
         // X (Mergeable1ByteCString)
         // X (Mergeable2ByteCString)
         // X (Mergeable4ByteCString)
@@ -30,9 +28,11 @@ namespace details {
         // X (MergeableConst16)
         // X (MergeableConst32)
         // X (MergeableConst)
-        {pstore::repo::section_type::ReadOnly, {".rodata", ELF::SHT_PROGBITS, ELF::SHF_ALLOC}},
-        // X (ThreadBSS)
-        // X (ThreadData)
+        {section_type::ReadOnly, {".rodata", ELF::SHT_PROGBITS, ELF::SHF_ALLOC}},
+        {section_type::ThreadBSS,
+         {".tbss", ELF::SHT_NOBITS, ELF::SHF_ALLOC | ELF::SHF_WRITE | ELF::SHF_TLS}},
+        {section_type::ThreadData,
+         {".tdata", ELF::SHT_PROGBITS, ELF::SHF_ALLOC | ELF::SHF_WRITE | ELF::SHF_TLS}},
         // X (ThreadLocal)
         // X (Metadata)
     };
