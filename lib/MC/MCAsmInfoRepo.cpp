@@ -18,6 +18,7 @@ using namespace llvm;
 void MCAsmInfoRepo::anchor() {}
 
 MCAsmInfoRepo::MCAsmInfoRepo() {
+  // Repo uses the MM_ELF mangling mode type.
   HasIdentDirective = false;
   WeakRefDirective = "\t.weak\t";
   PrivateGlobalPrefix = ".L";

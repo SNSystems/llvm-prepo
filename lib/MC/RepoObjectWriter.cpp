@@ -72,6 +72,9 @@ class RepoObjectWriter : public MCObjectWriter {
   // into the database later.
   using ModuleNamesContainer = std::map<StringRef, pstore::address>;
 
+  using NamesWithPrefixContainer =
+      SmallVector<std::unique_ptr<std::string>, 16>;
+
   std::map<Digest::DigestType,
            SmallVector<std::unique_ptr<pstore::repo::section_content>, 4>>
       Contents;
@@ -137,7 +140,13 @@ public:
   void writeSectionData(const MCAssembler &Asm, MCSection &Sec,
                         const MCAsmLayout &Layout, ModuleNamesContainer &Names);
 
-  void writeTicketNodes(const MCAssembler &Asm, ModuleNamesContainer &Names);
+  static StringRef getSymbolName(const MCAssembler &Asm,
+                                 const TicketNode &TicketMember,
+                                 const ModuleNamesContainer &Names,
+                                 NamesWithPrefixContainer &Symbols);
+
+  void writeTicketNodes(const MCAssembler &Asm, ModuleNamesContainer &Names,
+                        NamesWithPrefixContainer &Symbols);
 
   static pstore::repo::linkage_type
   toPstoreLinkage(GlobalValue::LinkageTypes L);
@@ -432,22 +441,45 @@ RepoObjectWriter::toPstoreLinkage(GlobalValue::LinkageTypes L) {
   }
 }
 
+StringRef RepoObjectWriter::getSymbolName(const MCAssembler &Asm,
+                                          const TicketNode &TicketMember,
+                                          const ModuleNamesContainer &Names,
+                                          NamesWithPrefixContainer &Symbols) {
+  if (!GlobalValue::isPrivateLinkage(TicketMember.getLinkage()))
+    return TicketMember.getNameAsString();
+
+  SmallString<256> Buf;
+  const StringRef NameRef =
+      (Twine(Asm.getContext().getAsmInfo()->getPrivateLabelPrefix()) +
+       Twine(TicketMember.getNameAsString()))
+          .toStringRef(Buf);
+
+  auto It = Names.find(NameRef);
+  if (It != Names.end())
+    return It->first;
+
+  Symbols.push_back(llvm::make_unique<std::string>(NameRef.str()));
+  return StringRef(*Symbols.back().get());
+}
+
 void RepoObjectWriter::writeTicketNodes(const MCAssembler &Asm,
-                                        ModuleNamesContainer &Names) {
+                                        ModuleNamesContainer &Names,
+                                        NamesWithPrefixContainer &Symbols) {
   // Record the TicketMember for this RepoSection.
   auto &TC = TicketContents[Header.uuid];
   for (const TicketNode *Ticket : Asm.getContext().getTickets()) {
     Digest::DigestType D = Ticket->getDigest();
-    // Insert this name into the module-wide string set. This set is later added
-    // to the whole-program string set and the ticket name addresses corrected at
-    // that time.
-    auto It = Names
-                  .insert(std::make_pair(Ticket->getNameAsString(),
-                                         pstore::address::null()))
-                  .first;
+    // Insert this name into the module-wide string set. This set is later
+    // added to the whole-program string set and the ticket name addresses
+    // corrected at that time.
+    const StringRef TicketSymbolName = getSymbolName(Asm, *Ticket, Names, Symbols);
+    auto It =
+        Names.insert(std::make_pair(TicketSymbolName, pstore::address::null()))
+            .first;
     // We're storing pointer to the string address into the ticket.
     auto NamePtr = reinterpret_cast<std::uintptr_t>(&(*It));
-    TC.emplace_back(pstore::index::uint128{D.high(), D.low()}, pstore::address{NamePtr},
+    TC.emplace_back(pstore::index::uint128{D.high(), D.low()},
+                    pstore::address{NamePtr},
                     toPstoreLinkage(Ticket->getLinkage()));
   }
 }
@@ -490,6 +522,7 @@ void RepoObjectWriter::writeObject(MCAssembler &Asm,
   writeTicketFile(Asm);
 
   ModuleNamesContainer Names;
+  NamesWithPrefixContainer PrefixedNames;
 
   raw_fd_ostream &TempStream = static_cast<raw_fd_ostream &>(getStream());
 
@@ -498,8 +531,8 @@ void RepoObjectWriter::writeObject(MCAssembler &Asm,
   std::error_code ErrorCode =
       sys::fs::getPathFromOpenFD(TempStream.get_fd(), ResultPath);
   if (ErrorCode) {
-    report_fatal_error("TicketNode: Invalid output file path: " +
-                       ErrorCode.message() + ".");
+    report_fatal_error(
+        "TicketNode: Invalid output file path: " + ErrorCode.message() + ".");
   }
   OutputFile = ResultPath.str();
   DEBUG(dbgs() << "path: " << OutputFile << "\n");
@@ -509,7 +542,7 @@ void RepoObjectWriter::writeObject(MCAssembler &Asm,
     writeSectionData(Asm, Section, Layout, Names);
   }
 
-  writeTicketNodes(Asm, Names);
+  writeTicketNodes(Asm, Names, PrefixedNames);
 
   Names.insert(std::make_pair(OutputFile, pstore::address::null()));
 
@@ -582,8 +615,8 @@ void RepoObjectWriter::writeObject(MCAssembler &Asm,
       auto MNC = reinterpret_cast<ModuleNamesContainer::value_type const *>(
           TicketMember.name.absolute());
       TicketMember.name = MNC->second;
-      DEBUG(dbgs() << "ticket name " << TicketMember.name.absolute()
-                   << " digest " << TicketMember.digest << " adding." << '\n');
+      DEBUG(dbgs() << "ticket name '" << MNC->first
+                   << "' digest '" << TicketMember.digest << "' adding." << '\n');
     }
 
     // Store the Ticket into store.
