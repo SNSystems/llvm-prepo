@@ -386,7 +386,11 @@ void RepoObjectWriter::writeSectionData(const MCAssembler &Asm, MCSection &Sec,
   }
 
   auto &SC = Contents[Section.hash()];
-  SC.push_back(make_unique<pstore::repo::section_content>(St));
+  unsigned const Alignment = Sec.getAlignment();
+  // TODO: need a cleaner way to check that the alignment value will fit.
+  assert (Alignment < std::numeric_limits <std::uint8_t>::max ());
+
+  SC.push_back(make_unique<pstore::repo::section_content>(St, static_cast <std::uint8_t> (Alignment)));
   pstore::repo::section_content &Content = *SC.back();
 
   // Add the section content to the fragment.

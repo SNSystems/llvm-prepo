@@ -108,7 +108,7 @@ private:
 
     static constexpr auto UnknownIndex = std::numeric_limits<unsigned>::max ();
     unsigned Index_ = UnknownIndex; // The section header table index
-
+    uint8_t Align_ = 0;
 
     // TODO: We have no a priori knowledge of the number of text contributions to this output
     // section. Using some sort of "chunked vector" might be considerably more efficient.
@@ -122,48 +122,74 @@ private:
 
     std::vector<Elf_Rela> Relocations_;
 
+    template <typename T>
+    static T alignedBytes (T v, uint8_t align_shift) {
+        auto align = T{1} << align_shift;
+        return (align - T{1}) & ~(align - T{1});
+    }
+
+    static void writePadding (llvm::raw_ostream & OS, unsigned bytes);
+
     std::string dataSectionName (std::string SectionName, pstore::address DiscriminatorName) const;
     std::string relocationSectionName (std::string const & BaseName) const;
+
+    std::string getString (pstore::address Addr) const;
 };
 
-inline std::string getString (pstore::database const & Db, pstore::address Addr) {
-    using namespace pstore::serialize;
-    archive::database_reader Source (Db, Addr);
-    return read<std::string> (Source);
-}
+// FIXME: this needs to be passeed in and not hard-wired.
 constexpr bool IsMips64EL = false;
 
 
+template <typename ELFT>
+std::string OutputSection<ELFT>::getString (pstore::address Addr) const {
+    using namespace pstore::serialize;
+    archive::database_reader Source (Db_, Addr);
+    return read<std::string> (Source);
+}
+
+// FIXME: the padding data depends on the output section. In particular, the text section should
+// receive NOP instructions. This is modelled in 
+template <typename ELFT>
+void OutputSection<ELFT>::writePadding (llvm::raw_ostream & OS, unsigned bytes) {
+    auto const b = uint8_t{0};
+    for (auto ctr = 0U; ctr < bytes; ++ctr) {
+        writeRaw (OS, b);
+    }
+}
 
 template <typename ELFT>
 void OutputSection<ELFT>::append (pstore::repo::ticket_member const & TM, SectionPtr SectionData,
                                   SymbolTable<ELFT> & Symbols) {
     using namespace llvm;
 
-    // FIXME: account for alignment
     Contributions_.emplace_back (SectionData);
 
     auto const ObjectSize = SectionData->data ().size ();
-    DEBUG (dbgs () << "  generating relocations FROM " << getString (Db_, TM.name) << '\n');
-    Symbols.insertSymbol (TM.name, this, SectionSize_, ObjectSize, TM.linkage);
+    DEBUG (dbgs () << "  generating relocations FROM " << this->getString (TM.name) << '\n');
 
-    auto const InitialSectionSize = SectionSize_;
-    SectionSize_ += ObjectSize; // FIXME: account for alignment
+    auto const DataAlign = SectionData->align ();
+    // ELF section alignment is the maximum of the alignment of all its contributions.
+    Align_ = std::max (Align_, DataAlign);
+
+    SectionSize_ += alignedBytes (SectionSize_, DataAlign);
+    Symbols.insertSymbol (TM.name, this, SectionSize_, ObjectSize, TM.linkage);
 
     auto const & XFixups = SectionData->xfixups ();
     for (pstore::repo::external_fixup const & Fixup : XFixups) {
         auto const SymbolIndex = Symbols.insertSymbol (Fixup.name);
-        DEBUG (dbgs () << "  generating relocation TO '" << getString (Db_, Fixup.name)
+        DEBUG (dbgs () << "  generating relocation TO '" << this->getString (Fixup.name)
                        << "' symbol index " << SymbolIndex << '\n');
 
         Elf_Rela Reloc;
         Reloc.setSymbolAndType (SymbolIndex, Fixup.type, IsMips64EL);
-        Reloc.r_offset = Fixup.offset + InitialSectionSize;
+        Reloc.r_offset = Fixup.offset + SectionSize_;
         Reloc.r_addend = Fixup.addend;
         Relocations_.push_back (Reloc);
     }
 
     // FIXME: what about the internal fixups?
+
+    SectionSize_ += ObjectSize;
 }
 
 template <typename ELFT>
@@ -179,10 +205,15 @@ OutputIt OutputSection<ELFT>::write (llvm::raw_ostream & OS, SectionNameStringTa
     auto const GroupFlag = IsLinkOnce_ ? Elf_Word (llvm::ELF::SHF_GROUP) : Elf_Word (0);
 
     auto const StartPos = OS.tell ();
+    auto Pos = StartPos;
+
     for (auto const & Contribution : Contributions_) {
         pstore::repo::section::container<std::uint8_t> D = Contribution->data ();
-        // FIXME: a fragment section needs to know its alignment.
+
+        auto const Alignment = alignedBytes (Pos, Contribution->align ());
+        this->writePadding (OS, Alignment);
         OS.write (reinterpret_cast<char const *> (D.data ()), D.size ());
+        Pos += Alignment + D.size ();
     }
     assert (OS.tell () - StartPos == SectionSize_);
 
@@ -200,29 +231,30 @@ OutputIt OutputSection<ELFT>::write (llvm::raw_ostream & OS, SectionNameStringTa
         SH.sh_flags = Attrs->second.Flags | GroupFlag;
         SH.sh_offset = StartPos;
         SH.sh_size = SectionSize_;
+        SH.sh_addralign = Align_;
         *(OutShdr++) = SH;
     }
 
     if (Relocations_.size () > 0) {
-        writeAlignmentPadding<typename decltype (Relocations_)::value_type> (OS);
+        using RelocationType = typename decltype (Relocations_)::value_type;
+        writeAlignmentPadding<RelocationType> (OS);
         auto const RelaStartPos = OS.tell ();
         auto const RelocsSize = this->relocationsSize ();
         OS.write (reinterpret_cast<char const *> (Relocations_.data ()), RelocsSize);
 
-        {
-            Elf_Shdr RelaSH;
-            zero (RelaSH);
-            RelaSH.sh_name = SectionNames.insert (this->relocationSectionName (Attrs->second.Name));
-            RelaSH.sh_type = llvm::ELF::SHT_RELA;
-            RelaSH.sh_flags =
-                llvm::ELF::SHF_INFO_LINK | GroupFlag; // sh_info holds index of the target section.
-            RelaSH.sh_offset = RelaStartPos;
-            RelaSH.sh_size = RelocsSize;
-            RelaSH.sh_link = SectionIndices::SymTab;
-            RelaSH.sh_info = Index_; // target section
-            RelaSH.sh_entsize = sizeof (Elf_Rela);
-            *(OutShdr++) = RelaSH;
-        }
+        Elf_Shdr RelaSH;
+        zero (RelaSH);
+        RelaSH.sh_name = SectionNames.insert (this->relocationSectionName (Attrs->second.Name));
+        RelaSH.sh_type = llvm::ELF::SHT_RELA;
+        RelaSH.sh_flags =
+            llvm::ELF::SHF_INFO_LINK | GroupFlag; // sh_info holds index of the target section.
+        RelaSH.sh_offset = RelaStartPos;
+        RelaSH.sh_size = RelocsSize;
+        RelaSH.sh_link = SectionIndices::SymTab;
+        RelaSH.sh_info = Index_; // target section
+        RelaSH.sh_entsize = sizeof (RelocationType);
+        RelaSH.sh_addralign = alignof (RelocationType);
+        *(OutShdr++) = RelaSH;
     }
     return OutShdr;
 }
@@ -232,7 +264,7 @@ std::string OutputSection<ELFT>::dataSectionName (std::string SectionName,
                                                   pstore::address DiscriminatorName) const {
     if (DiscriminatorName != pstore::address::null ()) {
         SectionName += '.';
-        SectionName += getString (Db_, DiscriminatorName);
+        SectionName += this->getString (DiscriminatorName);
     }
     return SectionName;
 }

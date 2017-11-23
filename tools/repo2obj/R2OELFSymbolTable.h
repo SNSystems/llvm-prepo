@@ -36,8 +36,8 @@ public:
         /// \param Offset_  The offset within Section which contains the first byte of the object.
         /// \param Size_  The object's size (in bytes).
         /// \param Linkage_  The symbol's linkage.
-        SymbolTarget (OutputSection<ELFT> const * Section_, std::uint64_t Offset_, std::uint64_t Size_,
-                      pstore::repo::linkage_type Linkage_)
+        SymbolTarget (OutputSection<ELFT> const * Section_, std::uint64_t Offset_,
+                      std::uint64_t Size_, pstore::repo::linkage_type Linkage_)
                 : Section{Section_}
                 , Offset{Offset_}
                 , Size{Size_}
@@ -61,18 +61,22 @@ public:
     /// \returns The index of the newly created or pre-existing entry for this name in the symbol
     /// table.
     std::uint64_t insertSymbol (pstore::address Name, OutputSection<ELFT> const * Section,
-                                std::uint64_t Offset, std::uint64_t Size, pstore::repo::linkage_type Linkage) {
+                                std::uint64_t Offset, std::uint64_t Size,
+                                pstore::repo::linkage_type Linkage) {
         return this->insertSymbol (Name, SymbolTarget (Section, Offset, Size, Linkage));
     }
 
     /// If not already in the symbol table, an undef entry is created. This may be later turned into
-    /// a proper definition.
+    /// a proper definition by a subsequent call to insertSymbol with the same name.
+    /// \param Name  The symbol name.
     /// \returns The index of the newly created or pre-existing entry for this name in the symbol
     /// table.
     std::uint64_t insertSymbol (pstore::address Name) {
         return this->insertSymbol (Name, llvm::None);
     }
 
+    /// \returns A tuple of two values, the first of which is the file offset at which the section
+    /// data was written; the second is the number of bytes that were written.
     std::tuple<std::uint64_t, std::uint64_t> write (llvm::raw_ostream & OS);
 
 private:
@@ -99,7 +103,6 @@ template <typename ELFT>
 unsigned SymbolTable<ELFT>::linkageToELFBinding (pstore::repo::linkage_type L) {
 // FIXME: a temporary bodge. We don't sort the symbol table and don't correctly set the sh_
 #if 0
-
     switch (L) {
     case pstore::repo::linkage_type::external:
     case pstore::repo::linkage_type::common:
