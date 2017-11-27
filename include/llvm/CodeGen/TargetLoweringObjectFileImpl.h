@@ -137,6 +137,7 @@ public:
 class TargetLoweringObjectFileRepo : public TargetLoweringObjectFile {
 public:
   ~TargetLoweringObjectFileRepo() override = default;
+  void Initialize(MCContext &ctx, const TargetMachine &TM) override;
 
   MCSection *getExplicitSectionGlobal(const GlobalObject *GO, SectionKind Kind,
                                       const TargetMachine &TM) const override;
@@ -147,6 +148,13 @@ public:
   MCSection *getSectionForConstant(const DataLayout &DL, SectionKind Kind,
                                    const Constant *C, unsigned &Align,
                                    const GlobalObject *GO) const override;
+
+
+  MCSection *getStaticCtorSection(unsigned Priority, const MCSymbol *KeySym) const override;
+  MCSection *getStaticDtorSection(unsigned Priority, const MCSymbol *KeySym) const override;
+
+private:
+  MCSection * createXXtorsSection (MCContext &Ctx, char const * Name);
 };
 
 class TargetLoweringObjectFileCOFF : public TargetLoweringObjectFile {

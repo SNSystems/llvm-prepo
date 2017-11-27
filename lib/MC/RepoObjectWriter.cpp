@@ -75,9 +75,9 @@ class RepoObjectWriter : public MCObjectWriter {
   using NamesWithPrefixContainer =
       SmallVector<std::unique_ptr<std::string>, 16>;
 
-  std::map<Digest::DigestType,
-           SmallVector<std::unique_ptr<pstore::repo::section_content>, 4>>
-      Contents;
+  using ContentsType =
+      std::map<Digest::DigestType,
+               SmallVector<std::unique_ptr<pstore::repo::section_content>, 4>>;
 
   std::map<pstore::uuid, std::vector<pstore::repo::ticket_member>>
       TicketContents;
@@ -137,8 +137,9 @@ public:
   void executePostLayoutBinding(MCAssembler &Asm,
                                 const MCAsmLayout &Layout) override;
 
-  void writeSectionData(const MCAssembler &Asm, MCSection &Sec,
-                        const MCAsmLayout &Layout, ModuleNamesContainer &Names);
+  void writeSectionData(ContentsType &Contents, const MCAssembler &Asm,
+                        MCSection &Sec, const MCAsmLayout &Layout,
+                        ModuleNamesContainer &Names);
 
   static StringRef getSymbolName(const MCAssembler &Asm,
                                  const TicketNode &TicketMember,
@@ -331,16 +332,11 @@ void svector_ostream<Container>::pwrite_impl(const char *Ptr, size_t Size,
 
 } // namespace
 
-void RepoObjectWriter::writeSectionData(const MCAssembler &Asm, MCSection &Sec,
+void RepoObjectWriter::writeSectionData(ContentsType &Fragments,
+                                        const MCAssembler &Asm, MCSection &Sec,
                                         const MCAsmLayout &Layout,
                                         ModuleNamesContainer &Names) {
   auto &Section = static_cast<MCSectionRepo &>(Sec);
-  // A "dummy" section is created to provide a default for the assembler but we
-  // don't write it to the repository.
-  if (Section.isDummy()) {
-    // TODO: warn if the dummy section is not empty.
-    return;
-  }
 
   auto St = pstore::repo::section_type::Data;
 
@@ -385,23 +381,22 @@ void RepoObjectWriter::writeSectionData(const MCAssembler &Asm, MCSection &Sec,
     llvm_unreachable("Unknown section type in writeRepoSectionData");
   }
 
-  auto &SC = Contents[Section.hash()];
   unsigned const Alignment = Sec.getAlignment();
   // TODO: need a cleaner way to check that the alignment value will fit.
-  assert (Alignment < std::numeric_limits <std::uint8_t>::max ());
+  assert(Alignment < std::numeric_limits<std::uint8_t>::max());
 
-  SC.push_back(make_unique<pstore::repo::section_content>(St, static_cast <std::uint8_t> (Alignment)));
-  pstore::repo::section_content &Content = *SC.back();
+  auto Content = make_unique<pstore::repo::section_content>(
+      St, static_cast<std::uint8_t>(Alignment));
 
   // Add the section content to the fragment.
-  svector_ostream<decltype(Content.data)> VecOS{Content.data};
+  svector_ostream<decltype(Content->data)> VecOS{Content->data};
   raw_pwrite_stream &OldStream = getStream();
   this->setStream(VecOS);
   Asm.writeSectionData(&Section, Layout);
   this->setStream(OldStream);
 
   auto const &Relocs = Relocations[&Section];
-  Content.xfixups.reserve(Relocs.size());
+  Content->xfixups.reserve(Relocs.size());
   for (auto const &Relocation : Relocations[&Section]) {
     // Insert the target symbol name into the set of known names for this
     // module. By gathering just a single instance of each string used in this
@@ -419,12 +414,30 @@ void RepoObjectWriter::writeSectionData(const MCAssembler &Asm, MCSection &Sec,
                                   pstore::repo::external_fixup::type)>::max());
 
     // Attach a suitable external fixup to this section.
-    Content.xfixups.push_back(
+    Content->xfixups.push_back(
         pstore::repo::external_fixup{{NamePtr},
                                      static_cast<std::uint8_t>(Relocation.Type),
                                      Relocation.Offset,
                                      Relocation.Addend});
   }
+
+  // A "dummy" section is created to provide a default for the assembler but we
+  // don't write it to the repository.
+  if (Section.isDummy()) {
+    if (Content->data.size() > 0) {
+      llvm_unreachable("The dummy section must have no data payload");
+    }
+    if (Content->xfixups.size() > 0) {
+      llvm_unreachable("The dummy section must have no external fixups");
+    }
+    if (Content->ifixups.size() > 0) {
+      llvm_unreachable("The dummy section must have no internal fixups");
+    }
+
+    return;
+  }
+
+  Fragments[Section.hash()].push_back(std::move(Content));
 }
 
 pstore::repo::linkage_type
@@ -440,6 +453,8 @@ RepoObjectWriter::toPstoreLinkage(GlobalValue::LinkageTypes L) {
     return pstore::repo::linkage_type::internal;
   case GlobalValue::CommonLinkage:
     return pstore::repo::linkage_type::common;
+  case GlobalValue::AppendingLinkage:
+    return pstore::repo::linkage_type::append;
   default:
     report_fatal_error("Unsupported linkage type");
   }
@@ -476,7 +491,8 @@ void RepoObjectWriter::writeTicketNodes(const MCAssembler &Asm,
     // Insert this name into the module-wide string set. This set is later
     // added to the whole-program string set and the ticket name addresses
     // corrected at that time.
-    const StringRef TicketSymbolName = getSymbolName(Asm, *Ticket, Names, Symbols);
+    const StringRef TicketSymbolName =
+        getSymbolName(Asm, *Ticket, Names, Symbols);
     auto It =
         Names.insert(std::make_pair(TicketSymbolName, pstore::address::null()))
             .first;
@@ -501,21 +517,19 @@ std::pair<pstore::database &, TransactionType &> getRepoTransaction() {
 }
 
 raw_ostream &operator<<(raw_ostream &OS, pstore::index::uint128 const &V) {
-  auto digitToHex = [](unsigned v) {
-    assert(v < 0x10);
-    return static_cast<char>(v + ((v < 10) ? '0' : 'a' - 10));
-  };
+  return OS << V.to_hex_string();
+}
 
-  std::uint64_t const High = V.high();
-  for (int Shift = 64 - 4; Shift >= 0; Shift -= 4) {
-    OS << digitToHex((High >> Shift) & 0x0F);
+template <typename StringStorage = SmallString<64>>
+StringRef streamPath(raw_fd_ostream &Stream, StringStorage &ResultPath) {
+  // Try to get the path from the file descriptor
+  std::error_code ErrorCode =
+      sys::fs::getPathFromOpenFD(Stream.get_fd(), ResultPath);
+  if (ErrorCode) {
+    report_fatal_error("TicketNode: Invalid output file path: " +
+                       ErrorCode.message() + ".");
   }
-
-  std::uint64_t const Low = V.low();
-  for (int Shift = 64 - 4; Shift >= 0; Shift -= 4) {
-    OS << digitToHex((Low >> Shift) & 0x0F);
-  }
-  return OS;
+  return ResultPath.str();
 }
 
 } // namespace
@@ -525,25 +539,19 @@ void RepoObjectWriter::writeObject(MCAssembler &Asm,
   // Write out the ticket file ...
   writeTicketFile(Asm);
 
+  ContentsType Fragments;
   ModuleNamesContainer Names;
   NamesWithPrefixContainer PrefixedNames;
 
-  raw_fd_ostream &TempStream = static_cast<raw_fd_ostream &>(getStream());
-
-  // Try to get the path from the file descriptor
   SmallString<64> ResultPath;
-  std::error_code ErrorCode =
-      sys::fs::getPathFromOpenFD(TempStream.get_fd(), ResultPath);
-  if (ErrorCode) {
-    report_fatal_error(
-        "TicketNode: Invalid output file path: " + ErrorCode.message() + ".");
-  }
-  OutputFile = ResultPath.str();
+  StringRef OutputFile =
+      streamPath(static_cast<raw_fd_ostream &>(this->getStream()), ResultPath);
   DEBUG(dbgs() << "path: " << OutputFile << "\n");
 
+  // Convert the Asm sections to repository fragment sections.
   for (MCSection &Sec : Asm) {
     auto &Section = static_cast<MCSectionRepo &>(Sec);
-    writeSectionData(Asm, Section, Layout, Names);
+    writeSectionData(Fragments, Asm, Section, Layout, Names);
   }
 
   writeTicketNodes(Asm, Names, PrefixedNames);
@@ -569,16 +577,16 @@ void RepoObjectWriter::writeObject(MCAssembler &Asm,
   pstore::index::digest_index *const DigestsIndex = Db.get_digest_index();
   assert(DigestsIndex);
 
-  for (auto &Content : Contents) {
+  for (auto &Fragment : Fragments) {
     auto const Key =
-        pstore::index::uint128{Content.first.high(), Content.first.low()};
+        pstore::index::uint128{Fragment.first.high(), Fragment.first.low()};
     if (DigestsIndex->find(Key) != DigestsIndex->end()) {
       DEBUG(dbgs() << "fragment " << Key << " exists. skipping\n");
     } else {
       auto Begin = pstore::repo::details::make_section_content_iterator(
-          Content.second.begin());
+          Fragment.second.begin());
       auto End = pstore::repo::details::make_section_content_iterator(
-          Content.second.end());
+          Fragment.second.end());
 
       // The name field of each of the external fixups is pointing into the
       // 'Names' map. Here we turn that into the pstore address of the string.
@@ -603,24 +611,30 @@ void RepoObjectWriter::writeObject(MCAssembler &Asm,
   pstore::index::ticket_index *const TicketIndex = Db.get_ticket_index();
   assert(TicketIndex);
 
-  // Find the store addres of output file path.
+  // Find the store addres of the output file path.
   auto It = Names.find(OutputFile);
   assert(It != Names.end() && "Output file can't be found!");
   auto OutputPathAddr = It->second;
 
   for (auto &TicketContent : TicketContents) {
-
     DEBUG(dbgs() << "Ticket uuid " << TicketContent.first.str()
                  << " adding. \n");
 
     // The name field of each of ticket_member is pointing into the 'Names' map.
     // Here we turn that into the pstore address of the string.
     for (auto &TicketMember : TicketContent.second) {
+      // Check that we have a fragment for this ticket member's digest value.
+      if (DigestsIndex->find(TicketMember.digest) == DigestsIndex->end()) {
+        report_fatal_error("The digest of missing repository fragment " +
+                           TicketMember.digest.to_hex_string() +
+                           " was found in a ticket member.");
+      }
+
       auto MNC = reinterpret_cast<ModuleNamesContainer::value_type const *>(
           TicketMember.name.absolute());
       TicketMember.name = MNC->second;
-      DEBUG(dbgs() << "ticket name '" << MNC->first
-                   << "' digest '" << TicketMember.digest << "' adding." << '\n');
+      DEBUG(dbgs() << "ticket name '" << MNC->first << "' digest '"
+                   << TicketMember.digest << "' adding." << '\n');
     }
 
     // Store the Ticket into store.

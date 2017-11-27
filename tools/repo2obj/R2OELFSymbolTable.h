@@ -12,6 +12,7 @@
 
 #include "llvm/Object/ELF.h"
 
+#include "R2OELFSectionType.h"
 #include "R2OELFStringTable.h"
 #include "WriteHelpers.h"
 
@@ -81,7 +82,7 @@ public:
 
 private:
     static unsigned linkageToELFBinding (pstore::repo::linkage_type L);
-    static unsigned sectionToSymbolType (pstore::repo::section_type T);
+    static unsigned sectionToSymbolType (ELFSectionType T);
     std::uint64_t insertSymbol (pstore::address Name, llvm::Optional<SymbolTarget> const & Target);
 
     typedef typename llvm::object::ELFFile<ELFT>::Elf_Sym Elf_Sym;
@@ -116,29 +117,31 @@ unsigned SymbolTable<ELFT>::linkageToELFBinding (pstore::repo::linkage_type L) {
 }
 
 template <typename ELFT>
-unsigned SymbolTable<ELFT>::sectionToSymbolType (pstore::repo::section_type T) {
+unsigned SymbolTable<ELFT>::sectionToSymbolType (ELFSectionType T) {
     using namespace pstore::repo;
     switch (T) {
-    case section_type::Common:
+    case ELFSectionType::Common:
         return llvm::ELF::STT_COMMON;
-    case section_type::Text:
+    case ELFSectionType::Text:
         return llvm::ELF::STT_FUNC;
-    case section_type::BSS:
-    case section_type::Data:
-    case section_type::RelRo:
-    case section_type::Mergeable1ByteCString:
-    case section_type::Mergeable2ByteCString:
-    case section_type::Mergeable4ByteCString:
-    case section_type::MergeableConst4:
-    case section_type::MergeableConst8:
-    case section_type::MergeableConst16:
-    case section_type::MergeableConst32:
-    case section_type::MergeableConst:
-    case section_type::ReadOnly:
+    case ELFSectionType::BSS:
+    case ELFSectionType::Data:
+    case ELFSectionType::InitArray:
+    case ELFSectionType::FiniArray:
+    case ELFSectionType::RelRo:
+    case ELFSectionType::Mergeable1ByteCString:
+    case ELFSectionType::Mergeable2ByteCString:
+    case ELFSectionType::Mergeable4ByteCString:
+    case ELFSectionType::MergeableConst4:
+    case ELFSectionType::MergeableConst8:
+    case ELFSectionType::MergeableConst16:
+    case ELFSectionType::MergeableConst32:
+    case ELFSectionType::MergeableConst:
+    case ELFSectionType::ReadOnly:
         return llvm::ELF::STT_OBJECT;
-    case section_type::ThreadBSS:
-    case section_type::ThreadData:
-    case section_type::ThreadLocal:
+    case ELFSectionType::ThreadBSS:
+    case ELFSectionType::ThreadData:
+    case ELFSectionType::ThreadLocal:
         return llvm::ELF::STT_TLS;
     default:
         return llvm::ELF::STT_NOTYPE;

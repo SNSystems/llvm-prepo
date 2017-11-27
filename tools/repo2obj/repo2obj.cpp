@@ -228,18 +228,22 @@ std::size_t ELFState<ELFT>::buildGroupSections () {
 template <typename ELFT>
 void ELFState<ELFT>::writeGroupSections (raw_ostream & OS, std::size_t ThisGroupIndex) {
     for (auto const & G : Groups) {
-        writeAlignmentPadding<Elf_Word> (OS);
+        writeAlignmentPadding<ELF::Elf32_Word> (OS);
         auto const StartPos = OS.tell ();
-        writeRaw (OS, Elf_Word{ELF::GRP_COMDAT});
+	auto NumWords = 1U;
+        writeRaw (OS, ELF::Elf32_Word{ELF::GRP_COMDAT});
+
         for (OutputSection<ELFT> const * GroupMember : G.second) {
             auto SectionIndex = GroupMember->getIndex ();
-            writeRaw (OS, Elf_Word{SectionIndex});
+            writeRaw (OS, ELF::Elf32_Word{SectionIndex});
+	    ++NumWords;
             if (GroupMember->relocationsSize () > 0) {
-                writeRaw (OS, Elf_Word{SectionIndex + 1});
+	      writeRaw (OS, ELF::Elf32_Word{SectionIndex + 1});
+	      ++NumWords;
             }
         }
 
-        auto const SectionSize = (G.second.size () + 1) * sizeof (ELF::Elf32_Word);
+        auto const SectionSize = NumWords * sizeof(ELF::Elf32_Word);
         assert (OS.tell () - StartPos == SectionSize);
 
         Elf_Shdr & SH = SectionHeaders[ThisGroupIndex];
@@ -262,6 +266,60 @@ static std::string getString (pstore::database const & Db, pstore::address Addr)
     return read<std::string> (Source);
 }
 
+
+namespace {
+
+    class SpecialNames {
+    public:
+        void initialize (pstore::database & Db);
+
+        pstore::address CtorName = pstore::address::null ();
+        pstore::address DtorName = pstore::address::null ();
+
+    private:
+        static pstore::address findString (pstore::index::name_index const & NameIndex,
+                                           char const * str);
+    };
+
+    void SpecialNames::initialize (pstore::database & Db) {
+        pstore::index::name_index const * const NameIndex = Db.get_name_index ();
+        if (!NameIndex) {
+            errs () << "Warning: name index was not found.\n";
+        } else {
+            // Get the address of the global tors names from the names set. If the string is
+            // missing, use null since we know that can't appear as a ticket's name.
+            CtorName = findString (*NameIndex, "llvm.global_ctors");
+            DtorName = findString (*NameIndex, "llvm.global_dtors");
+        }
+    }
+
+    pstore::address SpecialNames::findString (pstore::index::name_index const & NameIndex,
+                                              char const * str) {
+        auto Pos = NameIndex.find (str);
+        return (Pos != NameIndex.end ()) ? Pos.get_address () : pstore::address::null ();
+    }
+
+} // anonymous namespace
+
+static ELFSectionType getELFSectionType (pstore::repo::section_type T, pstore::address Name,
+                                         SpecialNames const & Magics) {
+    if (Name == Magics.CtorName) {
+        return ELFSectionType::InitArray;
+    } else if (Name == Magics.DtorName) {
+        return ELFSectionType::FiniArray;
+    }
+
+#define X(a)                                                                                       \
+    case (pstore::repo::section_type::a):                                                          \
+        return (ELFSectionType::a);
+    switch (T) { PSTORE_REPO_SECTION_TYPES }
+#undef X
+    llvm_unreachable ("getELFSectionType: unknown repository section kind.");
+}
+
+raw_ostream & operator<< (raw_ostream & OS, pstore::index::digest const & Digest) {
+    return OS << Digest.to_hex_string ();
+}
 
 int main (int argc, char * argv[]) {
     cl::ParseCommandLineOptions (argc, argv);
@@ -301,18 +359,21 @@ int main (int argc, char * argv[]) {
         return EXIT_FAILURE;
     }
 
+    SpecialNames Magics;
+    Magics.initialize (Db);
+
     using ELFT = ELF64LE;
     ELFState<ELF64LE> State (Db);
 
     {
         auto Ticket = pstore::repo::ticket::load (Db, TicketPos->second);
         for (auto const & TM : *Ticket) {
+            assert (TM.name != pstore::address::null ());
             DEBUG (dbgs () << "Processing: " << getString (Db, TM.name) << '\n');
 
             auto const FragmentPos = FragmentIndex->find (TM.digest);
             if (FragmentPos == FragmentIndex->end ()) {
-                errs () << "Error: fragment {" << TM.digest.high () << ',' << TM.digest.low ()
-                        << "} was not found.\n";
+                errs () << "Error: fragment " << TM.digest << " was not found.\n";
                 return EXIT_FAILURE;
             }
 
@@ -322,8 +383,11 @@ int main (int argc, char * argv[]) {
             for (auto const Key : Fragment->sections ().get_indices ()) {
                 // The symbol type and "discriminator" together identify the ELF output section
                 // to which this fragment's section data will be appended.
-                auto const Type = static_cast<pstore::repo::section_type> (Key);
-                auto const Id = std::make_tuple (Type, Discriminator);
+                auto Type = static_cast<pstore::repo::section_type> (Key);
+                auto const Id = std::make_tuple (
+                    getELFSectionType (static_cast<pstore::repo::section_type> (Key), TM.name,
+                                       Magics),
+                    Discriminator);
 
                 decltype (State.Sections)::iterator Pos;
                 bool DidInsert;

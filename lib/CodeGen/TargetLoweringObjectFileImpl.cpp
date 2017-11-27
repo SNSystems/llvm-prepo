@@ -665,23 +665,38 @@ TargetLoweringObjectFileELF::InitializeELF(bool UseInitArray_) {
 //                                 Program Repository
 //===----------------------------------------------------------------------===//
 
-static const TicketNode *getTicketNode(const GlobalObject *GO) {
-  // Read the fragment metadata from global object.
-  llvm::MDNode *MD = GO->getMetadata(LLVMContext::MD_fragment);
-  if (!MD)
-    return nullptr;
-  const TicketNode *TN = dyn_cast<TicketNode>(MD);
-  if (!TN)
-    report_fatal_error("MD_fragment type is not TicketNode!");
-  return TN;
+MCSection *TargetLoweringObjectFileRepo::getStaticCtorSection(
+    unsigned /*Priority*/, const MCSymbol * /*KeySym*/) const {
+  return StaticCtorSection;
 }
 
-MCSection *TargetLoweringObjectFileRepo::getExplicitSectionGlobal(
-    const GlobalObject *GO, SectionKind Kind, const TargetMachine &TM) const {
-  // TODO: map this named section to a section ID? What happens if there's no
-  // match?
-  llvm_unreachable("getExplicitSectionGlobal not yet implemented");
-  return nullptr;
+MCSection *TargetLoweringObjectFileRepo::getStaticDtorSection(
+    unsigned /*Priority*/, const MCSymbol * /*KeySym*/) const {
+  return StaticDtorSection;
+}
+
+MCSection *TargetLoweringObjectFileRepo::createXXtorsSection(MCContext &Ctx,
+                                                             char const *Name) {
+  const MCContext::RepoTicketContainer &Tickets = Ctx.getTickets();
+  auto End = std::end(Tickets);
+  // TODO: this is a linear search through a potentially large collection of
+  // metatdata nodes.
+  auto CtorsPos =
+      std::find_if(std::begin(Tickets), End, [Name](const TicketNode *T) {
+        return T->getNameAsString() == Name;
+      });
+  if (CtorsPos == End) {
+    return nullptr;
+  }
+  return Ctx.getRepoSection(MCContext::RepoSection::ReadOnlySection,
+                            (*CtorsPos)->getDigest());
+}
+
+void TargetLoweringObjectFileRepo::Initialize(MCContext &Ctx,
+                                              const TargetMachine &TM) {
+  TargetLoweringObjectFile::Initialize(Ctx, TM);
+  StaticCtorSection = this->createXXtorsSection(Ctx, "llvm.global_ctors");
+  StaticDtorSection = this->createXXtorsSection(Ctx, "llvm.global_dtors");
 }
 
 static MCSectionRepo *selectRepoSectionForGlobal(MCContext &Ctx,
@@ -709,10 +724,18 @@ static MCSectionRepo *selectRepoSectionForGlobal(MCContext &Ctx,
   } else if (Kind.isReadOnly()) {
     K = MCContext::RepoSection::ReadOnlySection;
   } else {
-    assert(0);
+    llvm_unreachable("selectRepoSectionForGlobal: unknown section type");
   }
 
   return Ctx.getRepoSection(K, Digest);
+}
+
+MCSection *TargetLoweringObjectFileRepo::getExplicitSectionGlobal(
+    const GlobalObject *GO, SectionKind Kind, const TargetMachine &TM) const {
+
+  // TODO: map this named section to a section ID? What happens if there's no
+  // match?
+  return selectRepoSectionForGlobal(getContext(), GO, Kind);
 }
 
 MCSection *TargetLoweringObjectFileRepo::SelectSectionForGlobal(

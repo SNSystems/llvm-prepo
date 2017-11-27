@@ -11,9 +11,9 @@
 
 #include "llvm/Object/ELF.h"
 
-#include "pstore_mcrepo/fragment.hpp"
 #include "pstore_mcrepo/ticket.hpp"
 
+#include "R2OELFSectionType.h"
 #include "R2OELFSymbolTable.h"
 #include "WriteHelpers.h"
 
@@ -28,6 +28,8 @@
 
 using SectionPtr = std::shared_ptr<pstore::repo::section const>;
 
+// The same as the repo types, but with a few extras
+
 namespace details {
 
     struct SectionInfo {
@@ -40,8 +42,8 @@ namespace details {
         unsigned Type;  // sh_type value
         unsigned Flags; // sh_flags value
     };
-    // FIXME: this can simply be an array. section_type is an enum of small integers.
-    using SectionMap = std::map<pstore::repo::section_type, SectionInfo>;
+    // FIXME: this can simply be an array. ELFSectionType is an enum of small integers.
+    using SectionMap = std::map<ELFSectionType, SectionInfo>;
     extern SectionMap const SectionAttributes;
 
 } // namespace details
@@ -49,7 +51,7 @@ namespace details {
 /// Defines the set of standard (fixed) sections that we put in the ELF file.
 enum SectionIndices { Null, SectionNamesStrTab, SymbolNamesStrTab, SymTab };
 
-using SectionId = std::tuple<pstore::repo::section_type, pstore::address>;
+using SectionId = std::tuple<ELFSectionType, pstore::address>;
 
 template <typename ELFT>
 class OutputSection {
@@ -89,7 +91,7 @@ public:
     OutputIt write (llvm::raw_ostream & OS, SectionNameStringTable & SectionNames,
                     OutputIt OutShdr) const;
 
-    pstore::repo::section_type getType () const {
+    ELFSectionType getType () const {
         return std::get<0> (Id_);
     }
     unsigned getIndex () const {
