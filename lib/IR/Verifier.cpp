@@ -688,7 +688,7 @@ void Verifier::visitGlobalVariable(const GlobalVariable &GV) {
 
   // Visit any TicketNode attachments.
   MDs.clear();
-  GV.getMetadata(LLVMContext::MD_fragment, MDs);
+  GV.getMetadata(LLVMContext::MD_repo_ticket, MDs);
   for (auto const *MD : MDs) {
     if (auto const *GVD = dyn_cast<TicketNode>(MD))
       visitTicketNode(*GVD);

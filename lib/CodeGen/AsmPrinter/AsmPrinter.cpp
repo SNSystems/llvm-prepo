@@ -259,7 +259,12 @@ bool AsmPrinter::doInitialization(Module &M) {
         }
       }
     } else {
-      report_fatal_error("Failed to get 'repo.tickets' module metadata!");
+      // Currently 'Global Variables' and 'Functions' contain the repo_ticket
+      // metadata. If we decide that 'Aliases' and 'IFuncs' should contain the
+      // repo_ticket metadata, we need to consider alias and ifunc lists.
+      if (!M.global_empty() || !M.empty()) {
+        report_fatal_error("Failed to get 'repo.tickets' module metadata!");
+      }
     }
   }
 

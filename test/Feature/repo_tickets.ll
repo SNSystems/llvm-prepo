@@ -1,21 +1,32 @@
+; If the global variables or functions have been defined in the database 'clang.db', 
+; the fragment is skipped and the ticket is added into database.
+;
+; The testcase includes two steps:
+; Step 1: Create the database 'clang.db' which contains the 'sum' fragment.
+; Step 2: run llc again to check that the ticket is added;
+
+; RUN: llc -filetype=obj %s -o %t
 ; RUN: llc -filetype=obj -debug-only repo-object %s -o /dev/null 2>&1 | FileCheck %s
 
 ; REQUIRES: asserts
 
-source_filename = "factorial.c"
-target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"
 target triple = "x86_64-pc-linux-gnu-repo"
 
-; Function Attrs: noinline nounwind optnone
-declare !fragment !0 i32 @factorial(i32) #0
+define i32 @sum(i32 %a, i32 %b) #0 !repo_ticket !0 {
+entry:
+  %a.addr = alloca i32, align 4
+  %b.addr = alloca i32, align 4
+  store i32 %a, i32* %a.addr, align 4
+  store i32 %b, i32* %b.addr, align 4
+  %0 = load i32, i32* %a.addr, align 4
+  %1 = load i32, i32* %b.addr, align 4
+  %add = add nsw i32 %0, %1
+  ret i32 %add
+}
 
-; Function Attrs: noinline nounwind optnone
-declare !fragment !1 i32 @fact3() #0
+!repo.tickets = !{!0}
 
-!repo.tickets = !{!0, !1}
+!0 = !TicketNode(name: "sum", digest: [16 x i8] c"qd\BD6r\8A=\BB\05\8B\D8.\AA\BA\04P", linkage: external)
 
-!0 = !TicketNode(name: "factorial", digest: [16 x i8] c"+Th8\90\1D\9E/\A3\CF=\01\B3<v\DB", linkage: external)
-!1 = !TicketNode(name: "fact3", digest: [16 x i8] c"\CA\FC.\06\8A\84\BE\14 \CB\7F5J\22l\19", linkage: external)
+;CHECK: ticket name 'sum' digest '5004baaa2ed88b05bb3d8a7236bd6471' adding.
 
-;CHECK: ticket name 'factorial' digest 'db763cb3013dcfa32f9e1d903868542b' adding.
-;CHECK: ticket name 'fact3' digest '196c224a357fcb2014be848a062efcca' adding.

@@ -32,7 +32,7 @@ void Digest::set(Module &M, GlobalObject *GO, Digest::DigestType const &D) {
   MDBuilder MDB(M.getContext());
   auto MD = MDB.createTicketNode(GO->getName(), D, GO->getLinkage());
   assert(MD && "TicketNode cannot be NULL!");
-  GO->setMetadata(LLVMContext::MD_fragment, MD);
+  GO->setMetadata(LLVMContext::MD_repo_ticket, MD);
   NamedMDNode *NMD = M.getOrInsertNamedMetadata("repo.tickets");
   assert(NMD && "NamedMDNode cannot be NULL!");
   NMD->addOperand(MD);
@@ -41,7 +41,7 @@ void Digest::set(Module &M, GlobalObject *GO, Digest::DigestType const &D) {
 Digest::DigestType Digest::get(const GlobalObject *GO) {
   // Use the digest in the MCSectionRepo.
   TicketNode *MD =
-      dyn_cast<TicketNode>(GO->getMetadata(LLVMContext::MD_fragment));
+      dyn_cast<TicketNode>(GO->getMetadata(LLVMContext::MD_repo_ticket));
   if (!MD) {
     // If invalid, report the error with report_fatal_error.
     report_fatal_error("Failed to get TicketNode metadata for global object '" +

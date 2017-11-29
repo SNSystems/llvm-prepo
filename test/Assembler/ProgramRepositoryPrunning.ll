@@ -14,24 +14,24 @@
 
 target triple = "x86_64-pc-linux-gnu-elf"
 
-;CHECK: @c = external global i32, align 4, !fragment !0
+;CHECK: @c = external global i32, align 4, !repo_ticket !0
 $c = comdat any
 @c = global i32 8, align 4, comdat($c)
-;CHECK: @a = external global i32, align 4, !fragment !1
+;CHECK: @a = external global i32, align 4, !repo_ticket !1
 $a = comdat exactmatch
 @a = global i32 1, align 4, comdat($a)
-;CHECK: @b = external global i32, align 4, !fragment !2
+;CHECK: @b = external global i32, align 4, !repo_ticket !2
 $b = comdat largest
 @b = internal global i32 1, comdat, align 4, comdat($b)
 
-;CHECK: declare !fragment !3 i8* @me()
+;CHECK: declare !repo_ticket !3 i8* @me()
 $me = comdat noduplicates
 define linkonce_odr i8* @me() comdat($me) {
 entry:
   ret i8* bitcast (i8* ()* @me to i8*)
 }
 
-;CHECK: declare !fragment !4 i32 @foo()
+;CHECK: declare !repo_ticket !4 i32 @foo()
 define internal i32 @foo() {
 entry:
   %0 = load i32, i32* @a, align 4
@@ -43,7 +43,7 @@ entry:
   ret i32 %1
 }
 
-;CHECK: declare !fragment !5 i32 @bar()
+;CHECK: declare !repo_ticket !5 i32 @bar()
 define i32 @bar() {
 entry:
   %call = call i32 @foo()

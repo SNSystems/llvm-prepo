@@ -93,9 +93,9 @@ bool RepoPruning::runOnModule(Module &M) {
       ++NumGO;
       GO.setComdat(nullptr);
       // Remove all metadata except fragment.
-      MD = GO.getMetadata(LLVMContext::MD_fragment);
+      MD = GO.getMetadata(LLVMContext::MD_repo_ticket);
       GO.clearMetadata();
-      GO.setMetadata(LLVMContext::MD_fragment, MD);
+      GO.setMetadata(LLVMContext::MD_repo_ticket, MD);
       GO.setLinkage(GlobalValue::ExternalLinkage);
       return true;
     }
@@ -115,7 +115,7 @@ bool RepoPruning::runOnModule(Module &M) {
   for (Function &Func : M) {
     if (EraseUnchangedGlobalObect(Func, NumFunctions)) {
       Func.deleteBody();
-      Func.setMetadata(LLVMContext::MD_fragment, MD);
+      Func.setMetadata(LLVMContext::MD_repo_ticket, MD);
     }
   }
 

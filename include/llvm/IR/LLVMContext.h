@@ -102,7 +102,7 @@ public:
     MD_associated = 22,               // "associated"
     MD_callees = 23,                  // "callees"
     MD_irr_loop = 24,                 // "irr_loop"
-    MD_fragment = 25,                 // "fragment"
+    MD_fragment = 25,                 // "repo_ticket"
   };
 
   /// Known operand bundle tag IDs, which always have the same value.  All
