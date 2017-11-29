@@ -583,6 +583,13 @@ void RepoObjectWriter::writeObject(MCAssembler &Asm,
     if (DigestsIndex->find(Key) != DigestsIndex->end()) {
       DEBUG(dbgs() << "fragment " << Key << " exists. skipping\n");
     } else {
+      // The fragment creation APIs require that the input sections are sorted
+      // by section_content::type. This guarantees that for them.
+      std::sort(Fragment.second.begin(), Fragment.second.end(),
+                [](std::unique_ptr<pstore::repo::section_content> const &a,
+                   std::unique_ptr<pstore::repo::section_content> const &b) {
+                  return a->type < b->type;
+                });
       auto Begin = pstore::repo::details::make_section_content_iterator(
           Fragment.second.begin());
       auto End = pstore::repo::details::make_section_content_iterator(

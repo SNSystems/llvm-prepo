@@ -190,6 +190,7 @@ void OutputSection<ELFT>::append (pstore::repo::ticket_member const & TM, Sectio
     }
 
     // FIXME: what about the internal fixups?
+    assert (SectionData->ifixups ().size () == 0);
 
     SectionSize_ += ObjectSize;
 }
