@@ -20,9 +20,12 @@ namespace details {
         {ELFSectionType::Data, {".data", ELF::SHT_PROGBITS, ELF::SHF_ALLOC | ELF::SHF_WRITE}},
         // X (RelRo)
         {ELFSectionType::Text, {".text", ELF::SHT_PROGBITS, ELF::SHF_ALLOC | ELF::SHF_EXECINSTR}},
-        // X (Mergeable1ByteCString)
-        // X (Mergeable2ByteCString)
-        // X (Mergeable4ByteCString)
+        {ELFSectionType::Mergeable1ByteCString,
+         {".rodata.str1", ELF::SHT_PROGBITS, ELF::SHF_ALLOC | ELF::SHF_MERGE | ELF::SHF_STRINGS}},
+        {ELFSectionType::Mergeable1ByteCString,
+         {".rodata.str2", ELF::SHT_PROGBITS, ELF::SHF_ALLOC | ELF::SHF_MERGE | ELF::SHF_STRINGS}},
+        {ELFSectionType::Mergeable1ByteCString,
+         {".rodata.str4", ELF::SHT_PROGBITS, ELF::SHF_ALLOC | ELF::SHF_MERGE | ELF::SHF_STRINGS}},
         {ELFSectionType::MergeableConst4,
          {".rodata.cst4", ELF::SHT_PROGBITS, ELF::SHF_ALLOC | ELF::SHF_MERGE}},
         {ELFSectionType::MergeableConst8,
@@ -31,13 +34,11 @@ namespace details {
          {".rodata.cst16", ELF::SHT_PROGBITS, ELF::SHF_ALLOC | ELF::SHF_MERGE}},
         {ELFSectionType::MergeableConst32,
          {".rodata.cst32", ELF::SHT_PROGBITS, ELF::SHF_ALLOC | ELF::SHF_MERGE}},
-        // X (MergeableConst)
         {ELFSectionType::ReadOnly, {".rodata", ELF::SHT_PROGBITS, ELF::SHF_ALLOC}},
         {ELFSectionType::ThreadBSS,
          {".tbss", ELF::SHT_NOBITS, ELF::SHF_ALLOC | ELF::SHF_WRITE | ELF::SHF_TLS}},
         {ELFSectionType::ThreadData,
          {".tdata", ELF::SHT_PROGBITS, ELF::SHF_ALLOC | ELF::SHF_WRITE | ELF::SHF_TLS}},
-        // X (ThreadLocal)
         // X (Metadata)
         {ELFSectionType::InitArray,
          {".init_array", ELF::SHT_INIT_ARRAY, ELF::SHF_ALLOC | ELF::SHF_WRITE}},

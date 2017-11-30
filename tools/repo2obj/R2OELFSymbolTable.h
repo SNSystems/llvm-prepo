@@ -136,12 +136,10 @@ unsigned SymbolTable<ELFT>::sectionToSymbolType (ELFSectionType T) {
     case ELFSectionType::MergeableConst8:
     case ELFSectionType::MergeableConst16:
     case ELFSectionType::MergeableConst32:
-    case ELFSectionType::MergeableConst:
     case ELFSectionType::ReadOnly:
         return llvm::ELF::STT_OBJECT;
     case ELFSectionType::ThreadBSS:
     case ELFSectionType::ThreadData:
-    case ELFSectionType::ThreadLocal:
         return llvm::ELF::STT_TLS;
     default:
         return llvm::ELF::STT_NOTYPE;

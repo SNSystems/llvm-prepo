@@ -332,55 +332,75 @@ void svector_ostream<Container>::pwrite_impl(const char *Ptr, size_t Size,
 
 } // namespace
 
+static pstore::repo::section_type SectionKindToRepoType(SectionKind K) {
+  if (K.isText()) {
+    return pstore::repo::section_type::Text;
+  }
+
+  // TODO: add sections types for BSSLocal and BSSExtern?
+  if (K.isBSS()) {
+    return pstore::repo::section_type::BSS;
+  }
+  if (K.isCommon()) {
+    return pstore::repo::section_type::Common;
+  }
+  if (K.isData()) {
+    return pstore::repo::section_type::Data;
+  }
+  if (K.isReadOnly()) {
+    return pstore::repo::section_type::ReadOnly;
+  }
+  if (K.isReadOnlyWithRel()) {
+    return pstore::repo::section_type::RelRo;
+  }
+
+  if (K.isMergeableConst4()) {
+    return pstore::repo::section_type::MergeableConst4;
+  }
+  if (K.isMergeableConst8()) {
+    return pstore::repo::section_type::MergeableConst8;
+  }
+  if (K.isMergeableConst16()) {
+    return pstore::repo::section_type::MergeableConst16;
+  }
+  if (K.isMergeableConst32()) {
+    return pstore::repo::section_type::MergeableConst32;
+  }
+  assert(!K.isMergeableConst() &&
+         "isMergeableConst should be covered by the four previous checks");
+
+  if (K.isMergeable1ByteCString()) {
+    return pstore::repo::section_type::Mergeable1ByteCString;
+  }
+  if (K.isMergeable2ByteCString()) {
+    return pstore::repo::section_type::Mergeable2ByteCString;
+  }
+  if (K.isMergeable4ByteCString()) {
+    return pstore::repo::section_type::Mergeable4ByteCString;
+  }
+  assert(!K.isMergeableCString() &&
+         "isMergeableCString should be covered by the three previous checks");
+
+  if (K.isThreadBSS()) {
+    return pstore::repo::section_type::ThreadBSS;
+  }
+  if (K.isThreadData()) {
+    return pstore::repo::section_type::ThreadData;
+  }
+  assert(!K.isThreadLocal() &&
+         "isThreadLocation should be covered by the two previous checks");
+
+  llvm_unreachable("Unsupported section type in getRepoSection");
+}
+
 void RepoObjectWriter::writeSectionData(ContentsType &Fragments,
                                         const MCAssembler &Asm, MCSection &Sec,
                                         const MCAsmLayout &Layout,
                                         ModuleNamesContainer &Names) {
   auto &Section = static_cast<MCSectionRepo &>(Sec);
 
-  auto St = pstore::repo::section_type::Data;
-
-  auto const kind = Section.getKind();
-  if (kind.isBSS()) {
-    St = pstore::repo::section_type::BSS;
-  } else if (kind.isCommon()) {
-    St = pstore::repo::section_type::Common;
-  } else if (kind.isData()) {
-    St = pstore::repo::section_type::Data;
-  } else if (kind.isReadOnlyWithRel()) {
-    St = pstore::repo::section_type::RelRo;
-  } else if (kind.isText()) {
-    St = pstore::repo::section_type::Text;
-  } else if (kind.isMergeable1ByteCString()) {
-    St = pstore::repo::section_type::Mergeable1ByteCString;
-  } else if (kind.isMergeable2ByteCString()) {
-    St = pstore::repo::section_type::Mergeable2ByteCString;
-  } else if (kind.isMergeable4ByteCString()) {
-    St = pstore::repo::section_type::Mergeable4ByteCString;
-  } else if (kind.isMergeableConst4()) {
-    St = pstore::repo::section_type::MergeableConst4;
-  } else if (kind.isMergeableConst8()) {
-    St = pstore::repo::section_type::MergeableConst8;
-  } else if (kind.isMergeableConst16()) {
-    St = pstore::repo::section_type::MergeableConst16;
-  } else if (kind.isMergeableConst32()) {
-    St = pstore::repo::section_type::MergeableConst32;
-  } else if (kind.isMergeableConst()) {
-    St = pstore::repo::section_type::MergeableConst;
-  } else if (kind.isReadOnly()) {
-    St = pstore::repo::section_type::ReadOnly;
-  } else if (kind.isThreadBSS()) {
-    St = pstore::repo::section_type::ThreadBSS;
-  } else if (kind.isThreadData()) {
-    St = pstore::repo::section_type::ThreadData;
-  } else if (kind.isThreadLocal()) {
-    St = pstore::repo::section_type::ThreadLocal;
-  } else if (kind.isMetadata()) {
-    St = pstore::repo::section_type::Metadata;
-  } else {
-    llvm_unreachable("Unknown section type in writeRepoSectionData");
-  }
-
+  pstore::repo::section_type const St =
+      SectionKindToRepoType(Section.getKind());
   unsigned const Alignment = Sec.getAlignment();
   // TODO: need a cleaner way to check that the alignment value will fit.
   assert(Alignment < std::numeric_limits<std::uint8_t>::max());
@@ -398,6 +418,26 @@ void RepoObjectWriter::writeSectionData(ContentsType &Fragments,
   auto const &Relocs = Relocations[&Section];
   Content->xfixups.reserve(Relocs.size());
   for (auto const &Relocation : Relocations[&Section]) {
+    using repo_relocation_type = pstore::repo::relocation_type;
+    assert (Relocation.Type >= std::numeric_limits <repo_relocation_type>::min ()
+            && Relocation.Type <= std::numeric_limits <repo_relocation_type>::max ());
+
+    MCSymbolRepo const *const Symbol = Relocation.Symbol;
+    if (Symbol->isInSection(false)) {
+      MCSection &S = Symbol->getSection();
+      if (MCSectionRepo const *const TargetSection =
+              dyn_cast<MCSectionRepo>(&S)) {
+        if (TargetSection->hash() == Section.hash()) {
+          Content->ifixups.emplace_back(
+               SectionKindToRepoType(TargetSection->getKind()),
+               static_cast<repo_relocation_type>(Relocation.Type), Relocation.Offset,
+               Relocation.Addend);
+
+          continue;
+        }
+      }
+    }
+
     // Insert the target symbol name into the set of known names for this
     // module. By gathering just a single instance of each string used in this
     // TU we reduce the number of insertions into the global name set (which are
@@ -416,7 +456,7 @@ void RepoObjectWriter::writeSectionData(ContentsType &Fragments,
     // Attach a suitable external fixup to this section.
     Content->xfixups.push_back(
         pstore::repo::external_fixup{{NamePtr},
-                                     static_cast<std::uint8_t>(Relocation.Type),
+                                     static_cast<repo_relocation_type>(Relocation.Type),
                                      Relocation.Offset,
                                      Relocation.Addend});
   }
