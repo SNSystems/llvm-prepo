@@ -37,6 +37,7 @@
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Format.h"
+#include "llvm/Support/Path.h"
 #include "llvm/Support/StringSaver.h"
 #include <set>
 #include <string>
@@ -569,6 +570,7 @@ StringRef streamPath(raw_fd_ostream &Stream, StringStorage &ResultPath) {
     report_fatal_error("TicketNode: Invalid output file path: " +
                        ErrorCode.message() + ".");
   }
+  llvm::sys::path::remove_filename(ResultPath);
   return ResultPath.str();
 }
 
