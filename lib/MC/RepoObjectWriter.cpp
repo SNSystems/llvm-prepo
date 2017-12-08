@@ -348,13 +348,6 @@ static pstore::repo::section_type SectionKindToRepoType(SectionKind K) {
   if (K.isData()) {
     return pstore::repo::section_type::Data;
   }
-  if (K.isReadOnly()) {
-    return pstore::repo::section_type::ReadOnly;
-  }
-  if (K.isReadOnlyWithRel()) {
-    return pstore::repo::section_type::RelRo;
-  }
-
   if (K.isMergeableConst4()) {
     return pstore::repo::section_type::MergeableConst4;
   }
@@ -382,6 +375,12 @@ static pstore::repo::section_type SectionKindToRepoType(SectionKind K) {
   assert(!K.isMergeableCString() &&
          "isMergeableCString should be covered by the three previous checks");
 
+  if (K.isReadOnly()) {
+    return pstore::repo::section_type::ReadOnly;
+  }
+  if (K.isReadOnlyWithRel()) {
+    return pstore::repo::section_type::RelRo;
+  }
   if (K.isThreadBSS()) {
     return pstore::repo::section_type::ThreadBSS;
   }
