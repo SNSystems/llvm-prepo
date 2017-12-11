@@ -1,0 +1,17 @@
+; RUN: llc -filetype=obj -debug-only repo-object %s -o %t 2>&1 | FileCheck %s
+
+; REQUIRES: asserts
+
+target triple = "x86_64-pc-linux-gnu-repo"
+
+define double @_Z4testv() !repo_ticket !0 {
+entry:
+  ret double 1.900000e+00
+}
+
+!repo.tickets = !{!0}
+
+!0 = !TicketNode(name: "_Z4testv", digest: [16 x i8] c"\B1\8C\0A\BD\C2P~\D7\12xf\7F\B5\D2a\88", linkage: external)
+
+;CHECK: section type 'MergeableConst8' and alignment 3
+;CHECK: section type 'Text' and alignment 4

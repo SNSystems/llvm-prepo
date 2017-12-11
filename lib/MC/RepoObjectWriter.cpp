@@ -401,9 +401,11 @@ void RepoObjectWriter::writeSectionData(ContentsType &Fragments,
 
   pstore::repo::section_type const St =
       SectionKindToRepoType(Section.getKind());
-  unsigned const Alignment = Sec.getAlignment();
+  assert(Sec.getAlignment() > 0);
+  unsigned const Alignment = Log2_32(Sec.getAlignment());
+
   // TODO: need a cleaner way to check that the alignment value will fit.
-  assert(Alignment < std::numeric_limits<std::uint8_t>::max());
+  assert(Alignment <= std::numeric_limits<std::uint8_t>::max());
 
   auto Content = make_unique<pstore::repo::section_content>(
       St, static_cast<std::uint8_t>(Alignment));
@@ -460,6 +462,9 @@ void RepoObjectWriter::writeSectionData(ContentsType &Fragments,
                                      Relocation.Offset,
                                      Relocation.Addend});
   }
+
+  DEBUG(dbgs() << "section type '" << Content->type << "' and alignment "
+               << unsigned(Content->align) << '\n');
 
   // A "dummy" section is created to provide a default for the assembler but we
   // don't write it to the repository.
