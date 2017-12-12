@@ -173,8 +173,8 @@ std::uint64_t OutputSection<ELFT>::SectionInfo::symbol (SymbolTable<ELFT> & Symb
         Symbol_ = Symbols.insertSymbol (Name, Section_, Offset_, 0 /*size*/,
                                         pstore::repo::linkage_type::internal);
 
-        DEBUG (dbgs () << "  created symbol (" << Name << ") for internal fixup to section "
-                       << Section_->getIndex () << ". Index " << Symbol_ << '\n');
+        DEBUG (dbgs () << "  created symbol (" << Name << ") for internal fixup (index " << Symbol_
+                       << ")\n");
 
         assert (Symbol_ != ELF::STN_UNDEF);
     }
