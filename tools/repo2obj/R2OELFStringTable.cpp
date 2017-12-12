@@ -62,6 +62,7 @@ std::tuple<std::uint64_t, std::uint64_t> StringTable::write (llvm::raw_ostream &
     for (SString const & Name : Data_) {
         assert (OS.tell () - Start == this->position (Name));
         OS << llvm::StringRef{Name.data (), Name.length ()} << '\0';
+    }
 
     std::uint64_t End = OS.tell ();
     assert (End >= Start);
