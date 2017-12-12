@@ -666,9 +666,7 @@ void RepoObjectWriter::writeObject(MCAssembler &Asm,
       DEBUG(dbgs() << "fragment " << Key << " adding. size="
                    << pstore::repo::fragment::size_bytes(Begin, End) << '\n');
 
-      pstore::record FragmentRecord =
-          pstore::repo::fragment::alloc(Transaction, Begin, End);
-      auto Kvp = std::make_pair(Key, FragmentRecord);
+      auto const Kvp = std::make_pair(Key, pstore::repo::fragment::alloc(Transaction, Begin, End));
       DigestsIndex->insert(Transaction, Kvp);
     }
   }
@@ -703,10 +701,9 @@ void RepoObjectWriter::writeObject(MCAssembler &Asm,
                    << TicketMember.digest << "' adding." << '\n');
     }
 
-    // Store the Ticket into store.
-    pstore::record TicketRecord = pstore::repo::ticket::alloc(
-        Transaction, OutputPathAddr, TicketContent.second);
-    auto Kvp = std::make_pair(TicketContent.first, TicketRecord);
+    // Store the Ticket.
+    auto const Kvp = std::make_pair(TicketContent.first, pstore::repo::ticket::alloc(
+        Transaction, OutputPathAddr, TicketContent.second));
     TicketIndex->insert(Transaction, Kvp);
   }
 
