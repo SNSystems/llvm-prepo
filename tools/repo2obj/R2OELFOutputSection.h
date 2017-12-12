@@ -12,11 +12,15 @@
 #include "llvm/Object/ELF.h"
 
 #include "pstore_mcrepo/ticket.hpp"
+#include "pstore/sstring_view.hpp"
+#include "pstore/sstring_view_archive.hpp"
 
+#include "R2OELFStringTable.h"
 #include "R2OELFSectionType.h"
 #include "R2OELFSymbolTable.h"
 #include "WriteHelpers.h"
 
+#include <array>
 #include <cstdint>
 #include <limits>
 #include <map>
@@ -72,8 +76,29 @@ public:
         return Relocations_.size () * sizeof (Elf_Rela);
     }
 
+    /// This structure is used to provide the data necessary to create a symbol which references
+    /// the first byte of each section contributed by a fragment.
+    struct SectionInfo {
+        SectionInfo () noexcept = default;
+        SectionInfo (OutputSection<ELFT> * Section, std::uint64_t Offset) noexcept
+                : Section_{Section}
+                , Offset_{Offset} {}
+
+        OutputSection<ELFT> * section () {
+            return Section_;
+        }
+        /// Returns the index of the symbol associated with this section/offset, creating it if
+        /// necessary.
+        std::uint64_t symbol (SymbolTable<ELFT> & Symbols);
+
+    private:
+        OutputSection<ELFT> * Section_ = nullptr;
+        std::uint64_t Offset_ = 0;
+        std::uint64_t Symbol_ = llvm::ELF::STN_UNDEF;
+    };
+
     void append (pstore::repo::ticket_member const & TM, SectionPtr SectionData,
-                 SymbolTable<ELFT> & Symbols);
+                 SymbolTable<ELFT> & Symbols, std::vector<SectionInfo> & OutputSections);
 
     /// \returns The number of ELF sections added by this OutputSection.
     std::size_t numSections () const;
@@ -84,12 +109,11 @@ public:
     /// \tparam OutputIt  An output iterator to which will be written one or more instance of the
     /// Elf_Shdr type.
     /// \param OS The binary output stream to which the contents of the output sections are written.
-    /// \param SectionNames
+    /// \param SectionNames  The collection of section names.
     /// \param OutShdr  An output iterator to which will be written one or more instance of the
     /// Elf_Shdr type as the write function creates sections in the output.
     template <typename OutputIt>
-    OutputIt write (llvm::raw_ostream & OS, SectionNameStringTable & SectionNames,
-                    OutputIt OutShdr) const;
+    OutputIt write (llvm::raw_ostream & OS, StringTable & SectionNames, OutputIt OutShdr) const;
 
     ELFSectionType getType () const {
         return std::get<0> (Id_);
@@ -134,23 +158,34 @@ private:
 
     std::string dataSectionName (std::string SectionName, pstore::address DiscriminatorName) const;
     std::string relocationSectionName (std::string const & BaseName) const;
-
-    std::string getString (pstore::address Addr) const;
 };
 
 // FIXME: this needs to be passeed in and not hard-wired.
 constexpr bool IsMips64EL = false;
 
-
 template <typename ELFT>
-std::string OutputSection<ELFT>::getString (pstore::address Addr) const {
-    using namespace pstore::serialize;
-    archive::database_reader Source (Db_, Addr);
-    return read<std::string> (Source);
+std::uint64_t OutputSection<ELFT>::SectionInfo::symbol (SymbolTable<ELFT> & Symbols) {
+    using namespace llvm;
+    if (Symbol_ == ELF::STN_UNDEF) {
+        static unsigned PrivateSymbolCount = 0;
+
+        auto Name = stringToSStringView (".LR" + std::to_string (PrivateSymbolCount++));
+        Symbol_ = Symbols.insertSymbol (Name, Section_, Offset_, 0 /*size*/,
+                                        pstore::repo::linkage_type::internal);
+
+        DEBUG (dbgs () << "  created symbol (" << Name << ") for internal fixup to section "
+                       << Section_->getIndex () << ". Index " << Symbol_ << '\n');
+
+        assert (Symbol_ != ELF::STN_UNDEF);
+    }
+    return Symbol_;
 }
 
+
+// writePadding
+// ~~~~~~~~~~~~
 // FIXME: the padding data depends on the output section. In particular, the text section should
-// receive NOP instructions. This is modelled in 
+// receive NOP instructions. This is modelled in
 template <typename ELFT>
 void OutputSection<ELFT>::writePadding (llvm::raw_ostream & OS, unsigned bytes) {
     auto const b = uint8_t{0};
@@ -159,50 +194,70 @@ void OutputSection<ELFT>::writePadding (llvm::raw_ostream & OS, unsigned bytes) 
     }
 }
 
+// append
+// ~~~~~~
 template <typename ELFT>
 void OutputSection<ELFT>::append (pstore::repo::ticket_member const & TM, SectionPtr SectionData,
-                                  SymbolTable<ELFT> & Symbols) {
+                                  SymbolTable<ELFT> & Symbols,
+                                  std::vector<SectionInfo> & OutputSections) {
+
     using namespace llvm;
 
     Contributions_.emplace_back (SectionData);
 
     auto const ObjectSize = SectionData->data ().size ();
-    DEBUG (dbgs () << "  generating relocations FROM " << this->getString (TM.name) << '\n');
+    DEBUG (dbgs () << "  generating relocations FROM '" << ::getString (Db_, TM.name) << "'\n");
 
-    auto const DataAlign = SectionData->align ();
+    std::uint8_t const DataAlign = std::uint8_t{1} << SectionData->align ();
     // ELF section alignment is the maximum of the alignment of all its contributions.
     Align_ = std::max (Align_, DataAlign);
 
     SectionSize_ += alignedBytes (SectionSize_, DataAlign);
-    Symbols.insertSymbol (TM.name, this, SectionSize_, ObjectSize, TM.linkage);
+    Symbols.insertSymbol (getString (Db_, TM.name), this, SectionSize_, ObjectSize, TM.linkage);
 
-    auto const & XFixups = SectionData->xfixups ();
-    for (pstore::repo::external_fixup const & Fixup : XFixups) {
-        auto const SymbolIndex = Symbols.insertSymbol (Fixup.name);
-        DEBUG (dbgs () << "  generating relocation TO '" << this->getString (Fixup.name)
-                       << "' symbol index " << SymbolIndex << '\n');
+    for (pstore::repo::external_fixup const & XFixup : SectionData->xfixups ()) {
+        auto TargetName = getString (Db_, XFixup.name);
+        std::uint64_t const SymbolIndex = Symbols.insertSymbol (TargetName);
+        DEBUG (dbgs () << "  generating relocation TO '" << TargetName << "' symbol index "
+                       << SymbolIndex << '\n');
 
         Elf_Rela Reloc;
-        Reloc.setSymbolAndType (SymbolIndex, Fixup.type, IsMips64EL);
-        Reloc.r_offset = Fixup.offset + SectionSize_;
-        Reloc.r_addend = Fixup.addend;
+        Reloc.setSymbolAndType (SymbolIndex, XFixup.type, IsMips64EL);
+        Reloc.r_offset = XFixup.offset + SectionSize_;
+        Reloc.r_addend = XFixup.addend;
         Relocations_.push_back (Reloc);
     }
 
-    // FIXME: what about the internal fixups?
-    assert (SectionData->ifixups ().size () == 0);
+    for (pstore::repo::internal_fixup const & IFixup : SectionData->ifixups ()) {
+        auto TargetSectionIndex =
+            static_cast<typename std::underlying_type<decltype (IFixup.section)>::type> (
+                IFixup.section);
+        assert (TargetSectionIndex >= 0 && TargetSectionIndex < OutputSections.size ());
+        auto & TargetSection = OutputSections[TargetSectionIndex];
+        
+        std::uint64_t SymbolIndex = TargetSection.symbol (Symbols);
+        Elf_Rela Reloc;
+        Reloc.setSymbolAndType (SymbolIndex, IFixup.type, IsMips64EL);
+        Reloc.r_offset = IFixup.offset + SectionSize_;
+        Reloc.r_addend = IFixup.addend;
+        Relocations_.push_back (Reloc);
+    }
 
     SectionSize_ += ObjectSize;
 }
 
+// numSections
+// ~~~~~~~~~~~
 template <typename ELFT>
 std::size_t OutputSection<ELFT>::numSections () const {
     return 1U + static_cast<std::size_t> (Relocations_.size () > 0);
 }
 
+// write
+// ~~~~~
 template <typename ELFT>
 template <typename OutputIt>
-OutputIt OutputSection<ELFT>::write (llvm::raw_ostream & OS, SectionNameStringTable & SectionNames,
+OutputIt OutputSection<ELFT>::write (llvm::raw_ostream & OS, StringTable & SectionNames,
                                      OutputIt OutShdr) const {
     assert (Index_ != UnknownIndex);
     auto const GroupFlag = IsLinkOnce_ ? Elf_Word (llvm::ELF::SHF_GROUP) : Elf_Word (0);
@@ -229,7 +284,7 @@ OutputIt OutputSection<ELFT>::write (llvm::raw_ostream & OS, SectionNameStringTa
 
         Elf_Shdr SH;
         zero (SH);
-        SH.sh_name = SectionNames.insert (SectionName);
+        SH.sh_name = SectionNames.insert (stringToSStringView (SectionName));
         SH.sh_type = Attrs->second.Type;
         SH.sh_flags = Attrs->second.Flags | GroupFlag;
         SH.sh_offset = StartPos;
@@ -247,7 +302,8 @@ OutputIt OutputSection<ELFT>::write (llvm::raw_ostream & OS, SectionNameStringTa
 
         Elf_Shdr RelaSH;
         zero (RelaSH);
-        RelaSH.sh_name = SectionNames.insert (this->relocationSectionName (Attrs->second.Name));
+        RelaSH.sh_name = SectionNames.insert (
+            stringToSStringView (this->relocationSectionName (Attrs->second.Name)));
         RelaSH.sh_type = llvm::ELF::SHT_RELA;
         RelaSH.sh_flags =
             llvm::ELF::SHF_INFO_LINK | GroupFlag; // sh_info holds index of the target section.
@@ -262,16 +318,20 @@ OutputIt OutputSection<ELFT>::write (llvm::raw_ostream & OS, SectionNameStringTa
     return OutShdr;
 }
 
+// dataSectionName
+// ~~~~~~~~~~~~~~~
 template <typename ELFT>
 std::string OutputSection<ELFT>::dataSectionName (std::string SectionName,
                                                   pstore::address DiscriminatorName) const {
     if (DiscriminatorName != pstore::address::null ()) {
         SectionName += '.';
-        SectionName += this->getString (DiscriminatorName);
+        SectionName += getString (Db_, DiscriminatorName).to_string ();
     }
     return SectionName;
 }
 
+// relocationSectionName
+// ~~~~~~~~~~~~~~~~~~~~~
 template <typename ELFT>
 std::string OutputSection<ELFT>::relocationSectionName (std::string const & BaseName) const {
     if (BaseName[0] == '.') {

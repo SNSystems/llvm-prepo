@@ -23,6 +23,9 @@
 
 #include "pstore/database.hpp"
 #include "pstore/hamt_map.hpp"
+#include "pstore/hamt_set.hpp"
+#include "pstore/index_types.hpp"
+#include "pstore/sstring_view_archive.hpp"
 #include "pstore_mcrepo/fragment.hpp"
 #include "pstore_mcrepo/ticket.hpp"
 
@@ -112,19 +115,18 @@ struct ELFState {
     std::map<SectionId, OutputSection<ELFT>> Sections;
     std::map<pstore::address, std::vector<OutputSection<ELFT> *>> Groups;
 
-    SectionNameStringTable SectionNames;
-    StringTable<pstore::address> SymbolNames;
+    StringTable SectionNames;
+    StringTable SymbolNames;
     SymbolTable<ELFT> Symbols;
 
     explicit ELFState (pstore::database & Db)
-            : SymbolNames{StringPolicy<pstore::address> (Db)}
-            , Symbols{SymbolNames} {}
+            : Symbols{SymbolNames} {}
 
     void initELFHeader (Elf_Ehdr & Header);
     void initStandardSections ();
     uint64_t writeSectionHeaders (raw_ostream & OS);
 
-    std::size_t buildGroupSections ();
+    std::size_t buildGroupSections (pstore::database & Db);
 
     /// Writes the group section data that was recorded by an earlier call to buildGroupSections().
     /// The group section headers are updated to record the location and and size of this data.
@@ -169,21 +171,21 @@ void ELFState<ELFT>::initStandardSections () {
 
     // Section name string table
     zero (SH);
-    SH.sh_name = SectionNames.insert (".shstrtab");
+    SH.sh_name = SectionNames.insert (stringToSStringView (".shstrtab"));
     SH.sh_type = ELF::SHT_STRTAB;
     assert (SectionHeaders.size () == SectionIndices::SectionNamesStrTab);
     SectionHeaders.push_back (SH);
 
     // Symbol name string table
     zero (SH);
-    SH.sh_name = SectionNames.insert (".strtab");
+    SH.sh_name = SectionNames.insert (stringToSStringView (".strtab"));
     SH.sh_type = ELF::SHT_STRTAB;
     assert (SectionHeaders.size () == SectionIndices::SymbolNamesStrTab);
     SectionHeaders.push_back (SH);
 
     // Symbol table
     zero (SH);
-    SH.sh_name = SectionNames.insert (".symtab");
+    SH.sh_name = SectionNames.insert (stringToSStringView (".symtab"));
     SH.sh_type = ELF::SHT_SYMTAB;
     SH.sh_link = SectionIndices::SymbolNamesStrTab;
     // FIXME: st_info should be one greater than the symbol table index of the last local symbol
@@ -209,15 +211,17 @@ uint64_t ELFState<ELFT>::writeSectionHeaders (raw_ostream & OS) {
 // creates the headers; later, once we know the collections of thsection indices that they'll
 // contain, we can write the group section bodies.
 template <typename ELFT>
-std::size_t ELFState<ELFT>::buildGroupSections () {
+std::size_t ELFState<ELFT>::buildGroupSections (pstore::database & Db) {
     auto const FirstGroupIndex = SectionHeaders.size ();
     for (auto const & G : Groups) {
         ELFState<ELFT>::Elf_Shdr SH;
         zero (SH);
-        SH.sh_name = SectionNames.insert (".group");
+        // TO: we could end up creating the ".group" string many times.
+        SH.sh_name = SectionNames.insert (stringToSStringView (".group"));
         SH.sh_type = ELF::SHT_GROUP;
         SH.sh_link = SectionIndices::SymTab;
-        SH.sh_info = Symbols.insertSymbol (G.first); // The group's signature symbol entry.
+        SH.sh_info =
+            Symbols.insertSymbol (getString (Db, G.first)); // The group's signature symbol entry.
         SH.sh_entsize = sizeof (ELF::Elf32_Word);
         SH.sh_addralign = alignof (ELF::Elf32_Word);
         SectionHeaders.push_back (SH);
@@ -230,16 +234,17 @@ void ELFState<ELFT>::writeGroupSections (raw_ostream & OS, std::size_t ThisGroup
     for (auto const & G : Groups) {
         writeAlignmentPadding<ELF::Elf32_Word> (OS);
         auto const StartPos = OS.tell ();
-	auto NumWords = 1U;
+        auto NumWords = 1U;
         writeRaw (OS, ELF::Elf32_Word{ELF::GRP_COMDAT});
 
         for (OutputSection<ELFT> const * GroupMember : G.second) {
             auto SectionIndex = GroupMember->getIndex ();
             writeRaw (OS, ELF::Elf32_Word{SectionIndex});
-	    ++NumWords;
+            ++NumWords;
+
             if (GroupMember->relocationsSize () > 0) {
-	      writeRaw (OS, ELF::Elf32_Word{SectionIndex + 1});
-	      ++NumWords;
+                writeRaw (OS, ELF::Elf32_Word{SectionIndex + 1});
+                ++NumWords;
             }
         }
 
@@ -260,13 +265,6 @@ LLVM_ATTRIBUTE_NORETURN static void error (Twine Message) {
     exit (EXIT_FAILURE);
 }
 
-static std::string getString (pstore::database const & Db, pstore::address Addr) {
-    using namespace pstore::serialize;
-    archive::database_reader Source (Db, Addr);
-    return read<std::string> (Source);
-}
-
-
 namespace {
 
     class SpecialNames {
@@ -278,11 +276,11 @@ namespace {
 
     private:
         static pstore::address findString (pstore::index::name_index const & NameIndex,
-                                           char const * str);
+                                           std::string str);
     };
 
     void SpecialNames::initialize (pstore::database & Db) {
-        pstore::index::name_index const * const NameIndex = Db.get_name_index ();
+        pstore::index::name_index const * const NameIndex = pstore::index::get_name_index (Db);
         if (!NameIndex) {
             errs () << "Warning: name index was not found.\n";
         } else {
@@ -294,8 +292,8 @@ namespace {
     }
 
     pstore::address SpecialNames::findString (pstore::index::name_index const & NameIndex,
-                                              char const * str) {
-        auto Pos = NameIndex.find (str);
+                                              std::string str) {
+        auto Pos = NameIndex.find (pstore::sstring_view<char const *>{str.data (), str.length ()});
         return (Pos != NameIndex.end ()) ? Pos.get_address () : pstore::address::null ();
     }
 
@@ -341,13 +339,13 @@ int main (int argc, char * argv[]) {
 
 
     pstore::database Db (RepoPath, pstore::database::access_mode::read_only);
-    pstore::index::ticket_index const * const TicketIndex = Db.get_ticket_index ();
+    pstore::index::ticket_index const * const TicketIndex = pstore::index::get_ticket_index (Db);
     if (!TicketIndex) {
         errs () << "Error: ticket index was not found.\n";
         return EXIT_FAILURE;
     }
     pstore::index::digest_index const * const FragmentIndex =
-        Db.get_digest_index (); // FIXME: this should be called "get_fragment_index".
+        pstore::index::get_digest_index (Db); // FIXME: this should be called "get_fragment_index".
     if (!FragmentIndex) {
         errs () << "Error: fragment index was not found.\n";
         return EXIT_FAILURE;
@@ -366,6 +364,9 @@ int main (int argc, char * argv[]) {
     ELFState<ELF64LE> State (Db);
 
     {
+        std::vector<OutputSection<ELFT>::SectionInfo> OutputSections;
+        OutputSections.resize (::pstore::repo::fragment::member_array::max_size ());
+
         auto Ticket = pstore::repo::ticket::load (Db, TicketPos->second);
         for (auto const & TM : *Ticket) {
             assert (TM.name != pstore::address::null ());
@@ -377,30 +378,39 @@ int main (int argc, char * argv[]) {
                 return EXIT_FAILURE;
             }
 
+            std::fill (std::begin (OutputSections), std::end (OutputSections),
+                       OutputSection<ELFT>::SectionInfo{});
+
             auto const IsLinkOnce = (TM.linkage == pstore::repo::linkage_type::linkonce);
+            // TODO: enable the name discriminator if "function/data sections mode" is enabled.
             auto const Discriminator = IsLinkOnce ? TM.name : pstore::address::null ();
             auto Fragment = pstore::repo::fragment::load (Db, FragmentPos->second);
+
             for (auto const Key : Fragment->sections ().get_indices ()) {
-                // The symbol type and "discriminator" together identify the ELF output section
+                // The section type and "discriminator" together identify the ELF output section
                 // to which this fragment's section data will be appended.
                 auto Type = static_cast<pstore::repo::section_type> (Key);
-                auto const Id = std::make_tuple (
-                    getELFSectionType (static_cast<pstore::repo::section_type> (Key), TM.name,
-                                       Magics),
-                    Discriminator);
+                auto const Id =
+                    std::make_tuple (getELFSectionType (Type, TM.name, Magics), Discriminator);
 
                 decltype (State.Sections)::iterator Pos;
                 bool DidInsert;
-                std::tie (Pos, DidInsert) = State.Sections.emplace (
-                    std::make_pair (Id, OutputSection<ELFT> (Db, Id, IsLinkOnce)));
+                std::tie (Pos, DidInsert) =
+                    State.Sections.emplace (Id, OutputSection<ELFT> (Db, Id, IsLinkOnce));
                 if (DidInsert && IsLinkOnce) {
                     State.Groups[TM.name].push_back (&Pos->second);
                 }
+                OutputSections[Key] = OutputSection<ELFT>::SectionInfo (
+                    &Pos->second, Pos->second.contributionsSize ());
+            }
 
-                pstore::repo::section const & Section = (*Fragment)[Type];
-                Pos->second.append (
+            for (auto const Key : Fragment->sections ().get_indices ()) {
+                auto OS = OutputSections[Key];
+                pstore::repo::section const & Section =
+                    (*Fragment)[static_cast<pstore::repo::section_type> (Key)];
+                OS.section ()->append (
                     TM, SectionPtr{std::static_pointer_cast<void const> (Fragment), &Section},
-                    State.Symbols);
+                    State.Symbols, OutputSections);
             }
         }
     }
@@ -413,7 +423,7 @@ int main (int argc, char * argv[]) {
     State.initELFHeader (Header);
     State.initStandardSections ();
 
-    std::size_t const FirstGroupIndex = State.buildGroupSections ();
+    std::size_t const FirstGroupIndex = State.buildGroupSections (Db);
 
     auto & OS = Out->os ();
     writeRaw (OS, Header);

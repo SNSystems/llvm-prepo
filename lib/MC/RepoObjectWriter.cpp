@@ -44,6 +44,11 @@
 #include <unordered_map>
 #include <vector>
 
+#include "pstore/hamt_map.hpp"
+#include "pstore/hamt_set.hpp"
+#include "pstore/index_types.hpp"
+#include "pstore/sstring_view.hpp"
+#include "pstore/sstring_view_archive.hpp"
 #include "pstore/transaction.hpp"
 #include "pstore_mcrepo/fragment.hpp"
 #include "pstore_mcrepo/ticket.hpp"
@@ -578,6 +583,10 @@ StringRef streamPath(raw_fd_ostream &Stream, StringStorage &ResultPath) {
   return ResultPath.str();
 }
 
+pstore::sstring_view<char const *> stringRefAsView(StringRef S) {
+  return {S.data(), S.size()};
+}
+
 } // namespace
 
 void RepoObjectWriter::writeObject(MCAssembler &Asm,
@@ -609,18 +618,21 @@ void RepoObjectWriter::writeObject(MCAssembler &Asm,
   auto &Db = DbTransact.first;
   auto &Transaction = DbTransact.second;
 
-  pstore::index::name_index *const NamesIndex = Db.get_name_index();
+  pstore::index::name_index *const NamesIndex =
+      pstore::index::get_name_index(Db);
   assert(NamesIndex);
 
   // Insert the names from this module into the global name set.
   for (ModuleNamesContainer::value_type &NameAddress : Names) {
     DEBUG(dbgs() << "insert name: " << NameAddress.first << '\n');
     pstore::index::name_index::iterator It =
-        NamesIndex->insert(Transaction, NameAddress.first).first;
+        NamesIndex->insert(Transaction, stringRefAsView(NameAddress.first))
+            .first;
     NameAddress.second = It.get_address();
   }
 
-  pstore::index::digest_index *const DigestsIndex = Db.get_digest_index();
+  pstore::index::digest_index *const DigestsIndex =
+      pstore::index::get_digest_index(Db);
   assert(DigestsIndex);
 
   for (auto &Fragment : Fragments) {
@@ -661,7 +673,8 @@ void RepoObjectWriter::writeObject(MCAssembler &Asm,
     }
   }
 
-  pstore::index::ticket_index *const TicketIndex = Db.get_ticket_index();
+  pstore::index::ticket_index *const TicketIndex =
+      pstore::index::get_ticket_index(Db);
   assert(TicketIndex);
 
   // Find the store addres of the output file path.

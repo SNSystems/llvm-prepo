@@ -9,6 +9,7 @@
 
 #include "pstore/database.hpp"
 #include "pstore/hamt_map.hpp"
+#include "pstore/index_types.hpp"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/ADT/Triple.h"
 #include "llvm/IR/CallSite.h"
@@ -75,7 +76,8 @@ bool RepoPruning::runOnModule(Module &M) {
   pstore::database &Repository = getRepoDatabase();
 
   MDNode *MD = nullptr;
-  pstore::index::digest_index *Digests = Repository.get_digest_index(false);
+  pstore::index::digest_index const *const Digests =
+      pstore::index::get_digest_index(Repository, false);
   if (Digests == nullptr) {
     return false;
   }
