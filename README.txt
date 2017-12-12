@@ -13,19 +13,22 @@ The process to follow is the same as that for a conventional build of Clang+LLVM
 
         $ git clone https://github.com/SNSystems/llvm-prepo.git
 
-1. Check out clang
+2. Check out clang
 
         $ cd llvm/tools
         $ git clone http://llvm.org/git/clang.git
         $ cd clang
-        $ git reset —hard 2276925224353681293a6a8ff6758a984d9c2e1c
+        $ git reset --hard 2276925224353681293a6a8ff6758a984d9c2e1c
 
-1. Clone pstore:
+3. Clone pstore:
 
         $ cd llvm/tools
         $ git clone git@github.com:SNSystems/pstore.git
 
-4. Build LLVM as normal
+4. Disable constructor alias:
+   Please see https://github.com/SNSystems/llvm-prepo/issues/10 for the details.
+
+5. Build LLVM as normal
 
 Note that you need a version of clang that was current when this repository was forked (hence the `git reset -hard`). Ultimately, I envisage supporting multiple database back-ends to fit different needs, but there's currently a hard dependency on the pstore (“Program Store”) key/value store as a back-end.
 
@@ -34,7 +37,7 @@ Using the Program Repository
 
 The Program Repository is implements as a new object-file format (“repo”) in LLVM. To use it, it's necessary to state that explicitly in the target triple:
 
-    $ clang ‑target x86_64‑pc‑linux‑gnu‑repo -o test.o test.c
+    $ clang -target x86_64-pc-linux-gnu-repo -o test.o test.c
 
 Furthermore, the repository path is currently hard-wired as `./clang.db` (eventually, you'd expect to be able to specify it with a command-line switch).
 
