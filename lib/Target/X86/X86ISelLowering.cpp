@@ -16036,7 +16036,8 @@ X86TargetLowering::LowerGlobalTLSAddress(SDValue Op, SelectionDAG &DAG) const {
   auto PtrVT = getPointerTy(DAG.getDataLayout());
   bool PositionIndependent = isPositionIndependent();
 
-  if (Subtarget.isTargetELF()) {
+  // TODO: TLS section should not dependent on the object file format.
+  if (Subtarget.isTargetELF() || Subtarget.isTargetRepo()) {
     TLSModel::Model model = DAG.getTarget().getTLSModel(GV);
     switch (model) {
       case TLSModel::GeneralDynamic:

@@ -706,6 +706,7 @@ public:
   bool isTargetELF() const { return TargetTriple.isOSBinFormatELF(); }
   bool isTargetCOFF() const { return TargetTriple.isOSBinFormatCOFF(); }
   bool isTargetMachO() const { return TargetTriple.isOSBinFormatMachO(); }
+  bool isTargetRepo() const { return TargetTriple.isOSBinFormatRepo(); }
 
   bool isTargetLinux() const { return TargetTriple.isOSLinux(); }
   bool isTargetKFreeBSD() const { return TargetTriple.isOSKFreeBSD(); }

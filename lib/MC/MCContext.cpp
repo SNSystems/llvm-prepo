@@ -476,6 +476,12 @@ MCSectionRepo *MCContext::getRepoSection(RepoSection K, Digest::DigestType const
   case RepoSection::DataSection:
     Kind = SectionKind::getData();
     break;
+  case RepoSection::ThreadBSSSection:
+    Kind = SectionKind::getThreadBSS();
+    break;
+  case RepoSection::ThreadDataSection:
+    Kind = SectionKind::getThreadData();
+    break;
   case RepoSection::MergeableConst4Section:
     Kind = SectionKind::getMergeableConst4();
     break;

@@ -713,6 +713,10 @@ static MCSectionRepo *selectRepoSectionForGlobal(MCContext &Ctx,
     K = MCContext::RepoSection::BSSSection;
   } else if (Kind.isData()) {
     K = MCContext::RepoSection::DataSection;
+  } else if (Kind.isThreadBSS()) {
+    K = MCContext::RepoSection::ThreadBSSSection;
+  } else if (Kind.isThreadData()) {
+    K = MCContext::RepoSection::ThreadDataSection;
   } else if (Kind.isMergeableConst4()) {
     K = MCContext::RepoSection::MergeableConst4Section;
   } else if (Kind.isMergeableConst8()) {

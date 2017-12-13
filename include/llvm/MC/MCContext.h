@@ -259,6 +259,8 @@ namespace llvm {
       TextSection,
       BSSSection,
       DataSection,
+      ThreadBSSSection,
+      ThreadDataSection,
       MergeableConst4Section,
       MergeableConst8Section,
       MergeableConst16Section,
