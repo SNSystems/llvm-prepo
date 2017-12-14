@@ -16,8 +16,7 @@
 #include "R2OELFStringTable.h"
 #include "WriteHelpers.h"
 
-#include <unordered_map>
-#include <vector>
+#include <map>
 
 
 template <typename ELFT>
@@ -51,6 +50,25 @@ public:
         pstore::repo::linkage_type Linkage;
     };
 
+    struct Value {
+        Value () {}
+        Value (std::uint64_t NameOffset_, llvm::Optional<SymbolTarget> Target_)
+                : NameOffset{NameOffset_}
+                , Target{std::move (Target_)} {}
+
+        pstore::repo::linkage_type linkage () const {
+            return Target ? Target.getValue ().Linkage : pstore::repo::linkage_type::external;
+        }
+
+        /// The offset of the name of this symbol in the symbol names string table.
+        std::uint64_t NameOffset = 0;
+        /// The location addressed by this symbol (if known).
+        llvm::Optional<SymbolTarget> Target;
+
+        std::uint64_t Index = llvm::ELF::STN_UNDEF;
+    };
+
+    using SymbolMapType = std::map<SString, Value>;
 
     /// Creates a definition in the symbol table.
     /// \param Name  The symbol name.
@@ -58,60 +76,49 @@ public:
     /// \param Offset  The offset within Section which contains the first byte of the object.
     /// \param Size  The object's size (in bytes).
     /// \param Linkage  The symbol's linkage.
-    /// \returns The index of the newly created or pre-existing entry for this name in the symbol
+    /// \returns A pointer to the newly created or pre-existing entry for this name in the symbol
     /// table.
-    std::uint64_t insertSymbol (SString Name, OutputSection<ELFT> const * Section,
-                                std::uint64_t Offset, std::uint64_t Size,
-                                pstore::repo::linkage_type Linkage) {
-        return this->insertSymbol (Name, SymbolTarget (Section, Offset, Size, Linkage));
-    }
+    Value * insertSymbol (SString Name, OutputSection<ELFT> const * Section, std::uint64_t Offset,
+                            std::uint64_t Size, pstore::repo::linkage_type Linkage);
 
     /// If not already in the symbol table, an undef entry is created. This may be later turned into
     /// a proper definition by a subsequent call to insertSymbol with the same name.
     /// \param Name  The symbol name.
-    /// \returns The index of the newly created or pre-existing entry for this name in the symbol
+    /// \returns A pointer to the newly created or pre-existing entry for this name in the symbol
     /// table.
-    std::uint64_t insertSymbol (SString Name) {
+    Value * insertSymbol (SString Name) {
         return this->insertSymbol (Name, llvm::None);
     }
 
     /// \returns A tuple of two values, the first of which is the file offset at which the section
     /// data was written; the second is the number of bytes that were written.
-    std::tuple<std::uint64_t, std::uint64_t> write (llvm::raw_ostream & OS);
+    std::tuple<std::uint64_t, std::uint64_t> write (llvm::raw_ostream & OS,
+                                                    std::vector<Value *> const & OrderedSymbols);
+
+    /// As a side effect, sets the Index field on the symbol entries to allow the index of any
+    /// symbol to be quickly discovered.
+    /// \note Don't insert any symbols after calling this function!
+    std::vector<Value *> sort ();
+
+    static unsigned firstNonLocal (std::vector<Value *> const & OrderedSymbols);
 
 private:
     static unsigned linkageToELFBinding (pstore::repo::linkage_type L);
     static unsigned sectionToSymbolType (ELFSectionType T);
-    std::uint64_t insertSymbol (SString Name, llvm::Optional<SymbolTarget> const & Target);
+
+    Value * insertSymbol (SString Name, llvm::Optional<SymbolTarget> const & Target);
 
     typedef typename llvm::object::ELFFile<ELFT>::Elf_Sym Elf_Sym;
 
-    struct Value {
-        /// The offset of the name of this symbol in the symbol names string table.
-        std::uint64_t NameOffset;
-        llvm::Optional<SymbolTarget> Target;
-    };
-
-    // FIXME: Vector is rather likely to be inefficient for the symbol table. Refactoring?
-    std::vector<Value> Symbols_;
-    std::unordered_map<SString, uint64_t> SymbolMap_; // TODO: DenseMap?
-
+    SymbolMapType SymbolMap_;
     StringTable & Strings_;
 };
 
 template <typename ELFT>
 unsigned SymbolTable<ELFT>::linkageToELFBinding (pstore::repo::linkage_type L) {
-// FIXME: a temporary bodge. We don't sort the symbol table and don't correctly set the sh_
-#if 0
-    switch (L) {
-    case pstore::repo::linkage_type::external:
-    case pstore::repo::linkage_type::common:
-    case pstore::repo::linkage_type::linkonce:
-        return llvm::ELF::STB_GLOBAL;
-    case pstore::repo::linkage_type::internal:
+    if (L == pstore::repo::linkage_type::internal) {
         return llvm::ELF::STB_LOCAL;
     }
-#endif
     return llvm::ELF::STB_GLOBAL;
 }
 
@@ -145,35 +152,42 @@ unsigned SymbolTable<ELFT>::sectionToSymbolType (ELFSectionType T) {
     }
 }
 
-template <typename ELFT>
-std::uint64_t SymbolTable<ELFT>::insertSymbol (SString Name,
-                                               llvm::Optional<SymbolTarget> const & Target) {
-    typename decltype (SymbolMap_)::iterator Pos;
-    bool DidInsert;
-    std::tie (Pos, DidInsert) = SymbolMap_.emplace (Name, 0);
-    if (DidInsert) {
-        uint64_t const SymbolIndex = SymbolMap_.size ();
-        Pos->second = SymbolIndex;
-        Symbols_.push_back (Value{Strings_.insert (Name), Target});
-        return SymbolIndex;
-    }
 
-    // If we don't have a value associated with this symbol, then use the one we have here.
-    // Note that SymbolIndex is the index of the symbol in the ELF symbol table. The Symbols_ array
-    // does not include the null symbol so we have to subtract 1.
-    uint64_t const SymbolIndex = Pos->second;
-    assert (SymbolIndex > 0 && SymbolIndex <= Symbols_.size ());
-    Value & V = Symbols_[SymbolIndex - 1];
-    if (!V.Target) {
-        // FIXME: if Target && V.Target, we're attemptting to make a duplicate definition which
-        // wouldn't be right.
-        V.Target = Target;
-    }
-    return SymbolIndex;
+// insertSymbol
+// ~~~~~~~~~~~~
+template <typename ELFT>
+auto SymbolTable<ELFT>::insertSymbol (SString Name, OutputSection<ELFT> const * Section,
+                                      std::uint64_t Offset, std::uint64_t Size,
+                                      pstore::repo::linkage_type Linkage) -> Value * {
+    return this->insertSymbol (Name, SymbolTarget (Section, Offset, Size, Linkage));
 }
 
 template <typename ELFT>
-std::tuple<std::uint64_t, std::uint64_t> SymbolTable<ELFT>::write (llvm::raw_ostream & OS) {
+auto SymbolTable<ELFT>::insertSymbol (SString Name, llvm::Optional<SymbolTarget> const & Target)
+    -> Value * {
+    typename decltype (SymbolMap_)::iterator Pos;
+    bool DidInsert;
+    std::tie (Pos, DidInsert) = SymbolMap_.emplace (Name, Value{});
+    if (DidInsert) {
+        Pos->second = Value{Strings_.insert (Name), Target};
+        return &Pos->second;
+    }
+
+    // If we don't have a value associated with this symbol, then use the one we have here.
+    Value & V = Pos->second;
+    if (!V.Target) {
+        // FIXME: if Target && V.Target, we're attempting to make a duplicate definition which
+        // wouldn't be right.
+        V.Target = Target;
+    }
+    return &Pos->second;
+}
+
+// write
+// ~~~~~
+template <typename ELFT>
+std::tuple<std::uint64_t, std::uint64_t>
+SymbolTable<ELFT>::write (llvm::raw_ostream & OS, std::vector<Value *> const & OrderedSymbols) {
     using namespace llvm;
     writeAlignmentPadding<Elf_Sym> (OS);
 
@@ -185,12 +199,12 @@ std::tuple<std::uint64_t, std::uint64_t> SymbolTable<ELFT>::write (llvm::raw_ost
     Symbol.st_shndx = ELF::SHN_UNDEF;
     writeRaw (OS, Symbol);
 
-    for (Value const & SV : Symbols_) {
+    for (Value const * SV : OrderedSymbols) {
         zero (Symbol);
-        Symbol.st_name = SV.NameOffset;
+        Symbol.st_name = SV->NameOffset;
 
-        if (SV.Target) {
-            SymbolTarget const & T = SV.Target.getValue ();
+        if (SV->Target) {
+            SymbolTarget const & T = SV->Target.getValue ();
             Symbol.st_value = T.Offset;
             Symbol.setBindingAndType (linkageToELFBinding (T.Linkage),
                                       sectionToSymbolType (T.Section->getType ()));
@@ -206,6 +220,50 @@ std::tuple<std::uint64_t, std::uint64_t> SymbolTable<ELFT>::write (llvm::raw_ost
         writeRaw (OS, Symbol);
     }
     return std::make_tuple (StartOffset, OS.tell () - StartOffset);
+}
+
+template <typename ELFT>
+auto SymbolTable<ELFT>::sort () -> std::vector<Value *> {
+    std::vector<Value *> OrderedSymbols;
+    OrderedSymbols.reserve (SymbolMap_.size ());
+    for (auto & S : SymbolMap_) {
+        OrderedSymbols.push_back (&S.second);
+    }
+
+    std::sort (std::begin (OrderedSymbols), std::end (OrderedSymbols),
+               [](Value const * const A, Value const * const B) {
+                   return A->linkage () == pstore::repo::linkage_type::internal &&
+                          B->linkage () != pstore::repo::linkage_type::internal;
+               });
+
+    // Finally tell the symbols about their indices.
+    unsigned Index = 0;
+    for (auto & S : OrderedSymbols) {
+        S->Index = ++Index;
+    }
+    return OrderedSymbols;
+}
+
+template <typename ELFT>
+unsigned SymbolTable<ELFT>::firstNonLocal (std::vector<Value *> const & OrderedSymbols) {
+    using Iterator = typename std::vector<Value *>::const_iterator;
+    auto Count = static_cast<typename std::iterator_traits<Iterator>::difference_type> (
+        OrderedSymbols.size ());
+    auto First = std::begin (OrderedSymbols);
+
+    while (Count > 0U) {
+        auto It = First;
+        auto const Step = Count / 2;
+        std::advance (It, Step);
+
+        if ((*It)->linkage () == pstore::repo::linkage_type::internal) {
+            First = ++It;
+            Count -= Step + 1;
+        } else {
+            Count = Step;
+        }
+    }
+    return First != std::end (OrderedSymbols) ? (*First)->Index : 1U;
 }
 
 #endif // LLVM_TOOLS_REPO2OBJ_ELFSYMBOLTABLE_H

@@ -188,9 +188,6 @@ void ELFState<ELFT>::initStandardSections () {
     SH.sh_name = SectionNames.insert (stringToSStringView (".symtab"));
     SH.sh_type = ELF::SHT_SYMTAB;
     SH.sh_link = SectionIndices::SymbolNamesStrTab;
-    // FIXME: st_info should be one greater than the symbol table index of the last local symbol
-    // (binding STB_LOCAL).
-    SH.sh_info = 1;
     SH.sh_entsize = sizeof (ELFState<ELFT>::Elf_Sym);
     SH.sh_addralign = alignof (ELFState<ELFT>::Elf_Sym);
     assert (SectionHeaders.size () == SectionIndices::SymTab);
@@ -208,20 +205,27 @@ uint64_t ELFState<ELFT>::writeSectionHeaders (raw_ostream & OS) {
 
 // The ELF spec. requires the groups sections to appear before the sections that they contain in
 // the section header table. For this reason, we have to create them in two passes: the first
-// creates the headers; later, once we know the collections of thsection indices that they'll
+// creates the headers; later, once we know the collections of the section indices that they'll
 // contain, we can write the group section bodies.
+//
+// A further wrinkle is that the entry in the section header table contains the index of the group's
+// "signature" symbol. We therefore must have already generated and sorted the symbol table to
+// assign indices.
 template <typename ELFT>
 std::size_t ELFState<ELFT>::buildGroupSections (pstore::database & Db) {
     auto const FirstGroupIndex = SectionHeaders.size ();
     for (auto const & G : Groups) {
+        auto SignatureSymbol = Symbols.insertSymbol (getString (Db, G.first));
+        assert (SignatureSymbol != nullptr &&
+                SignatureSymbol->Index != llvm::ELF::STN_UNDEF);
+
         ELFState<ELFT>::Elf_Shdr SH;
         zero (SH);
         // TO: we could end up creating the ".group" string many times.
         SH.sh_name = SectionNames.insert (stringToSStringView (".group"));
         SH.sh_type = ELF::SHT_GROUP;
         SH.sh_link = SectionIndices::SymTab;
-        SH.sh_info =
-            Symbols.insertSymbol (getString (Db, G.first)); // The group's signature symbol entry.
+        SH.sh_info = SignatureSymbol->Index; // The group's signature symbol entry.
         SH.sh_entsize = sizeof (ELF::Elf32_Word);
         SH.sh_addralign = alignof (ELF::Elf32_Word);
         SectionHeaders.push_back (SH);
@@ -242,7 +246,7 @@ void ELFState<ELFT>::writeGroupSections (raw_ostream & OS, std::size_t ThisGroup
             writeRaw (OS, ELF::Elf32_Word{SectionIndex});
             ++NumWords;
 
-            if (GroupMember->relocationsSize () > 0) {
+            if (GroupMember->numRelocations () > 0) {
                 writeRaw (OS, ELF::Elf32_Word{SectionIndex + 1});
                 ++NumWords;
             }
@@ -417,7 +421,7 @@ int main (int argc, char * argv[]) {
 
     DEBUG (dbgs () << "There are " << State.Groups.size () << " groups\n");
 
-    // FIXME: sort the symbol table.
+    std::vector<SymbolTable<ELFT>::Value *> OrderedSymbols = State.Symbols.sort ();
 
     decltype (State)::Elf_Ehdr Header;
     State.initELFHeader (Header);
@@ -447,7 +451,10 @@ int main (int argc, char * argv[]) {
     // Now do the same for the symbol table.
     {
         auto & S = State.SectionHeaders[SectionIndices::SymTab];
-        std::tie (S.sh_offset, S.sh_size) = State.Symbols.write (OS);
+        // st_info should be one greater than the symbol table index of the last local symbol
+        // (binding STB_LOCAL).
+        S.sh_info = SymbolTable<ELFT>::firstNonLocal (OrderedSymbols);
+        std::tie (S.sh_offset, S.sh_size) = State.Symbols.write (OS, OrderedSymbols);
     }
 
     uint64_t SectionHeadersOffset = State.writeSectionHeaders (OS);
