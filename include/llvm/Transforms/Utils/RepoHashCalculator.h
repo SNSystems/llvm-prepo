@@ -92,7 +92,11 @@ public:
   }
 
   /// Incrementally add the bytes in \p Data to the hash.
-  void update(ArrayRef<uint8_t> Data) { Hash.update(Data); }
+  template <typename Ty> void update(ArrayRef<Ty> Data) {
+    Hash.update(
+        ArrayRef<uint8_t>(reinterpret_cast<const uint8_t *>(Data.data()),
+                          Data.size() * sizeof(Ty)));
+  }
 
   MD5::MD5Result getHashResult() {
     MD5::MD5Result Result;
@@ -103,7 +107,8 @@ public:
   void reset() { Hash = MD5(); }
 
   template <typename Ty> void hashNumber(Ty V) {
-    Hash.update(ArrayRef<uint8_t>((uint8_t *)&V, sizeof(V)));
+    Hash.update(
+        ArrayRef<uint8_t>(reinterpret_cast<const uint8_t *>(&V), sizeof(V)));
   }
 
   void hashMem(StringRef V);
@@ -209,7 +214,9 @@ public:
   MD5::MD5Result getHashResult();
 
   /// Incrementally add the bytes in \p Data to the hash.
-  void update(ArrayRef<uint8_t> Data) { FnHash.update(Data); }
+  template <typename T> void update(const T &Data) {
+    FnHash.update(makeArrayRef(Data));
+  }
 
 protected:
   /// Return the function for unit test.
@@ -268,7 +275,9 @@ public:
   MD5::MD5Result getHashResult() { return GvHash.getHashResult(); }
 
   /// Incrementally add the bytes in \p Data to the hash.
-  void update(ArrayRef<uint8_t> Data) { GvHash.update(Data); }
+  template <typename T> void update(const T &Data) {
+    GvHash.update(makeArrayRef(Data));
+  }
 
 private:
   // The Variable undergoing calculation.

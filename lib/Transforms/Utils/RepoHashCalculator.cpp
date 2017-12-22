@@ -468,14 +468,14 @@ void FunctionHashCalculator::hashInstruction(const Instruction *V) {
   if (const InsertValueInst *IVI = dyn_cast<InsertValueInst>(V)) {
     update(HashKind::TAG_InsertValueInst);
     ArrayRef<unsigned> Indices = IVI->getIndices();
-    update(ArrayRef<uint8_t>((uint8_t *)&Indices,
+    update(ArrayRef<uint8_t>(reinterpret_cast<const uint8_t *>(Indices.data()),
                              sizeof(unsigned) * Indices.size()));
     return;
   }
   if (const ExtractValueInst *EVI = dyn_cast<ExtractValueInst>(V)) {
     update(HashKind::TAG_ExtractValueInst);
     ArrayRef<unsigned> Indices = EVI->getIndices();
-    update(ArrayRef<uint8_t>((uint8_t *)&Indices,
+    update(ArrayRef<uint8_t>(reinterpret_cast<const uint8_t *>(Indices.data()),
                              sizeof(unsigned) * Indices.size()));
     return;
   }
