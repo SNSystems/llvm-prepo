@@ -15,9 +15,14 @@ using namespace llvm;
 pstore::database &llvm::getRepoDatabase() {
   static std::unique_ptr<pstore::database> Repository;
   if (!Repository) {
-    // FIME: the name of the store is just hard-wired for the moment.
+    // FIXME: this should be coming from the command-line!
+    char const * path = getenv ("REPOFILE");
+    if (!path) {
+        path = "./clang.db";
+    }
+
     Repository.reset(new pstore::database(
-        "./clang.db", pstore::database::access_mode::writable));
+        path, pstore::database::access_mode::writable));
   }
   return *Repository;
 }

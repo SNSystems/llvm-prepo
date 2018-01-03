@@ -47,7 +47,7 @@ using namespace llvm::object;
 
 namespace {
 
-    cl::opt<std::string> RepoPath (cl::Optional, cl::desc ("Program pepository path"),
+    cl::opt<std::string> RepoPath ("repo", cl::Optional, cl::desc ("Program repository path"),
                                    cl::init ("./clang.db"));
     cl::opt<std::string> TicketPath (cl::Positional, cl::desc ("<ticket path>"));
     static cl::opt<std::string> OutputFilename ("o", cl::desc ("Output filename"),
