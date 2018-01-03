@@ -18,10 +18,10 @@ using namespace llvm;
 void MCAsmInfoRepo::anchor() {}
 
 MCAsmInfoRepo::MCAsmInfoRepo() {
-  // Repo uses the MM_ELF mangling mode type.
+  // Repo uses the MM_None mangling mode type.
   HasIdentDirective = false;
   WeakRefDirective = "\t.weak\t";
-  PrivateGlobalPrefix = ".L";
+  PrivateGlobalPrefix = "";
   PrivateLabelPrefix = ".L";
   HasDotTypeDotSizeDirective = false;
 }

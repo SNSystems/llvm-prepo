@@ -519,7 +519,7 @@ StringRef RepoObjectWriter::getSymbolName(const MCAssembler &Asm,
 
   SmallString<256> Buf;
   const StringRef NameRef =
-      (Twine(Asm.getContext().getAsmInfo()->getPrivateLabelPrefix()) +
+      (Twine(Asm.getContext().getAsmInfo()->getPrivateGlobalPrefix()) +
        Twine(TicketMember.getNameAsString()))
           .toStringRef(Buf);
 
