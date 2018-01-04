@@ -192,17 +192,7 @@ void HashCalculator::hashConstant(const Constant *V) {
 
   auto GlobalValueV = dyn_cast<GlobalValue>(V);
   if (GlobalValueV) {
-    auto *GV = dyn_cast<GlobalVariable>(GlobalValueV);
-    if (GV && GV->hasDefinitiveInitializer()) {
-      DenseMap<const GlobalValue *, unsigned>::iterator GVI =
-          GlobalNumbers.find(GV);
-      if (GVI != GlobalNumbers.end())
-        hashGlobalValue(GlobalValueV);
-      else {
-        GlobalNumbers.insert(std::make_pair(GV, GlobalNumbers.size()));
-        hashConstant(GV->getInitializer());
-      }
-    }
+    hashGlobalValue(GlobalValueV);
     return;
   }
 
@@ -308,15 +298,28 @@ void HashCalculator::hashValue(const Value *V) {
 
 void HashCalculator::hashGlobalValue(const GlobalValue *V) {
   hashMem(V->getName());
-  auto *GV = dyn_cast<GlobalVariable>(V);
-  if (GV && GV->hasDefinitiveInitializer()) {
+  if (auto *GV = dyn_cast<GlobalVariable>(V)) {
+    // Calculate the global variable hash.
+    Hash.update(HashKind::TAG_GlobalVariable);
     DenseMap<const GlobalValue *, unsigned>::iterator GVI =
         GlobalNumbers.find(GV);
     if (GVI == GlobalNumbers.end()) {
       GlobalNumbers.insert(std::make_pair(GV, GlobalNumbers.size()));
-      hashConstant(GV->getInitializer());
+      if (GV->hasDefinitiveInitializer())
+        hashConstant(GV->getInitializer());
     } else {
       hashNumber(GVI->second);
+    }
+    return;
+  }
+
+  if (const Function *F = dyn_cast<Function>(V)) {
+    // Calculate the function hash. It covers the "llvm.global_ctors",
+    // "llvm.global_dtors"
+    Hash.update(HashKind::TAG_GlobalFunction);
+    Hash.update(F->getLinkage());
+    if (GlobalValue::isLocalLinkage(F->getLinkage())) {
+      hashMem(F->getParent()->getSourceFileName());
     }
   }
 }
