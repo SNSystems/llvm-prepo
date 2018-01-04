@@ -231,7 +231,19 @@ void OutputSection<ELFT>::append (pstore::repo::ticket_member const & TM, Sectio
     Align_ = std::max (Align_, DataAlign);
 
     SectionSize_ += alignedBytes (SectionSize_, DataAlign);
-    Symbols.insertSymbol (getString (Db_, TM.name), this, SectionSize_, ObjectSize, TM.linkage);
+
+    // "append" linkage is slightly unusual in that multiple definitions of the same symbol
+    // simply pile up one after the other in the output. ELF doesn't have this concept, obviously,
+    // so we need to ensure that we don't produce a definition of this symbol in each object file
+    // that will result in an error when they are linked.
+    //
+    // This check is sufficient for the llvm.globl_ctors/dtors use-case where the symbols are
+    // mapped to the .init_array/.fini_array sections and we don't actually need a symbol which
+    // references the data.
+
+    if (TM.linkage != pstore::repo::linkage_type::append) {
+        Symbols.insertSymbol (getString (Db_, TM.name), this, SectionSize_, ObjectSize, TM.linkage);
+    }
 
     for (pstore::repo::external_fixup const & XFixup : SectionData->xfixups ()) {
         auto const TargetName = getString (Db_, XFixup.name);
