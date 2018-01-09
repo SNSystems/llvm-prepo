@@ -19,6 +19,7 @@
 #include "llvm/IR/Module.h"
 #include "llvm/IR/RepoTicket.h"
 #include "llvm/Support/Debug.h"
+#include "llvm/Support/Path.h"
 #include "llvm/Support/raw_ostream.h"
 
 using namespace llvm;
@@ -311,16 +312,6 @@ void HashCalculator::hashGlobalValue(const GlobalValue *V) {
       hashNumber(GVI->second);
     }
     return;
-  }
-
-  if (const Function *F = dyn_cast<Function>(V)) {
-    // Calculate the function hash. It covers the "llvm.global_ctors",
-    // "llvm.global_dtors"
-    Hash.update(HashKind::TAG_GlobalFunction);
-    Hash.update(F->getLinkage());
-    if (GlobalValue::isLocalLinkage(F->getLinkage())) {
-      hashMem(F->getParent()->getSourceFileName());
-    }
   }
 }
 
