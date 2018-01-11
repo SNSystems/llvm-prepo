@@ -248,8 +248,9 @@ void OutputSection<ELFT>::append (pstore::repo::ticket_member const & TM, Sectio
     for (pstore::repo::external_fixup const & XFixup : SectionData->xfixups ()) {
         auto const TargetName = getString (Db_, XFixup.name);
         DEBUG (dbgs () << "  generating relocation TO '" << TargetName << '\n');
-        Relocations_.emplace_back (Symbols.insertSymbol (TargetName), XFixup.type,
-                                   XFixup.offset + SectionSize_, XFixup.addend);
+        Relocations_.emplace_back(Symbols.insertSymbol(TargetName, XFixup.type),
+                                  XFixup.type, XFixup.offset + SectionSize_,
+                                  XFixup.addend);
     }
 
     for (pstore::repo::internal_fixup const & IFixup : SectionData->ifixups ()) {

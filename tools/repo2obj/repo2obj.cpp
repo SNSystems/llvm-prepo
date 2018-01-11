@@ -215,7 +215,7 @@ template <typename ELFT>
 std::size_t ELFState<ELFT>::buildGroupSections (pstore::database & Db) {
     auto const FirstGroupIndex = SectionHeaders.size ();
     for (auto const & G : Groups) {
-        auto SignatureSymbol = Symbols.insertSymbol (getString (Db, G.first));
+        auto SignatureSymbol = Symbols.findSymbol (getString (Db, G.first));
         assert (SignatureSymbol != nullptr &&
                 SignatureSymbol->Index != llvm::ELF::STN_UNDEF);
 
