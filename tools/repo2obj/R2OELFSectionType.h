@@ -13,9 +13,8 @@
 
 #define X(a) a,
 enum class ELFSectionType {
-    PSTORE_REPO_SECTION_TYPES
-    InitArray,
-    FiniArray,
+  PSTORE_REPO_SECTION_TYPES InitArray,
+  FiniArray,
 };
 #undef X
 
