@@ -123,10 +123,14 @@ private:
 
 template <typename ELFT>
 unsigned SymbolTable<ELFT>::linkageToELFBinding(pstore::repo::linkage_type L) {
-  if (L == pstore::repo::linkage_type::internal) {
+  switch (L) {
+  case pstore::repo::linkage_type::internal:
     return llvm::ELF::STB_LOCAL;
+  case pstore::repo::linkage_type::linkonce:
+    return llvm::ELF::STB_WEAK;
+  default:
+    return llvm::ELF::STB_GLOBAL;
   }
-  return llvm::ELF::STB_GLOBAL;
 }
 
 template <typename ELFT>
