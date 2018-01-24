@@ -10,8 +10,8 @@
 #ifndef LLVM_TOOLS_REPO2OBJ_ELFSTRINGTABLE_H
 #define LLVM_TOOLS_REPO2OBJ_ELFSTRINGTABLE_H
 
-#include "pstore/sstring_view.hpp"
 #include "llvm/Support/raw_ostream.h"
+#include "pstore/sstring_view.hpp"
 
 #include <list>
 #include <string>
@@ -23,9 +23,17 @@ class database;
 struct address;
 } // namespace pstore
 
+/// A string-view type using std::shared_ptr<char const> to store the string's
+/// data. This type is used to enable the StringTable class to freely mix
+/// strings from the database with strings synthesized specially for the ELF
+/// file.
 using SString = ::pstore::sstring_view<std::shared_ptr<char const>>;
 
-SString stringToSStringView(std::string const &Str);
+/// Constructs a string-view object from a StringRef. This new object contains a
+/// copy of the string contents.
+SString stringToSStringView(llvm::StringRef Ref);
+
+/// Reads a string from a pstore database given its address.
 SString getString(pstore::database const &Db, pstore::address Addr);
 
 namespace llvm {

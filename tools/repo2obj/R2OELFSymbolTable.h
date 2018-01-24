@@ -65,9 +65,7 @@ public:
     std::uint64_t Index = llvm::ELF::STN_UNDEF;
   };
 
-  using SymbolMapType = std::map<SString, Value>;
-
-  /// Find a symbol with name equivalent to Name in the symbol table.
+  /// Find a symbol with name equivalent to \p Name in the symbol table.
   /// \param Name  The symbol name.
   /// \returns A pointer to pre-existing entry for this name in the symbol
   /// table. If not found, return nullptr.
@@ -117,6 +115,7 @@ private:
 
   typedef typename llvm::object::ELFFile<ELFT>::Elf_Sym Elf_Sym;
 
+  using SymbolMapType = std::map<SString, Value>;
   SymbolMapType SymbolMap_;
   StringTable &Strings_;
 };
@@ -284,11 +283,15 @@ auto SymbolTable<ELFT>::sort() -> std::vector<Value *> {
     OrderedSymbols.push_back(&S.second);
   }
 
-  std::sort(std::begin(OrderedSymbols), std::end(OrderedSymbols),
-            [](Value const *const A, Value const *const B) {
-              return A->linkage() == pstore::repo::linkage_type::internal &&
-                     B->linkage() != pstore::repo::linkage_type::internal;
-            });
+  // Use stable_sort() to preserve the alphabetical ordering of the two groups
+  // (internal and non-internal) of symbols. This makes the repo2obj symbol
+  // table a little more similar to the compiler's own ELF files.
+  std::stable_sort(
+      std::begin(OrderedSymbols), std::end(OrderedSymbols),
+      [](Value const *const A, Value const *const B) {
+        return A->linkage() == pstore::repo::linkage_type::internal &&
+               B->linkage() != pstore::repo::linkage_type::internal;
+      });
 
   // Finally tell the symbols about their indices.
   unsigned Index = 0;

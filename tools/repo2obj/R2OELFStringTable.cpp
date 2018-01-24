@@ -16,14 +16,19 @@
 #include "pstore/serialize/standard_types.hpp"
 #include "pstore/sstring_view_archive.hpp"
 
-SString stringToSStringView(std::string const &Str) {
+// stringToSStringView
+// ~~~~~~~~~~~~~~~~~~~
+SString stringToSStringView(llvm::StringRef Ref) {
+  auto const Length = Ref.size();
   // TODO: check for make_shared array support from C++20.
   auto Ptr =
-      std::shared_ptr<char>(new char[Str.size()], [](char *P) { delete[] P; });
-  std::copy(std::begin(Str), std::end(Str), Ptr.get());
-  return {std::static_pointer_cast<char const>(Ptr), Str.size()};
+      std::shared_ptr<char>(new char[Length], [](char *P) { delete[] P; });
+  std::copy(std::begin(Ref), std::end(Ref), Ptr.get());
+  return {std::static_pointer_cast<char const>(Ptr), Length};
 }
 
+// getString
+// ~~~~~~~~~
 SString getString(pstore::database const &Db, pstore::address Addr) {
   using namespace pstore::serialize;
   archive::database_reader Source(Db, Addr);

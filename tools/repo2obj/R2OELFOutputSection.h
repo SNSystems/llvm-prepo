@@ -175,6 +175,8 @@ typename SymbolTable<ELFT>::Value *
 OutputSection<ELFT>::SectionInfo::symbol(SymbolTable<ELFT> &Symbols) {
   using namespace llvm;
   if (Symbol_ == nullptr) {
+    // FIXME: a static local isn't a great way to implement this. I just need to
+    // be able to generate a unique name.
     static auto PrivateSymbolCount = 0U;
 
     auto Name =

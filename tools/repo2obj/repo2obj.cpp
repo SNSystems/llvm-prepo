@@ -213,6 +213,8 @@ uint64_t ELFState<ELFT>::writeSectionHeaders(raw_ostream &OS) {
 template <typename ELFT>
 std::size_t ELFState<ELFT>::buildGroupSections(pstore::database &Db) {
   auto const FirstGroupIndex = SectionHeaders.size();
+  std::uint64_t const Name =
+      Groups.empty() ? 0 : SectionNames.insert(stringToSStringView(".group"));
   for (auto const &G : Groups) {
     auto SignatureSymbol = Symbols.findSymbol(getString(Db, G.first));
     assert(SignatureSymbol != nullptr &&
@@ -220,8 +222,7 @@ std::size_t ELFState<ELFT>::buildGroupSections(pstore::database &Db) {
 
     ELFState<ELFT>::Elf_Shdr SH;
     zero(SH);
-    // TO: we could end up creating the ".group" string many times.
-    SH.sh_name = SectionNames.insert(stringToSStringView(".group"));
+    SH.sh_name = Name;
     SH.sh_type = ELF::SHT_GROUP;
     SH.sh_link = SectionIndices::SymTab;
     SH.sh_info = SignatureSymbol->Index; // The group's signature symbol entry.
@@ -324,6 +325,17 @@ static ELFSectionType getELFSectionType(pstore::repo::section_type T,
   llvm_unreachable("getELFSectionType: unknown repository section kind.");
 }
 
+static std::string getRepoPath() {
+  if (RepoPath.getNumOccurrences() == 0) {
+    // TODO: remove this envrionment variable once the matching behavior is
+    // removed from the compiler.
+    if (auto File = getenv("REPOFILE")) {
+      return {File};
+    }
+  }
+  return RepoPath;
+}
+
 raw_ostream &operator<<(raw_ostream &OS, pstore::index::digest const &Digest) {
   return OS << Digest.to_hex_string();
 }
@@ -348,7 +360,7 @@ int main(int argc, char *argv[]) {
   pstore::uuid const &Uuid = UuidOrError.get();
   DEBUG(dbgs() << "'" << TicketPath << "' : " << Uuid.str() << '\n');
 
-  pstore::database Db(RepoPath, pstore::database::access_mode::read_only);
+  pstore::database Db(getRepoPath(), pstore::database::access_mode::read_only);
   pstore::index::ticket_index const *const TicketIndex =
       pstore::index::get_ticket_index(Db);
   if (!TicketIndex) {
