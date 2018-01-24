@@ -21,9 +21,6 @@ MCRepoStreamer::~MCRepoStreamer() {}
 
 void MCRepoStreamer::ChangeSection(MCSection *Section,
                                    const MCExpr *Subsection) {
-  MCSymbol *const beginSymbol = Section->getBeginSymbol();
-  StringRef name = (beginSymbol == nullptr) ? "<none>" : beginSymbol->getName();
-
   this->MCObjectStreamer::ChangeSection(Section, Subsection);
 }
 
@@ -34,12 +31,12 @@ bool MCRepoStreamer::EmitSymbolAttribute(MCSymbol *Symbol,
 
 void MCRepoStreamer::EmitCommonSymbol(MCSymbol *Symbol, uint64_t Size,
                                       unsigned ByteAlignment) {
-  std::cout << "Emit common symbol\n";
+  report_fatal_error("Emit Common Symbol not yet implemented");
 }
 
 void MCRepoStreamer::EmitZerofill(MCSection *Section, MCSymbol *Symbol,
                                   uint64_t Size, unsigned ByteAlignment) {
-  std::cout << "Emit zero fill\n";
+  report_fatal_error("Emit Zero File not yet implemented");
 }
 
 void MCRepoStreamer::EmitInstToData(const MCInst &Inst,
