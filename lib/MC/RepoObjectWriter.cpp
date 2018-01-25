@@ -253,13 +253,13 @@ void RepoObjectWriter::recordRelocation(MCAssembler &Asm,
   const MCSymbolRefExpr *RefA = Target.getSymA();
   const auto *SymA = RefA ? cast<MCSymbolRepo>(&RefA->getSymbol()) : nullptr;
 
-  bool ViaWeakRef = false;
+  //bool ViaWeakRef = false;
   if (SymA && SymA->isVariable()) {
     const MCExpr *Expr = SymA->getVariableValue();
     if (const auto *Inner = dyn_cast<MCSymbolRefExpr>(Expr)) {
       if (Inner->getKind() == MCSymbolRefExpr::VK_WEAKREF) {
         SymA = cast<MCSymbolRepo>(&Inner->getSymbol());
-        ViaWeakRef = true;
+        //ViaWeakRef = true; TODO: we're not supporting weak references at the moment.
       }
     }
   }
