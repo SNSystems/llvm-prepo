@@ -112,7 +112,7 @@ template <class ELFT> struct ELFState {
   using SectionHeaderTable = std::vector<Elf_Shdr>;
   SectionHeaderTable SectionHeaders;
   std::map<SectionId, OutputSection<ELFT>> Sections;
-  std::map<pstore::address, std::vector<OutputSection<ELFT> *>> Groups;
+  std::map<pstore::address, GroupInfo<ELFT>> Groups;
 
   StringTable SectionNames;
   StringTable SymbolNames;
@@ -124,12 +124,12 @@ template <class ELFT> struct ELFState {
   void initStandardSections();
   uint64_t writeSectionHeaders(raw_ostream &OS);
 
-  std::size_t buildGroupSections(pstore::database &Db);
+  void buildGroupSection(pstore::database &Db, GroupInfo<ELFT> &GI);
 
-  /// Writes the group section data that was recorded by an earlier call to
-  /// buildGroupSections(). The group section headers are updated to record the
+  /// Writes the group section data that was recorded by earlier calls to
+  /// buildGroupSection(). The group section headers are updated to record the
   /// location and and size of this data.
-  void writeGroupSections(raw_ostream &OS, std::size_t FirstGroupIndex);
+  void writeGroupSections(raw_ostream &OS);
 };
 
 template <class ELFT> void ELFState<ELFT>::initELFHeader(Elf_Ehdr &Header) {
@@ -211,38 +211,39 @@ uint64_t ELFState<ELFT>::writeSectionHeaders(raw_ostream &OS) {
 // index of the group's "signature" symbol. We therefore must have already
 // generated and sorted the symbol table to assign indices.
 template <typename ELFT>
-std::size_t ELFState<ELFT>::buildGroupSections(pstore::database &Db) {
-  auto const FirstGroupIndex = SectionHeaders.size();
-  std::uint64_t const Name =
-      Groups.empty() ? 0 : SectionNames.insert(stringToSStringView(".group"));
-  for (auto const &G : Groups) {
-    auto SignatureSymbol = Symbols.findSymbol(getString(Db, G.first));
+void ELFState<ELFT>::buildGroupSection(pstore::database &Db,
+                                       GroupInfo<ELFT> &GI) {
+  // If we haven't yet recorded a section index for this group, then build one
+  // now.
+  if (GI.SectionIndex == 0U) {
+    auto SignatureSymbol =
+        Symbols.findSymbol(getString(Db, GI.IdentifyingSymbol));
     assert(SignatureSymbol != nullptr &&
            SignatureSymbol->Index != llvm::ELF::STN_UNDEF);
-
+    static auto const GroupString = stringToSStringView(".group");
     ELFState<ELFT>::Elf_Shdr SH;
     zero(SH);
-    SH.sh_name = Name;
+    SH.sh_name = SectionNames.insert(GroupString);
     SH.sh_type = ELF::SHT_GROUP;
     SH.sh_link = SectionIndices::SymTab;
     SH.sh_info = SignatureSymbol->Index; // The group's signature symbol entry.
     SH.sh_entsize = sizeof(ELF::Elf32_Word);
     SH.sh_addralign = alignof(ELF::Elf32_Word);
+
+    GI.SectionIndex = SectionHeaders.size();
     SectionHeaders.push_back(SH);
   }
-  return FirstGroupIndex;
 }
 
 template <typename ELFT>
-void ELFState<ELFT>::writeGroupSections(raw_ostream &OS,
-                                        std::size_t ThisGroupIndex) {
+void ELFState<ELFT>::writeGroupSections(raw_ostream &OS) {
   for (auto const &G : Groups) {
     writeAlignmentPadding<ELF::Elf32_Word>(OS);
     auto const StartPos = OS.tell();
     auto NumWords = 1U;
     writeRaw(OS, ELF::Elf32_Word{ELF::GRP_COMDAT});
 
-    for (OutputSection<ELFT> const *GroupMember : G.second) {
+    for (OutputSection<ELFT> const *GroupMember : G.second.Members) {
       auto SectionIndex = GroupMember->getIndex();
       writeRaw(OS, ELF::Elf32_Word{SectionIndex});
       ++NumWords;
@@ -256,12 +257,11 @@ void ELFState<ELFT>::writeGroupSections(raw_ostream &OS,
     auto const SectionSize = NumWords * sizeof(ELF::Elf32_Word);
     assert(OS.tell() - StartPos == SectionSize);
 
-    Elf_Shdr &SH = SectionHeaders[ThisGroupIndex];
+    assert(G.second.SectionIndex < SectionHeaders.size());
+    Elf_Shdr &SH = SectionHeaders[G.second.SectionIndex];
     assert(SH.sh_type == ELF::SHT_GROUP);
     SH.sh_offset = StartPos;
     SH.sh_size = SectionSize;
-
-    ++ThisGroupIndex;
   }
 }
 
@@ -368,8 +368,7 @@ int main(int argc, char *argv[]) {
     return EXIT_FAILURE;
   }
   pstore::index::digest_index const *const FragmentIndex =
-      pstore::index::get_digest_index(
-          Db); // FIXME: this should be called "get_fragment_index".
+      pstore::index::get_digest_index(Db);
   if (!FragmentIndex) {
     errs() << "Error: fragment index was not found.\n";
     return EXIT_FAILURE;
@@ -406,32 +405,49 @@ int main(int argc, char *argv[]) {
                 OutputSection<ELFT>::SectionInfo{});
 
       auto const IsLinkOnce =
-          (TM.linkage == pstore::repo::linkage_type::linkonce);
+          TM.linkage == pstore::repo::linkage_type::linkonce;
       // TODO: enable the name discriminator if "function/data sections mode" is
       // enabled.
       auto const Discriminator = IsLinkOnce ? TM.name : pstore::address::null();
-      auto Fragment = pstore::repo::fragment::load(Db, FragmentPos->second);
+      auto const Fragment =
+          pstore::repo::fragment::load(Db, FragmentPos->second);
 
+      // Go through the sections that this fragment contains create the
+      // corresponding ELF section(s) as necessary.
       for (auto const Key : Fragment->sections().get_indices()) {
         // The section type and "discriminator" together identify the ELF output
         // section to which this fragment's section data will be appended.
-        auto Type = static_cast<pstore::repo::section_type>(Key);
         auto const Id = std::make_tuple(
-            getELFSectionType(Type, TM.name, Magics), Discriminator);
+            getELFSectionType(static_cast<pstore::repo::section_type>(Key),
+                              TM.name, Magics),
+            Discriminator);
 
         decltype(State.Sections)::iterator Pos;
         bool DidInsert;
         std::tie(Pos, DidInsert) =
-            State.Sections.emplace(Id, OutputSection<ELFT>(Db, Id, IsLinkOnce));
+            State.Sections.emplace(Id, OutputSection<ELFT>(Db, Id));
+
+        // If this is the first time that we've wanted to append to the ELF
+        // section described by 'Id' and the ticket-members has linkonce
+        // linkage, then we need to make the section a member of a group
+        // section.
         if (DidInsert && IsLinkOnce) {
-          State.Groups[TM.name].push_back(&Pos->second);
+          decltype(State.Groups)::iterator GroupPos;
+          bool _;
+          std::tie(GroupPos, _) = State.Groups.emplace(
+              TM.name, GroupInfo<ELFT>(TM.name, &Pos->second));
+          // Tell the output section about the group of which it's a member.
+          Pos->second.attachToGroup(&GroupPos->second);
         }
+
         OutputSections[Key] = OutputSection<ELFT>::SectionInfo(
-            &Pos->second, Pos->second.contributionsSize());
+            &Pos->second, Pos->second.contributionSize());
       }
 
+      // This can't currently be folded into the first loop because the need the
+      // OutputSections array to be built.
       for (auto const Key : Fragment->sections().get_indices()) {
-        auto OS = OutputSections[Key];
+        auto &OS = OutputSections[Key];
         pstore::repo::section const &Section =
             (*Fragment)[static_cast<pstore::repo::section_type>(Key)];
         OS.section()->append(
@@ -450,18 +466,20 @@ int main(int argc, char *argv[]) {
   State.initELFHeader(Header);
   State.initStandardSections();
 
-  std::size_t const FirstGroupIndex = State.buildGroupSections(Db);
-
   auto &OS = Out->os();
   writeRaw(OS, Header);
 
   for (auto &S : State.Sections) {
-    S.second.setIndex(State.SectionHeaders.size());
-    S.second.write(OS, State.SectionNames,
-                   std::back_inserter(State.SectionHeaders));
+    OutputSection<ELFT> &Section = S.second;
+    if (GroupInfo<ELFT> *const Group = Section.group()) {
+      State.buildGroupSection(Db, *Group);
+    }
+    Section.setIndex(State.SectionHeaders.size());
+    Section.write(OS, State.SectionNames,
+                  std::back_inserter(State.SectionHeaders));
   }
 
-  State.writeGroupSections(OS, FirstGroupIndex);
+  State.writeGroupSections(OS);
 
   // Write the two string tables (and patch their respective section headers)
   {

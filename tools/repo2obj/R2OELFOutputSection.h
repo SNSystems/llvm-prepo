@@ -57,21 +57,43 @@ enum SectionIndices { Null, SectionNamesStrTab, SymbolNamesStrTab, SymTab };
 
 using SectionId = std::tuple<ELFSectionType, pstore::address>;
 
+template <typename ELFT> class OutputSection;
+
+/// Map from the key-symbol address to the collection of sections belonging to
+/// the group.
+template <typename ELFT> struct GroupInfo {
+  GroupInfo(pstore::address IdentifyingSymbol_, OutputSection<ELFT> *Member)
+      : IdentifyingSymbol{IdentifyingSymbol_} {
+    Members.reserve(2U); // the majority of groups have one or two members.
+    Members.push_back(Member);
+  }
+  pstore::address
+      IdentifyingSymbol; ///< The name that uniquely idenfifies this group.
+  std::vector<OutputSection<ELFT> *> Members;
+  std::size_t SectionIndex = 0; ///< The section-index of this group.
+};
+
 template <typename ELFT> class OutputSection {
 public:
-  explicit OutputSection(pstore::database &Db, SectionId Id, bool IsLinkOnce)
-      : Db_{Db}, Id_{std::move(Id)}, IsLinkOnce_{IsLinkOnce} {}
+  OutputSection(pstore::database &Db, SectionId Id)
+      : Db_{Db}, Id_{std::move(Id)} {}
   OutputSection(OutputSection const &) = delete;
   OutputSection(OutputSection &&) noexcept = default;
   OutputSection &operator=(OutputSection const &) = delete;
   OutputSection &operator=(OutputSection &&) noexcept = default;
 
-  std::uint64_t contributionsSize() const { return SectionSize_; }
+  std::uint64_t contributionSize() const { return SectionSize_; }
   std::uint64_t numRelocations() const { return Relocations_.size(); }
+
+  /// Associates this OutputSection with a specific group section.
+  void attachToGroup(GroupInfo<ELFT> *Group) { Group_ = Group; }
+  /// Get the Group of which the seciton is a member (if any).
+  GroupInfo<ELFT> *group() { return Group_; }
 
   /// This structure is used to provide the data necessary to create a symbol
   /// which references the first byte of each section contributed by a fragment.
-  struct SectionInfo {
+  class SectionInfo {
+  public:
     SectionInfo() noexcept = default;
     SectionInfo(OutputSection<ELFT> *Section, std::uint64_t Offset) noexcept
         : Section_{Section}, Offset_{Offset} {}
@@ -122,7 +144,7 @@ public:
 private:
   pstore::database const &Db_;
   SectionId const Id_;
-  bool const IsLinkOnce_;
+  GroupInfo<ELFT> *Group_ = nullptr;
 
   static constexpr auto UnknownIndex = std::numeric_limits<unsigned>::max();
   unsigned Index_ = UnknownIndex; // The section header table index
@@ -132,6 +154,7 @@ private:
   // this output section. Using some sort of "chunked vector" might be
   // considerably more efficient.
   std::vector<SectionPtr> Contributions_;
+  /// The number of data bytes contained in this section.
   std::uint64_t SectionSize_ = 0;
 
   using Elf_Word = typename llvm::object::ELFFile<ELFT>::Elf_Word;
@@ -256,8 +279,7 @@ void OutputSection<ELFT>::append(pstore::repo::ticket_member const &TM,
         IFixup.section);
     assert(TargetSectionIndex >= 0 &&
            TargetSectionIndex < OutputSections.size());
-    auto &TargetSection = OutputSections[TargetSectionIndex];
-
+    SectionInfo &TargetSection = OutputSections[TargetSectionIndex];
     Relocations_.emplace_back(TargetSection.symbol(Symbols), IFixup.type,
                               IFixup.offset + SectionSize_, IFixup.addend);
   }
@@ -280,7 +302,7 @@ OutputIt OutputSection<ELFT>::write(llvm::raw_ostream &OS,
                                     OutputIt OutShdr) const {
   assert(Index_ != UnknownIndex);
   auto const GroupFlag =
-      IsLinkOnce_ ? Elf_Word(llvm::ELF::SHF_GROUP) : Elf_Word(0);
+      Group_ != nullptr ? Elf_Word{llvm::ELF::SHF_GROUP} : Elf_Word{0};
 
   auto const StartPos = OS.tell();
   auto Pos = StartPos;
