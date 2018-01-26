@@ -526,8 +526,13 @@ void AsmPrinter::EmitGlobalVariable(const GlobalVariable *GV) {
       Align = 0;
 
     // .comm _foo, 42, 4
-    OutStreamer->EmitCommonSymbol(GVSym, Size, Align);
-    return;
+    if (GV->getMetadata((LLVMContext::MD_repo_ticket))) {
+      // A common symbol should be emitted to BSS section in the repo.
+      GVKind = SectionKind::getBSSExtern();
+    } else {
+      OutStreamer->EmitCommonSymbol(GVSym, Size, Align);
+      return;
+    }
   }
 
   // Determine to which section this global should be emitted.
