@@ -17,7 +17,6 @@ namespace details {
 SectionMap const SectionAttributes{
     {ELFSectionType::BSS,
      {".bss", ELF::SHT_NOBITS, ELF::SHF_ALLOC | ELF::SHF_WRITE}},
-    // X (Common)
     {ELFSectionType::Data,
      {".data", ELF::SHT_PROGBITS, ELF::SHF_ALLOC | ELF::SHF_WRITE}},
     // X (RelRo)

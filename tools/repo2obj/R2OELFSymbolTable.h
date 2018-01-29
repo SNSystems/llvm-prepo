@@ -36,7 +36,8 @@ public:
     SymbolTarget(OutputSection<ELFT> const *Section_, std::uint64_t Offset_,
                  std::uint64_t Size_, pstore::repo::linkage_type Linkage_)
         : Section{Section_}, Offset{Offset_}, Size{Size_}, Linkage{Linkage_} {
-      assert(Section != nullptr);
+      assert(Linkage_ == pstore::repo::linkage_type::common ||
+             Section != nullptr);
     }
 
     OutputSection<ELFT> const *Section;
@@ -61,6 +62,7 @@ public:
     llvm::Optional<SymbolTarget> Target;
     /// True if this symbol type is ELF::STT_TLS, otherwise is false.
     bool IsTLS = false;
+    bool IsCommon = false;
 
     std::uint64_t Index = llvm::ELF::STN_UNDEF;
   };
@@ -87,6 +89,10 @@ public:
   /// If not already in the symbol table, an undef entry is created. This may be
   /// later turned into a proper definition by a subsequent call to insertSymbol
   /// with the same name.
+  ///
+  /// The symbol relocation type is used to correctly tag the ELF symbol as TLS
+  /// if necessary.
+  ///
   /// \param Name  The symbol name.
   /// \param Type  The symbol relocation type.
   /// \returns A pointer to the newly created or pre-existing entry for this
@@ -136,8 +142,6 @@ template <typename ELFT>
 unsigned SymbolTable<ELFT>::sectionToSymbolType(ELFSectionType T) {
   using namespace pstore::repo;
   switch (T) {
-  case ELFSectionType::Common:
-    return llvm::ELF::STT_COMMON;
   case ELFSectionType::Text:
     return llvm::ELF::STT_FUNC;
   case ELFSectionType::BSS:
@@ -197,7 +201,11 @@ auto SymbolTable<ELFT>::insertSymbol(SString Name,
     -> Value * {
   auto SV =
       this->insertSymbol(Name, SymbolTarget(Section, Offset, Size, Linkage));
-  SV->IsTLS = sectionToSymbolType(Section->getType()) == llvm::ELF::STT_TLS;
+  if (Linkage == pstore::repo::linkage_type::common) {
+    SV->IsCommon = true;
+  } else {
+    SV->IsTLS = sectionToSymbolType(Section->getType()) == llvm::ELF::STT_TLS;
+  }
   return SV;
 }
 
@@ -257,17 +265,25 @@ SymbolTable<ELFT>::write(llvm::raw_ostream &OS,
     if (SV->Target) {
       SymbolTarget const &T = SV->Target.getValue();
       Symbol.st_value = T.Offset;
-      auto const ST = sectionToSymbolType(T.Section->getType());
+      auto const ST = T.Section ? sectionToSymbolType(T.Section->getType())
+                                : ELF::STT_OBJECT;
       assert(SV->IsTLS == (ST == llvm::ELF::STT_TLS));
       Symbol.setBindingAndType(linkageToELFBinding(T.Linkage), ST);
       // The section (header table index) in which this value is defined.
-      Symbol.st_shndx = T.Section->getIndex();
+      Symbol.st_shndx = SV->IsCommon ? ELF::SHN_COMMON : T.Section->getIndex();
       Symbol.st_size = T.Size;
     } else {
       // There's no definition for this name.
-      Symbol.setBindingAndType(ELF::STB_GLOBAL,
-                               SV->IsTLS ? ELF::STT_TLS : ELF::STT_NOTYPE);
-      Symbol.st_shndx = ELF::SHN_UNDEF;
+      unsigned char Type;
+      if (SV->IsTLS) {
+        Type = ELF::STT_TLS;
+      } else if (SV->IsCommon) {
+        Type = ELF::STT_OBJECT;
+      } else {
+        Type = ELF::STT_NOTYPE;
+      }
+      Symbol.setBindingAndType(ELF::STB_GLOBAL, Type);
+      Symbol.st_shndx = SV->IsCommon ? ELF::SHN_COMMON : ELF::SHN_UNDEF;
     }
 
     writeRaw(OS, Symbol);

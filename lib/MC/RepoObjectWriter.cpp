@@ -344,11 +344,8 @@ static pstore::repo::section_type SectionKindToRepoType(SectionKind K) {
   }
 
   // TODO: add sections types for BSSLocal and BSSExtern?
-  if (K.isBSS()) {
+  if (K.isBSS() || K.isCommon()) {
     return pstore::repo::section_type::BSS;
-  }
-  if (K.isCommon()) {
-    return pstore::repo::section_type::Common;
   }
   if (K.isData()) {
     return pstore::repo::section_type::Data;

@@ -56,6 +56,11 @@ static cl::opt<std::string> OutputFilename("o", cl::desc("Output filename"),
 
 } // end anonymous namespace
 
+LLVM_ATTRIBUTE_NORETURN static void error(Twine Message) {
+  errs() << Message << "\n";
+  exit(EXIT_FAILURE);
+}
+
 static ErrorOr<pstore::uuid> getTicketFileUuid(StringRef TicketPath) {
   constexpr auto TicketFileSize =
       sizeof(std::uint64_t) + pstore::uuid::elements;
@@ -70,8 +75,7 @@ static ErrorOr<pstore::uuid> getTicketFileUuid(StringRef TicketPath) {
   }
   uint64_t FileSize = Status.getSize();
   if (FileSize != TicketFileSize) {
-    // doesn't look like a ticket file.
-    assert(0); // FIXME: return a proper error code.
+    error("File \"" + OutputFilename + "\" was not a Repo ticket file");
   }
 
   ErrorOr<std::unique_ptr<MemoryBuffer>> MemberBufferOrErr =
@@ -89,8 +93,7 @@ static ErrorOr<pstore::uuid> getTicketFileUuid(StringRef TicketPath) {
 
   StringRef Signature = Contents.slice(0, 8);
   if (Signature != "RepoUuid") {
-    // don't look like a ticket file.
-    assert(0); // FIXME: return a proper error code.
+    error("File \"" + OutputFilename + "\" was not a Repo ticket file");
   }
 
   pstore::uuid::container_type UuidBytes;
@@ -265,11 +268,6 @@ void ELFState<ELFT>::writeGroupSections(raw_ostream &OS) {
   }
 }
 
-LLVM_ATTRIBUTE_NORETURN static void error(Twine Message) {
-  errs() << Message << "\n";
-  exit(EXIT_FAILURE);
-}
-
 namespace {
 
 class SpecialNames {
@@ -411,6 +409,21 @@ int main(int argc, char *argv[]) {
       auto const Discriminator = IsLinkOnce ? TM.name : pstore::address::null();
       auto const Fragment =
           pstore::repo::fragment::load(Db, FragmentPos->second);
+
+      if (TM.linkage == pstore::repo::linkage_type::common) {
+        SString Name = getString(Db, TM.name);
+
+        if (Fragment->num_sections() != 1U ||
+            !Fragment->has_section(pstore::repo::section_type::BSS)) {
+          error("Fragment for common symbol \"" + std::string{Name} +
+                "\" did not contain a single BSS section");
+        }
+        pstore::repo::section const &S =
+            (*Fragment)[pstore::repo::section_type::BSS];
+        State.Symbols.insertSymbol(Name, nullptr /*no output section*/,
+                                   0 /*offset*/, S.data().size(), TM.linkage);
+        continue;
+      }
 
       // Go through the sections that this fragment contains create the
       // corresponding ELF section(s) as necessary.
