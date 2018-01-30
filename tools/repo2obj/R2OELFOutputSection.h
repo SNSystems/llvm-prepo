@@ -243,7 +243,7 @@ void OutputSection<ELFT>::append(pstore::repo::ticket_member const &TM,
   DEBUG(dbgs() << "  generating relocations FROM '" << ::getString(Db_, TM.name)
                << "'\n");
 
-  std::uint8_t const DataAlign = std::uint8_t{1} << SectionData->align();
+  std::uint8_t const DataAlign = SectionData->align();
   // ELF section alignment is the maximum of the alignment of all its
   // contributions.
   Align_ = std::max(Align_, DataAlign);
