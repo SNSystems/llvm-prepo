@@ -404,7 +404,7 @@ void RepoObjectWriter::writeSectionData(ContentsType &Fragments,
   pstore::repo::section_type const St =
       SectionKindToRepoType(Section.getKind());
   assert(Sec.getAlignment() > 0);
-  unsigned const Alignment = Log2_32(Sec.getAlignment());
+  unsigned const Alignment = Sec.getAlignment();
 
   // TODO: need a cleaner way to check that the alignment value will fit.
   assert(Alignment <= std::numeric_limits<std::uint8_t>::max());
