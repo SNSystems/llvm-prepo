@@ -117,11 +117,10 @@ template <class ELFT> struct ELFState {
   std::map<SectionId, OutputSection<ELFT>> Sections;
   std::map<pstore::address, GroupInfo<ELFT>> Groups;
 
-  StringTable SectionNames;
-  StringTable SymbolNames;
+  StringTable Strings;
   SymbolTable<ELFT> Symbols;
 
-  explicit ELFState(pstore::database &Db) : Symbols{SymbolNames} {}
+  explicit ELFState(pstore::database &Db) : Symbols{Strings} {}
 
   void initELFHeader(Elf_Ehdr &Header);
   void initStandardSections();
@@ -160,7 +159,7 @@ template <class ELFT> void ELFState<ELFT>::initELFHeader(Elf_Ehdr &Header) {
   Header.e_phnum = 0;
   Header.e_shentsize = sizeof(Elf_Shdr);
   Header.e_shnum = 0; // patched up later.
-  Header.e_shstrndx = SectionIndices::SectionNamesStrTab;
+  Header.e_shstrndx = SectionIndices::StringTab;
 }
 
 template <typename ELFT> void ELFState<ELFT>::initStandardSections() {
@@ -170,25 +169,18 @@ template <typename ELFT> void ELFState<ELFT>::initStandardSections() {
   assert(SectionHeaders.size() == SectionIndices::Null);
   SectionHeaders.push_back(SH);
 
-  // Section name string table
+  // string table
   zero(SH);
-  SH.sh_name = SectionNames.insert(stringToSStringView(".shstrtab"));
+  SH.sh_name = Strings.insert(stringToSStringView(".strtab"));
   SH.sh_type = ELF::SHT_STRTAB;
-  assert(SectionHeaders.size() == SectionIndices::SectionNamesStrTab);
-  SectionHeaders.push_back(SH);
-
-  // Symbol name string table
-  zero(SH);
-  SH.sh_name = SectionNames.insert(stringToSStringView(".strtab"));
-  SH.sh_type = ELF::SHT_STRTAB;
-  assert(SectionHeaders.size() == SectionIndices::SymbolNamesStrTab);
+  assert(SectionHeaders.size() == SectionIndices::StringTab);
   SectionHeaders.push_back(SH);
 
   // Symbol table
   zero(SH);
-  SH.sh_name = SectionNames.insert(stringToSStringView(".symtab"));
+  SH.sh_name = Strings.insert(stringToSStringView(".symtab"));
   SH.sh_type = ELF::SHT_SYMTAB;
-  SH.sh_link = SectionIndices::SymbolNamesStrTab;
+  SH.sh_link = SectionIndices::StringTab;
   SH.sh_entsize = sizeof(ELFState<ELFT>::Elf_Sym);
   SH.sh_addralign = alignof(ELFState<ELFT>::Elf_Sym);
   assert(SectionHeaders.size() == SectionIndices::SymTab);
@@ -226,7 +218,7 @@ void ELFState<ELFT>::buildGroupSection(pstore::database &Db,
     static auto const GroupString = stringToSStringView(".group");
     ELFState<ELFT>::Elf_Shdr SH;
     zero(SH);
-    SH.sh_name = SectionNames.insert(GroupString);
+    SH.sh_name = Strings.insert(GroupString);
     SH.sh_type = ELF::SHT_GROUP;
     SH.sh_link = SectionIndices::SymTab;
     SH.sh_info = SignatureSymbol->Index; // The group's signature symbol entry.
@@ -310,9 +302,9 @@ static ELFSectionType getELFSectionType(pstore::repo::section_type T,
                                         pstore::address Name,
                                         SpecialNames const &Magics) {
   if (Name == Magics.CtorName) {
-    return ELFSectionType::InitArray;
+    return ELFSectionType::init_array;
   } else if (Name == Magics.DtorName) {
-    return ELFSectionType::FiniArray;
+    return ELFSectionType::fini_array;
   }
 
 #define X(a)                                                                   \
@@ -414,12 +406,12 @@ int main(int argc, char *argv[]) {
         SString Name = getString(Db, TM.name);
 
         if (Fragment->num_sections() != 1U ||
-            !Fragment->has_section(pstore::repo::section_type::BSS)) {
+            !Fragment->has_section(pstore::repo::section_type::bss)) {
           error("Fragment for common symbol \"" + std::string{Name} +
-                "\" did not contain a single BSS section");
+                "\" did not contain a sole BSS section");
         }
         pstore::repo::section const &S =
-            (*Fragment)[pstore::repo::section_type::BSS];
+            (*Fragment)[pstore::repo::section_type::bss];
         State.Symbols.insertSymbol(Name, nullptr /*no output section*/,
                                    0 /*offset*/, S.data().size(), TM.linkage);
         continue;
@@ -488,20 +480,15 @@ int main(int argc, char *argv[]) {
       State.buildGroupSection(Db, *Group);
     }
     Section.setIndex(State.SectionHeaders.size());
-    Section.write(OS, State.SectionNames,
-                  std::back_inserter(State.SectionHeaders));
+    Section.write(OS, State.Strings, std::back_inserter(State.SectionHeaders));
   }
 
   State.writeGroupSections(OS);
 
-  // Write the two string tables (and patch their respective section headers)
+  // Write the string table (and patch its section header)
   {
-    auto &S = State.SectionHeaders[SectionIndices::SectionNamesStrTab];
-    std::tie(S.sh_offset, S.sh_size) = State.SectionNames.write(OS);
-  }
-  {
-    auto &S = State.SectionHeaders[SectionIndices::SymbolNamesStrTab];
-    std::tie(S.sh_offset, S.sh_size) = State.SymbolNames.write(OS);
+    auto &S = State.SectionHeaders[SectionIndices::StringTab];
+    std::tie(S.sh_offset, S.sh_size) = State.Strings.write(OS);
   }
   // Now do the same for the symbol table.
   {
@@ -515,7 +502,7 @@ int main(int argc, char *argv[]) {
   uint64_t SectionHeadersOffset = State.writeSectionHeaders(OS);
   Header.e_shoff = SectionHeadersOffset;
   Header.e_shnum = State.SectionHeaders.size();
-  Header.e_shstrndx = SectionIndices::SectionNamesStrTab;
+  Header.e_shstrndx = SectionIndices::StringTab;
 
   OS.seek(0);
   writeRaw(OS, Header);

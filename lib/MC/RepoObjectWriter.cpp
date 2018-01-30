@@ -340,54 +340,54 @@ void svector_ostream<Container>::pwrite_impl(const char *Ptr, size_t Size,
 
 static pstore::repo::section_type SectionKindToRepoType(SectionKind K) {
   if (K.isText()) {
-    return pstore::repo::section_type::Text;
+    return pstore::repo::section_type::text;
   }
 
   // TODO: add sections types for BSSLocal and BSSExtern?
   if (K.isBSS() || K.isCommon()) {
-    return pstore::repo::section_type::BSS;
+    return pstore::repo::section_type::bss;
   }
   if (K.isData()) {
-    return pstore::repo::section_type::Data;
+    return pstore::repo::section_type::data;
   }
   if (K.isMergeableConst4()) {
-    return pstore::repo::section_type::MergeableConst4;
+    return pstore::repo::section_type::mergeable_const_4;
   }
   if (K.isMergeableConst8()) {
-    return pstore::repo::section_type::MergeableConst8;
+    return pstore::repo::section_type::mergeable_const_8;
   }
   if (K.isMergeableConst16()) {
-    return pstore::repo::section_type::MergeableConst16;
+    return pstore::repo::section_type::mergeable_const_16;
   }
   if (K.isMergeableConst32()) {
-    return pstore::repo::section_type::MergeableConst32;
+    return pstore::repo::section_type::mergeable_const_32;
   }
   assert(!K.isMergeableConst() &&
          "isMergeableConst should be covered by the four previous checks");
 
   if (K.isMergeable1ByteCString()) {
-    return pstore::repo::section_type::Mergeable1ByteCString;
+    return pstore::repo::section_type::mergeable_1_byte_c_string;
   }
   if (K.isMergeable2ByteCString()) {
-    return pstore::repo::section_type::Mergeable2ByteCString;
+    return pstore::repo::section_type::mergeable_2_byte_c_string;
   }
   if (K.isMergeable4ByteCString()) {
-    return pstore::repo::section_type::Mergeable4ByteCString;
+    return pstore::repo::section_type::mergeable_4_byte_c_string;
   }
   assert(!K.isMergeableCString() &&
          "isMergeableCString should be covered by the three previous checks");
 
   if (K.isReadOnly()) {
-    return pstore::repo::section_type::ReadOnly;
+    return pstore::repo::section_type::read_only;
   }
   if (K.isReadOnlyWithRel()) {
-    return pstore::repo::section_type::RelRo;
+    return pstore::repo::section_type::rel_ro;
   }
   if (K.isThreadBSS()) {
-    return pstore::repo::section_type::ThreadBSS;
+    return pstore::repo::section_type::thread_bss;
   }
   if (K.isThreadData()) {
-    return pstore::repo::section_type::ThreadData;
+    return pstore::repo::section_type::thread_data;
   }
   assert(!K.isThreadLocal() &&
          "isThreadLocation should be covered by the two previous checks");

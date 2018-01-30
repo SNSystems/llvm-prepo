@@ -11,11 +11,14 @@
 
 #include "pstore_mcrepo/fragment.hpp"
 
+// clang-format off
 #define X(a) a,
 enum class ELFSectionType {
-  PSTORE_REPO_SECTION_TYPES InitArray,
-  FiniArray,
+  PSTORE_REPO_SECTION_TYPES
+  init_array,
+  fini_array,
 };
 #undef X
+// clang-format on
 
 #endif // LLVM_TOOLS_REPO2OBJ_ELFSECTIONTYPE_H

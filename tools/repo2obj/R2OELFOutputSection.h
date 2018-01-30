@@ -53,7 +53,7 @@ extern SectionMap const SectionAttributes;
 } // namespace details
 
 /// Defines the set of standard (fixed) sections that we put in the ELF file.
-enum SectionIndices { Null, SectionNamesStrTab, SymbolNamesStrTab, SymTab };
+enum SectionIndices { Null, StringTab, SymTab };
 
 using SectionId = std::tuple<ELFSectionType, pstore::address>;
 

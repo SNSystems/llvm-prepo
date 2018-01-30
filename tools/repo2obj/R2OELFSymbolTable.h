@@ -61,7 +61,8 @@ public:
     /// The location addressed by this symbol (if known).
     llvm::Optional<SymbolTarget> Target;
     /// True if this symbol type is ELF::STT_TLS, otherwise is false.
-    bool IsTLS = false;
+    bool IsTLS = false; // FIXME: two bools are unnessary because a symbol
+                        // cannot be both TLS and common.
     bool IsCommon = false;
 
     std::uint64_t Index = llvm::ELF::STN_UNDEF;
@@ -142,28 +143,27 @@ template <typename ELFT>
 unsigned SymbolTable<ELFT>::sectionToSymbolType(ELFSectionType T) {
   using namespace pstore::repo;
   switch (T) {
-  case ELFSectionType::Text:
+  case ELFSectionType::text:
     return llvm::ELF::STT_FUNC;
-  case ELFSectionType::BSS:
-  case ELFSectionType::Data:
-  case ELFSectionType::InitArray:
-  case ELFSectionType::FiniArray:
-  case ELFSectionType::RelRo:
-  case ELFSectionType::Mergeable1ByteCString:
-  case ELFSectionType::Mergeable2ByteCString:
-  case ELFSectionType::Mergeable4ByteCString:
-  case ELFSectionType::MergeableConst4:
-  case ELFSectionType::MergeableConst8:
-  case ELFSectionType::MergeableConst16:
-  case ELFSectionType::MergeableConst32:
-  case ELFSectionType::ReadOnly:
+  case ELFSectionType::bss:
+  case ELFSectionType::data:
+  case ELFSectionType::init_array:
+  case ELFSectionType::fini_array:
+  case ELFSectionType::rel_ro:
+  case ELFSectionType::mergeable_1_byte_c_string:
+  case ELFSectionType::mergeable_2_byte_c_string:
+  case ELFSectionType::mergeable_4_byte_c_string:
+  case ELFSectionType::mergeable_const_4:
+  case ELFSectionType::mergeable_const_8:
+  case ELFSectionType::mergeable_const_16:
+  case ELFSectionType::mergeable_const_32:
+  case ELFSectionType::read_only:
     return llvm::ELF::STT_OBJECT;
-  case ELFSectionType::ThreadBSS:
-  case ELFSectionType::ThreadData:
+  case ELFSectionType::thread_bss:
+  case ELFSectionType::thread_data:
     return llvm::ELF::STT_TLS;
-  default:
-    return llvm::ELF::STT_NOTYPE;
   }
+  llvm_unreachable("invalid section type");
 }
 
 template <typename ELFT>
@@ -266,11 +266,12 @@ SymbolTable<ELFT>::write(llvm::raw_ostream &OS,
       SymbolTarget const &T = SV->Target.getValue();
       Symbol.st_value = T.Offset;
       auto const ST = T.Section ? sectionToSymbolType(T.Section->getType())
-                                : ELF::STT_OBJECT;
+                                : static_cast<unsigned>(ELF::STT_OBJECT);
       assert(SV->IsTLS == (ST == llvm::ELF::STT_TLS));
       Symbol.setBindingAndType(linkageToELFBinding(T.Linkage), ST);
       // The section (header table index) in which this value is defined.
-      Symbol.st_shndx = SV->IsCommon ? ELF::SHN_COMMON : T.Section->getIndex();
+      Symbol.st_shndx = SV->IsCommon ? static_cast<unsigned>(ELF::SHN_COMMON)
+                                     : T.Section->getIndex();
       Symbol.st_size = T.Size;
     } else {
       // There's no definition for this name.
