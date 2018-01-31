@@ -178,9 +178,22 @@ private:
   };
   std::vector<Relocation> Relocations_;
 
-  template <typename T> static T alignedBytes(T v, uint8_t align_shift) {
-    auto align = T{1} << align_shift;
-    return (align - T{1}) & ~(align - T{1});
+  /// \returns True if the input value is a power of 2.
+  template <typename Ty,
+            typename = typename std::enable_if<std::is_unsigned<Ty>::value>>
+  static inline bool isPowerOfTwo(Ty N) {
+    //  if a number n is a power of 2 then bitwise & of n and n-1 will be zero.
+    return N && !(N & (N - 1U));
+  }
+
+  /// \param v  The value to be aligned.
+  /// \param align  The alignment required for 'v'.
+  /// \returns  The value closest to but greater than or equal to 'V' for which
+  /// v modulo align is zero.
+  template <typename IntType>
+  static inline IntType aligned(IntType V, std::size_t Align) {
+    assert(isPowerOfTwo(Align));
+    return (V + Align - 1U) & ~(Align - 1U);
   }
 
   static void writePadding(llvm::raw_ostream &OS, unsigned bytes);
@@ -248,7 +261,7 @@ void OutputSection<ELFT>::append(pstore::repo::ticket_member const &TM,
   // contributions.
   Align_ = std::max(Align_, DataAlign);
 
-  SectionSize_ += alignedBytes(SectionSize_, DataAlign);
+  SectionSize_ = aligned(SectionSize_, DataAlign);
 
   // "append" linkage is slightly unusual in that multiple definitions of the
   // same symbol simply pile up one after the other in the output. ELF doesn't
@@ -304,17 +317,26 @@ OutputIt OutputSection<ELFT>::write(llvm::raw_ostream &OS,
   auto const GroupFlag =
       Group_ != nullptr ? Elf_Word{llvm::ELF::SHF_GROUP} : Elf_Word{0};
 
-  auto const StartPos = OS.tell();
-  auto Pos = StartPos;
+  // Ensure that the start of the section data is suitably aligned.
+  auto Pos = OS.tell();
+  auto const StartPos = aligned(Pos, Align_);
+  assert(StartPos >= Pos);
+  this->writePadding(OS, StartPos - Pos);
+
+  Pos = StartPos;
 
   for (auto const &Contribution : Contributions_) {
     pstore::repo::section::container<std::uint8_t> D = Contribution->data();
 
-    auto const Alignment = alignedBytes(Pos, Contribution->align());
-    this->writePadding(OS, Alignment);
-    OS.write(reinterpret_cast<char const *>(D.data()), D.size());
-    Pos += Alignment + D.size();
+    assert(Align_ >= Contribution->align());
+    auto const AlignedPos = aligned(Pos, Contribution->align());
+    assert(AlignedPos >= Pos);
+    this->writePadding(OS, AlignedPos - Pos);
+    std::size_t const Size = D.size();
+    OS.write(reinterpret_cast<char const *>(D.data()), Size);
+    Pos = AlignedPos + Size;
   }
+  assert(Pos == OS.tell());
   assert(OS.tell() - StartPos == SectionSize_);
 
   auto const &Attrs = details::SectionAttributes.find(this->getType());
