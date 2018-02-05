@@ -62,10 +62,9 @@ template <typename ELFT> class OutputSection;
 /// Map from the key-symbol address to the collection of sections belonging to
 /// the group.
 template <typename ELFT> struct GroupInfo {
-  GroupInfo(pstore::address IdentifyingSymbol_, OutputSection<ELFT> *Member)
+  explicit GroupInfo(pstore::address IdentifyingSymbol_)
       : IdentifyingSymbol{IdentifyingSymbol_} {
     Members.reserve(2U); // the majority of groups have one or two members.
-    Members.push_back(Member);
   }
   pstore::address
       IdentifyingSymbol; ///< The name that uniquely idenfifies this group.

@@ -416,7 +416,6 @@ int main(int argc, char *argv[]) {
                                    0 /*offset*/, S.data().size(), TM.linkage);
         continue;
       }
-
       // Go through the sections that this fragment contains create the
       // corresponding ELF section(s) as necessary.
       for (auto const Key : Fragment->sections().get_indices()) {
@@ -437,10 +436,16 @@ int main(int argc, char *argv[]) {
         // linkage, then we need to make the section a member of a group
         // section.
         if (DidInsert && IsLinkOnce) {
-          decltype(State.Groups)::iterator GroupPos;
-          bool _;
-          std::tie(GroupPos, _) = State.Groups.emplace(
-              TM.name, GroupInfo<ELFT>(TM.name, &Pos->second));
+          decltype(State.Groups)::iterator GroupPos =
+              State.Groups.find(TM.name);
+          if (GroupPos == State.Groups.end()) {
+            bool _;
+            std::tie(GroupPos, _) =
+                State.Groups.emplace(TM.name, GroupInfo<ELFT>(TM.name));
+          }
+
+          GroupPos->second.Members.push_back(&Pos->second);
+
           // Tell the output section about the group of which it's a member.
           Pos->second.attachToGroup(&GroupPos->second);
         }
