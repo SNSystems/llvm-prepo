@@ -11,7 +11,7 @@
 #define LLVM_TOOLS_REPO2OBJ_ELFSTRINGTABLE_H
 
 #include "llvm/Support/raw_ostream.h"
-#include "pstore/sstring_view.hpp"
+#include "pstore_support/sstring_view.hpp"
 
 #include <list>
 #include <string>

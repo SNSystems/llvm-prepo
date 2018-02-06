@@ -47,11 +47,12 @@
 #include "pstore/hamt_map.hpp"
 #include "pstore/hamt_set.hpp"
 #include "pstore/index_types.hpp"
-#include "pstore/sstring_view.hpp"
 #include "pstore/sstring_view_archive.hpp"
 #include "pstore/transaction.hpp"
 #include "pstore_mcrepo/fragment.hpp"
 #include "pstore_mcrepo/ticket.hpp"
+#include "pstore_support/sstring_view.hpp"
+
 
 using namespace llvm;
 
@@ -266,6 +267,9 @@ void RepoObjectWriter::recordRelocation(MCAssembler &Asm,
 
   unsigned Type = getRelocType(Ctx, Target, Fixup, IsPCRel);
   uint64_t OriginalC = C;
+  bool RelocateWithSymbol = false;
+  if (!RelocateWithSymbol && SymA && !SymA->isUndefined())
+    C += Layout.getSymbolOffset(*SymA);
 
   uint64_t Addend = 0;
   if (hasRelocationAddend()) {
@@ -421,7 +425,7 @@ void RepoObjectWriter::writeSectionData(ContentsType &Fragments,
 
   auto const &Relocs = Relocations[&Section];
   Content->xfixups.reserve(Relocs.size());
-  for (auto const &Relocation : Relocations[&Section]) {
+  for (auto const &Relocation : Relocs) {
     using repo_relocation_type = pstore::repo::relocation_type;
     assert (Relocation.Type >= std::numeric_limits <repo_relocation_type>::min ()
             && Relocation.Type <= std::numeric_limits <repo_relocation_type>::max ());
