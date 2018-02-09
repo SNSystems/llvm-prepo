@@ -42,8 +42,8 @@ struct SectionInfo {
   SectionInfo(StringType &&N, unsigned T, unsigned F)
       : Name{std::forward<StringType>(N)}, Type{T}, Flags{F} {}
   std::string Name;
-  unsigned Type;  // sh_type value
-  unsigned Flags; // sh_flags value
+  unsigned Type;  ///< sh_type value
+  unsigned Flags; ///< sh_flags value
 };
 // FIXME: this can simply be an array. ELFSectionType is an enum of small
 // integers.
@@ -82,7 +82,15 @@ public:
   OutputSection &operator=(OutputSection &&) noexcept = default;
 
   std::uint64_t contributionSize() const { return SectionSize_; }
+
+  /// Returns the amount of data contained by this section adding the specified
+  /// alignment to the value.
+  std::uint64_t alignedContributionSize(std::uint8_t Align) const {
+    return aligned(this->contributionSize(), Align);
+  }
+
   std::uint64_t numRelocations() const { return Relocations_.size(); }
+  SectionId const &sectionId() const { return Id_; }
 
   /// Associates this OutputSection with a specific group section.
   void attachToGroup(GroupInfo<ELFT> *Group) { Group_ = Group; }
@@ -195,7 +203,8 @@ private:
     return (V + Align - 1U) & ~(Align - 1U);
   }
 
-  static void writePadding(llvm::raw_ostream &OS, unsigned bytes);
+  void writePadding(llvm::raw_ostream &OS, std::uint64_t Bytes) const;
+  void writeNopData(llvm::raw_ostream &OS, std::uint64_t Count) const;
 
   std::string dataSectionName(std::string SectionName,
                               pstore::address DiscriminatorName) const;
@@ -219,12 +228,75 @@ OutputSection<ELFT>::SectionInfo::symbol(SymbolTable<ELFT> &Symbols) {
     Symbol_ = Symbols.insertSymbol(Name, Section_, Offset_, 0 /*size*/,
                                    pstore::repo::linkage_type::internal);
 
-    DEBUG(dbgs() << "  created symbol (" << Name
-                 << ") for internal fixup (index " << Symbol_ << ")\n");
+    DEBUG(dbgs() << "  created symbol:" << Name
+                 << " for internal fixup (offset:" << Offset_
+                 << " contributionSize:" << Section_->contributionSize()
+                 << ")\n");
 
     assert(Symbol_ != nullptr);
   }
   return Symbol_;
+}
+
+// FIXME: this code is ripped from X86AsmBackend::writeNopData(). Unfortunately
+// that function is somewhat coupled to its surrounding classes fairly tightly
+// so that it's easier in the short term to replicate it here. Refactor.
+/// \brief Write a sequence of optimal nops to the output, covering \p Count
+/// bytes.
+/// \return - true on success, false on failure
+template <typename ELFT>
+void OutputSection<ELFT>::writeNopData(llvm::raw_ostream &OS,
+                                       uint64_t Count) const {
+  static const uint8_t Nops[10][10] = {
+      // nop
+      {0x90},
+      // xchg %ax,%ax
+      {0x66, 0x90},
+      // nopl (%[re]ax)
+      {0x0f, 0x1f, 0x00},
+      // nopl 0(%[re]ax)
+      {0x0f, 0x1f, 0x40, 0x00},
+      // nopl 0(%[re]ax,%[re]ax,1)
+      {0x0f, 0x1f, 0x44, 0x00, 0x00},
+      // nopw 0(%[re]ax,%[re]ax,1)
+      {0x66, 0x0f, 0x1f, 0x44, 0x00, 0x00},
+      // nopl 0L(%[re]ax)
+      {0x0f, 0x1f, 0x80, 0x00, 0x00, 0x00, 0x00},
+      // nopl 0L(%[re]ax,%[re]ax,1)
+      {0x0f, 0x1f, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00},
+      // nopw 0L(%[re]ax,%[re]ax,1)
+      {0x66, 0x0f, 0x1f, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00},
+      // nopw %cs:0L(%[re]ax,%[re]ax,1)
+      {0x66, 0x2e, 0x0f, 0x1f, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00},
+  };
+
+#if 0
+  // This CPU doesn't support long nops. If needed add more.
+  // FIXME: Can we get this from the subtarget somehow?
+  // FIXME: We could generated something better than plain 0x90.
+  if (!HasNopl) {
+    for (uint64_t i = 0; i < Count; ++i)
+      OW->write8(0x90);
+    return true;
+  }
+#endif
+
+  // 15 is the longest single nop instruction.  Emit as many 15-byte nops as
+  // needed, then emit a nop of the remaining length.
+  auto MaxNopLength = uint64_t{15};
+  do {
+    auto const ThisNopLength =
+        static_cast<std::uint8_t>(std::min(Count, MaxNopLength));
+    uint8_t const Prefixes = ThisNopLength <= 10 ? 0 : ThisNopLength - 10;
+    for (uint8_t i = 0; i < Prefixes; i++) {
+      write8(OS, 0x66);
+    }
+    const uint8_t Rest = ThisNopLength - Prefixes;
+    for (uint8_t i = 0; i < Rest; i++) {
+      write8(OS, Nops[Rest - 1][i]);
+    }
+    Count -= ThisNopLength;
+  } while (Count != 0);
 }
 
 // writePadding
@@ -232,10 +304,13 @@ OutputSection<ELFT>::SectionInfo::symbol(SymbolTable<ELFT> &Symbols) {
 // FIXME: the padding data depends on the output section. In particular, the
 // text section should receive NOP instructions. This is modelled in
 template <typename ELFT>
-void OutputSection<ELFT>::writePadding(llvm::raw_ostream &OS, unsigned bytes) {
-  auto const b = uint8_t{0};
-  for (auto ctr = 0U; ctr < bytes; ++ctr) {
-    writeRaw(OS, b);
+void OutputSection<ELFT>::writePadding(llvm::raw_ostream &OS,
+                                       std::uint64_t Bytes) const {
+  if (std::get<0>(sectionId()) == ELFSectionType::text) {
+    return writeNopData(OS, Bytes);
+  }
+  for (auto Ctr = std::uint64_t{0}; Ctr < Bytes; ++Ctr) {
+    write8(OS, 0);
   }
 }
 
@@ -246,7 +321,6 @@ void OutputSection<ELFT>::append(pstore::repo::ticket_member const &TM,
                                  SectionPtr SectionData,
                                  SymbolTable<ELFT> &Symbols,
                                  std::vector<SectionInfo> &OutputSections) {
-
   using namespace llvm;
 
   Contributions_.emplace_back(SectionData);
@@ -286,14 +360,29 @@ void OutputSection<ELFT>::append(pstore::repo::ticket_member const &TM,
   }
 
   for (pstore::repo::internal_fixup const &IFixup : SectionData->ifixups()) {
+    // "patch section" and "patch offset" define the address that the fixup will
+    // modify.
+    OutputSection const *PatchSection = this;
+    auto const PatchOffset = SectionSize_ + IFixup.offset;
+    DEBUG(llvm::dbgs() << "patch section is "
+                       << std::get<0>(PatchSection->sectionId()) << " + "
+                       << PatchOffset << '\n');
+
+    // "target section" and friends define the value that the fixup will write
+    // to the "patch address".
     auto const TargetSectionIndex = static_cast<
         typename std::underlying_type<decltype(IFixup.section)>::type>(
         IFixup.section);
     assert(TargetSectionIndex >= 0 &&
            TargetSectionIndex < OutputSections.size());
     SectionInfo &TargetSection = OutputSections[TargetSectionIndex];
+
+    DEBUG(llvm::dbgs() << "reloc target section is "
+                       << std::get<0>(TargetSection.section()->sectionId())
+                       << '\n');
+
     Relocations_.emplace_back(TargetSection.symbol(Symbols), IFixup.type,
-                              IFixup.offset + SectionSize_, IFixup.addend);
+                              PatchOffset, IFixup.addend);
   }
 
   SectionSize_ += ObjectSize;

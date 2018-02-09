@@ -21,4 +21,9 @@ enum class ELFSectionType {
 #undef X
 // clang-format on
 
+namespace llvm {
+class raw_ostream;
+}
+llvm::raw_ostream &operator<<(llvm::raw_ostream &OS, ELFSectionType ST);
+
 #endif // LLVM_TOOLS_REPO2OBJ_ELFSECTIONTYPE_H

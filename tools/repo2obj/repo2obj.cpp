@@ -52,7 +52,8 @@ cl::opt<std::string> RepoPath("repo", cl::Optional,
                               cl::init("./clang.db"));
 cl::opt<std::string> TicketPath(cl::Positional, cl::desc("<ticket path>"));
 static cl::opt<std::string> OutputFilename("o", cl::desc("Output filename"),
-                                           cl::value_desc("filename"));
+                                           cl::value_desc("filename"),
+                                           cl::init("./a.out"));
 
 } // end anonymous namespace
 
@@ -421,15 +422,16 @@ int main(int argc, char *argv[]) {
       for (auto const Key : Fragment->sections().get_indices()) {
         // The section type and "discriminator" together identify the ELF output
         // section to which this fragment's section data will be appended.
+        auto const SectionType = static_cast<pstore::repo::section_type>(Key);
         auto const Id = std::make_tuple(
-            getELFSectionType(static_cast<pstore::repo::section_type>(Key),
-                              TM.name, Magics),
-            Discriminator);
+            getELFSectionType(SectionType, TM.name, Magics), Discriminator);
 
         decltype(State.Sections)::iterator Pos;
         bool DidInsert;
         std::tie(Pos, DidInsert) =
             State.Sections.emplace(Id, OutputSection<ELFT>(Db, Id));
+
+        OutputSection<ELFT> *const OSection = &Pos->second;
 
         // If this is the first time that we've wanted to append to the ELF
         // section described by 'Id' and the ticket-members has linkonce
@@ -444,23 +446,27 @@ int main(int argc, char *argv[]) {
                 State.Groups.emplace(TM.name, GroupInfo<ELFT>(TM.name));
           }
 
-          GroupPos->second.Members.push_back(&Pos->second);
+          GroupPos->second.Members.push_back(OSection);
 
           // Tell the output section about the group of which it's a member.
-          Pos->second.attachToGroup(&GroupPos->second);
+          OSection->attachToGroup(&GroupPos->second);
         }
 
+        // Record the location that the later call to section()->append() will
+        // assign to this data. We need to account for any alignment padding
+        // that that function may place before the data itself (hence the call
+        // to alignedContributionSize()).
         OutputSections[Key] = OutputSection<ELFT>::SectionInfo(
-            &Pos->second, Pos->second.contributionSize());
+            OSection, OSection->alignedContributionSize(
+                          (*Fragment)[SectionType].align()));
       }
 
       // This can't currently be folded into the first loop because the need the
       // OutputSections array to be built.
       for (auto const Key : Fragment->sections().get_indices()) {
-        auto &OS = OutputSections[Key];
         pstore::repo::section const &Section =
             (*Fragment)[static_cast<pstore::repo::section_type>(Key)];
-        OS.section()->append(
+        OutputSections[Key].section()->append(
             TM, SectionPtr{std::static_pointer_cast<void const>(Fragment),
                            &Section},
             State.Symbols, OutputSections);

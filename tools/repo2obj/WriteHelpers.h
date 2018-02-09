@@ -36,6 +36,8 @@ std::size_t writeRaw(llvm::raw_ostream &OS, Ty const &T) {
   return sizeof(T);
 }
 
+std::size_t write8(llvm::raw_ostream &OS, std::uint8_t V);
+
 template <typename Ty, typename = typename std::enable_if<
                            std::is_standard_layout<Ty>::value>::type>
 std::size_t writeRaw(llvm::raw_ostream &OS, Ty *T, std::size_t Size) {
