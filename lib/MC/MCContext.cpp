@@ -482,6 +482,15 @@ MCSectionRepo *MCContext::getRepoSection(RepoSection K, Digest::DigestType const
   case RepoSection::ThreadDataSection:
     Kind = SectionKind::getThreadData();
     break;
+  case RepoSection::Mergeable1ByteCStringSection:
+    Kind = SectionKind::getMergeable1ByteCString ();
+    break;
+  case RepoSection::Mergeable2ByteCStringSection:
+    Kind = SectionKind::getMergeable2ByteCString ();
+    break;
+  case RepoSection::Mergeable4ByteCStringSection:
+    Kind = SectionKind::getMergeable4ByteCString ();
+    break;
   case RepoSection::MergeableConst4Section:
     Kind = SectionKind::getMergeableConst4();
     break;
@@ -497,8 +506,6 @@ MCSectionRepo *MCContext::getRepoSection(RepoSection K, Digest::DigestType const
   case RepoSection::ReadOnlySection:
     Kind = SectionKind::getReadOnly();
     break;
-  default:
-    llvm_unreachable("Unsupported section type in getRepoSection");
   }
 
   auto Result = new MCSectionRepo(Kind, nullptr /*symbol*/, Digest);
