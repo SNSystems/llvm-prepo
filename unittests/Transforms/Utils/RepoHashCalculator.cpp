@@ -235,7 +235,7 @@ TEST_F(VariableHash, CheckInitializer) {
 
   Constant *Zero = ConstantInt::get(Int8, 0);
   GV0->setInitializer(Zero);
-  EXPECT_FALSE(isEqualHash());
+  EXPECT_TRUE(isEqualHash());
 
   GV1->setInitializer(Zero);
   EXPECT_TRUE(isEqualHash());
