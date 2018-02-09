@@ -1,5 +1,7 @@
 ; RUN: llc -filetype=obj -debug-only repo-object %s -o %t.o
 
+; REQUIRES: asserts
+
 target triple = "x86_64-pc-linux-gnu-repo"
 
 !llvm.module.flags = !{!0}

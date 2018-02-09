@@ -19,11 +19,11 @@ entry:
   ret i32 2
 }
 
-;CHECK: !0 = !TicketNode(name: "fp_foo", digest: [16 x i8] c"_\C9\D7\18\C6\5C\94\FAQY\F1\09^\7FL\18", linkage: external)
-;CHECK: !1 = !TicketNode(name: "fp_bar", digest: [16 x i8] c"\AD\12\07\EF\DD\BD\0B\C3\E8\EB5\00\B7\0D\AA\C7", linkage: external)
-;CHECK: !2 = !TicketNode(name: "a", digest: [16 x i8] c"j97\FBR\0F\95*\98=\F71\8Do\8A\F3", linkage: internal)
-;CHECK: !3 = !TicketNode(name: "vp_a", digest: [16 x i8] c"uG\A2\EEj\04\03V\A7\18\7Fy|\DFt\C2", linkage: external)
-;CHECK: !4 = !TicketNode(name: "b", digest: [16 x i8] c"\9C\DBo\BA\EC\99\0A>&\C3\BE\FAS(\82\99", linkage: internal)
-;CHECK: !5 = !TicketNode(name: "vp_b", digest: [16 x i8] c"\80\08\E7\C5e\D7\86\F2\FE\C4\0A\DC\FC'64", linkage: external)
-;CHECK: !6 = !TicketNode(name: "foo", digest: [16 x i8] c"\9E\FC16\E2\F6\1A\F5\F5av\A5\9F\05b\D3", linkage: internal)
-;CHECK: !7 = !TicketNode(name: "bar", digest: [16 x i8] c"f\D1S\E1\14\93\B1\7FhB\17\C8\C1tV5", linkage: internal)
+;CHECK: !0 = !TicketNode(name: "fp_foo", digest: [16 x i8] c"<c\930z>i>\AFXi\17G[\A1\A0", linkage: external)
+;CHECK: !1 = !TicketNode(name: "fp_bar", digest: [16 x i8] c"\9F\F2!\9F}(\D8\83\EAS\9E>\CE\F4\B5\B1", linkage: external)
+;CHECK: !2 = !TicketNode(name: "a", digest: [16 x i8] c"Wb|\8D\9B\03\D9\D3\F0\D7\0E\92l=\E8\D0", linkage: internal)
+;CHECK: !3 = !TicketNode(name: "vp_a", digest: [16 x i8] c"z\80\E7\D5-\E3\BE*?\88\E1o\BA*\DF\BB", linkage: external)
+;CHECK: !4 = !TicketNode(name: "b", digest: [16 x i8] c"\E1\DA<\FA\BA\EC\F1G(xz\0CwVE2", linkage: internal)
+;CHECK: !5 = !TicketNode(name: "vp_b", digest: [16 x i8] c"\D3`\C6\B8\DF4\E2B?Z\C9W\99\DA\1C\12", linkage: external)
+;CHECK: !6 = !TicketNode(name: "foo", digest: [16 x i8] c"\F1\E3\F1\0DG\D1Z\9C\BC\01\BF_+Z8L", linkage: internal)
+;CHECK: !7 = !TicketNode(name: "bar", digest: [16 x i8] c"\A5\0A\E8),\9A\E7\9D\B99\7F\9E\E3\BE+$", linkage: internal)

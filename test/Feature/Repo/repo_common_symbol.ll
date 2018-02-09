@@ -19,4 +19,4 @@ target triple = "x86_64-pc-linux-gnu-repo"
 ; CHECK-NEXT: Binding: Global (0x1)
 ; CHECK-NEXT: Type: Object (0x1)
 ; CHECK-NEXT: Other: 0
-; CHECK-NEXT: Section: .bss (0x4)
+; CHECK-NEXT: Section: Common (0xFFF2)

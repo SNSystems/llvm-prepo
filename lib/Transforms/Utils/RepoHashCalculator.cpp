@@ -558,7 +558,7 @@ void VariableHashCalculator::calculateHash(Module &M) {
   GvHash.hashModule(M);
   GvHash.hashType(Gv->getValueType());
   // If global variable is constant, accumulate the const attribute.
-  update(HashKind::TAG_GVConstant);
+  update(HashKind::TAG_GVIsConstant);
   update(Gv->isConstant());
   // Accumulate the thread local mode.
   update(HashKind::TAG_GVThreadLocalMode);
@@ -569,11 +569,10 @@ void VariableHashCalculator::calculateHash(Module &M) {
   // Accumulate an optional unnamed_addr or local_unnamed_addr attribute.
   update(HashKind::TAG_GVUnnamedAddr);
   update(static_cast<uint8_t>(Gv->getUnnamedAddr()));
-  if (Gv->hasName() && Gv->hasDefinitiveInitializer()) {
-    // Global variable is constant type. Accumulate the initial value.
-    // This accumulation also cover the "llvm.global_ctors",
-    // "llvm.global_dtors", "llvm.used" and "llvm.compiler.used" cases.
-    update(HashKind::TAG_GVInitValue);
-    GvHash.hashConstant(Gv->getInitializer());
-  }
+  // Global variable is constant type. Accumulate the initial value.
+  // This accumulation also cover the "llvm.global_ctors",
+  // "llvm.global_dtors", "llvm.used" and "llvm.compiler.used" cases.
+  GvHash.hashConstant((Gv->hasName() && Gv->hasDefinitiveInitializer())
+                          ? Gv->getInitializer()
+                          : Constant::getNullValue(Gv->getValueType()));
 }
