@@ -63,7 +63,7 @@ namespace {
 typedef DenseMap<const MCSectionRepo *, uint32_t> SectionIndexMapTy;
 
 class RepoObjectWriter : public MCObjectWriter {
-
+private:
   /// The target specific repository writer instance.
   std::unique_ptr<MCRepoObjectTargetWriter> TargetObjectWriter;
 
@@ -103,7 +103,6 @@ class RepoObjectWriter : public MCObjectWriter {
   /// @}
 
   // TargetObjectWriter wrappers.
-  bool hasRelocationAddend() const { return true; }
   unsigned getRelocType(MCContext &Ctx, const MCValue &Target,
                         const MCFixup &Fixup, bool IsPCRel) const {
     return TargetObjectWriter->getRelocType(Ctx, Target, Fixup, IsPCRel);
@@ -271,13 +270,8 @@ void RepoObjectWriter::recordRelocation(MCAssembler &Asm,
   if (!RelocateWithSymbol && SymA && !SymA->isUndefined())
     C += Layout.getSymbolOffset(*SymA);
 
-  uint64_t Addend = 0;
-  if (hasRelocationAddend()) {
-    Addend = C;
-    C = 0;
-  }
-
-  FixedValue = C;
+  uint64_t Addend = C;
+  FixedValue = 0;
 
   const auto *RenamedSymA = SymA;
   if (SymA) {

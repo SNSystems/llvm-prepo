@@ -23,7 +23,10 @@ namespace llvm {
 class MCSectionRepo : public MCSection {
 private:
   ::llvm::Digest::DigestType Digest;
+  /// Monotonically increases for each section.
   unsigned const Index;
+  /// A dummy section is created for the assembler's initial setup. Is this the
+  /// dummy section?
   bool IsDummy = false;
 
   friend class MCContext;
