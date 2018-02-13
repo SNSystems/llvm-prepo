@@ -23,10 +23,11 @@ The process to follow is similar to that for a conventional build of Clang+LLVM,
         $ cd llvm/tools
         $ git clone https://github.com/SNSystems/pstore.git
         $ cd -
+        
+   Ultimately, we envisage supporting multiple database back-ends to fit different needs, but there’s currently a hard dependency on the pstore (“Program Store”) key/value store as a back-end.
+
 
 1. Build LLVM as [normal](https://llvm.org/docs/CMake.html).
-
-Ultimately, we envisage supporting multiple database back-ends to fit different needs, but there’s currently a hard dependency on the pstore (“Program Store”) key/value store as a back-end.
 
 ## Using the Program Repository
 
