@@ -9,17 +9,14 @@
 
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/Optional.h"
-#include "llvm/BinaryFormat/ELF.h"
-#include "llvm/BinaryFormat/Repo.h"
+#include "llvm/MC/MCRepoTicketFile.h"
 #include "llvm/MC/StringTableBuilder.h"
 #include "llvm/Object/Binary.h"
-#include "llvm/Object/ELF.h"
-#include "llvm/Object/ELFObjectFile.h"
-#include "llvm/Object/ELFTypes.h"
 #include "llvm/Support/CommandLine.h"
+#include "llvm/Support/FileSystem.h"
 #include "llvm/Support/MemoryBuffer.h"
-#include "llvm/Support/ToolOutputFile.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Support/ToolOutputFile.h"
 
 #include "pstore/database.hpp"
 #include "pstore/hamt_map.hpp"
@@ -51,57 +48,15 @@ cl::opt<std::string> RepoPath("repo", cl::Optional,
                               cl::desc("Program repository path"),
                               cl::init("./clang.db"));
 cl::opt<std::string> TicketPath(cl::Positional, cl::desc("<ticket path>"));
-static cl::opt<std::string> OutputFilename("o", cl::desc("Output filename"),
-                                           cl::value_desc("filename"),
-                                           cl::init("./a.out"));
+cl::opt<std::string> OutputFilename("o", cl::desc("Output filename"),
+                                    cl::value_desc("filename"),
+                                    cl::init("./a.out"));
 
 } // end anonymous namespace
 
 LLVM_ATTRIBUTE_NORETURN static void error(Twine Message) {
   errs() << Message << "\n";
   exit(EXIT_FAILURE);
-}
-
-static ErrorOr<pstore::uuid> getTicketFileUuid(StringRef TicketPath) {
-  constexpr auto TicketFileSize =
-      sizeof(std::uint64_t) + pstore::uuid::elements;
-  int TicketFD = 0;
-  if (std::error_code Err = sys::fs::openFileForRead(TicketPath, TicketFD)) {
-    return Err;
-  }
-
-  sys::fs::file_status Status;
-  if (std::error_code Err = sys::fs::status(TicketFD, Status)) {
-    return Err;
-  }
-  uint64_t FileSize = Status.getSize();
-  if (FileSize != TicketFileSize) {
-    error("File \"" + OutputFilename + "\" was not a Repo ticket file");
-  }
-
-  ErrorOr<std::unique_ptr<MemoryBuffer>> MemberBufferOrErr =
-      MemoryBuffer::getOpenFile(TicketFD, TicketPath, FileSize, false);
-  if (!MemberBufferOrErr) {
-    return MemberBufferOrErr.getError();
-  }
-
-  if (close(TicketFD) != 0) {
-    return std::error_code(errno, std::generic_category());
-  }
-
-  StringRef Contents = MemberBufferOrErr.get()->getBuffer();
-  assert(Contents.size() == TicketFileSize);
-
-  StringRef Signature = Contents.slice(0, 8);
-  if (Signature != "RepoUuid") {
-    error("File \"" + OutputFilename + "\" was not a Repo ticket file");
-  }
-
-  pstore::uuid::container_type UuidBytes;
-  StringRef Bytes = Contents.substr(8, pstore::uuid::elements);
-  assert(Bytes.size() == pstore::uuid::elements);
-  std::copy(std::begin(Bytes), std::end(Bytes), std::begin(UuidBytes));
-  return {UuidBytes};
 }
 
 template <class ELFT> struct ELFState {
@@ -341,15 +296,16 @@ int main(int argc, char *argv[]) {
     error("repo2obj: Error opening '" + OutputFilename + "': " + EC.message());
   }
 
-  ErrorOr<pstore::uuid> UuidOrError = getTicketFileUuid(TicketPath);
-  if (!UuidOrError) {
+  ErrorOr<pstore::index::digest> DigestOrError =
+      llvm::repo::getTicketIdFromFile(TicketPath);
+  if (!DigestOrError) {
     errs() << "Error: '" << TicketPath << "' ("
-           << UuidOrError.getError().message() << ")\n";
+           << DigestOrError.getError().message() << ")\n";
     return EXIT_FAILURE;
   }
 
-  pstore::uuid const &Uuid = UuidOrError.get();
-  DEBUG(dbgs() << "'" << TicketPath << "' : " << Uuid.str() << '\n');
+  pstore::index::digest const &Digest = DigestOrError.get();
+  DEBUG(dbgs() << "'" << TicketPath << "' : " << Digest << '\n');
 
   pstore::database Db(getRepoPath(), pstore::database::access_mode::read_only);
   pstore::index::ticket_index const *const TicketIndex =
@@ -365,9 +321,9 @@ int main(int argc, char *argv[]) {
     return EXIT_FAILURE;
   }
 
-  auto TicketPos = TicketIndex->find(UuidOrError.get());
+  auto TicketPos = TicketIndex->find(Digest);
   if (TicketPos == TicketIndex->end()) {
-    errs() << "Error: ticket " << Uuid.str() << " was not found.\n";
+    errs() << "Error: ticket " << Digest << " was not found.\n";
     return EXIT_FAILURE;
   }
 

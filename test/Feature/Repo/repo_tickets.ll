@@ -5,7 +5,7 @@
 ; Step 1: Create the database 'clang.db' which contains the 'sum' fragment.
 ; Step 2: run llc again to check that the ticket is added;
 ;
-; RUN: llc -filetype=obj %s -o %t
+; RUN: rm clang.db
 ; RUN: llc -filetype=obj -debug-only repo-object %s -o %t 2>&1 | FileCheck %s
 
 ; REQUIRES: asserts
@@ -25,7 +25,6 @@ entry:
 }
 
 !repo.tickets = !{!0}
-
 !0 = !TicketNode(name: "sum", digest: [16 x i8] c"qd\BD6r\8A=\BB\05\8B\D8.\AA\BA\04P", linkage: external)
 
 ;CHECK: path: {{.*}}test{{/|\\}}Feature{{/|\\}}Repo{{/|\\}}Output

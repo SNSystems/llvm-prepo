@@ -13,7 +13,6 @@
 #include "llvm/ADT/Triple.h"
 #include "llvm/MC/MCValue.h"
 #include "llvm/Support/DataTypes.h"
-#include "llvm/BinaryFormat/Repo.h"
 #include "llvm/Support/raw_ostream.h"
 #include <vector>
 
@@ -60,18 +59,6 @@ protected:
   MCRepoObjectTargetWriter(uint16_t EM);
 
 public:
-  static uint8_t getOSABI(Triple::OSType OSType) {
-    switch (OSType) {
-    case Triple::CloudABI:
-      return ELF::ELFOSABI_CLOUDABI;
-    case Triple::PS4:
-    case Triple::FreeBSD:
-      return ELF::ELFOSABI_FREEBSD;
-    default:
-      return ELF::ELFOSABI_NONE;
-    }
-  }
-
   virtual ~MCRepoObjectTargetWriter() {}
 
   virtual unsigned getRelocType(MCContext &Ctx, const MCValue &Target,

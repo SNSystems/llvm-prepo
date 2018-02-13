@@ -9,6 +9,7 @@
 
 #include "MCTargetDesc/X86FixupKinds.h"
 #include "MCTargetDesc/X86MCTargetDesc.h"
+#include "llvm/BinaryFormat/ELF.h"
 #include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCExpr.h"

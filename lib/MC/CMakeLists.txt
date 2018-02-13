@@ -34,8 +34,9 @@ add_llvm_library(LLVMMC
   MCObjectStreamer.cpp
   MCObjectWriter.cpp
   MCRegisterInfo.cpp
-  MCRepoStreamer.cpp
   MCRepoObjectTargetWriter.cpp
+  MCRepoStreamer.cpp
+  MCRepoTicketFile.cpp
   MCSchedule.cpp
   MCSection.cpp
   MCSectionCOFF.cpp

@@ -89,7 +89,7 @@ bool RepoPruning::runOnModule(Module &M) {
       return false;
     auto Result = Digest::get(&GO);
 
-    auto const Key = pstore::index::uint128{Result.high(), Result.low()};
+    auto const Key = pstore::index::digest{Result.high(), Result.low()};
     if (Digests->find(Key) != Digests->end()) {
       Changed = true;
       ++NumGO;
