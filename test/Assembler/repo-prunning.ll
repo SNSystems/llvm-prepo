@@ -50,9 +50,9 @@ entry:
   ret i32 %call
 }
 
-;CHECK: !0 = !TicketNode(name: "c",
-;CHECK: !1 = !TicketNode(name: "a",
-;CHECK: !2 = !TicketNode(name: "b",
-;CHECK: !3 = !TicketNode(name: "me",
-;CHECK: !4 = !TicketNode(name: "foo",
-;CHECK: !5 = !TicketNode(name: "bar",
+;CHECK: !0 = !TicketNode(name: "c", digest: [16 x i8] c"b\99\D0\08\E3\BD1@\B6\9Dz\C1\EB\A1&\9E", linkage: external, pruned: true)
+;CHECK: !1 = !TicketNode(name: "a", digest: [16 x i8] c"Wb|\8D\9B\03\D9\D3\F0\D7\0E\92l=\E8\D0", linkage: external, pruned: true)
+;CHECK: !2 = !TicketNode(name: "b", digest: [16 x i8] c"Wb|\8D\9B\03\D9\D3\F0\D7\0E\92l=\E8\D0", linkage: internal, pruned: true)
+;CHECK: !3 = !TicketNode(name: "me", digest: [16 x i8] c";\E6\F2\D6\F2dRRj\97\EF\A1U\86M\F8", linkage: linkonce_odr, pruned: true)
+;CHECK: !4 = !TicketNode(name: "foo", digest: [16 x i8] c"V\86O\8B\0A\9A\CAk\13\A0Ip\05\EB\81 ", linkage: internal, pruned: true)
+;CHECK: !5 = !TicketNode(name: "bar", digest: [16 x i8] c"\F5N%f\0CxU\D0\E3K\05e\FC/)C", linkage: external, pruned: true)

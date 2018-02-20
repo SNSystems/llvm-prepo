@@ -69,13 +69,12 @@ static bool isCanonical(const MDString *S) {
 
 TicketNode *TicketNode::getImpl(LLVMContext &Context, MDString *Name,
                                 ConstantAsMetadata *Digest,
-                                GlobalValue::LinkageTypes Linkage,
-                                StorageType Storage,
-                                bool ShouldCreate) {
+                                GlobalValue::LinkageTypes Linkage, bool Pruned,
+                                StorageType Storage, bool ShouldCreate) {
   if (Storage == Uniqued) {
     if (auto *N =
             getUniqued(Context.pImpl->TicketNodes,
-                       TicketNodeInfo::KeyTy(Linkage, Name, Digest)))
+                       TicketNodeInfo::KeyTy(Linkage, Pruned, Name, Digest)))
       return N;
     if (!ShouldCreate)
       return nullptr;
@@ -86,15 +85,14 @@ TicketNode *TicketNode::getImpl(LLVMContext &Context, MDString *Name,
   assert(isCanonical(Name) && "Expected canonical MDString");
   Metadata *Ops[] = {Name, Digest};
   return storeImpl(new (array_lengthof(Ops))
-                       TicketNode(Context, Storage, Linkage, Ops),
+                       TicketNode(Context, Storage, Linkage, Pruned, Ops),
                    Storage, Context.pImpl->TicketNodes);
 }
 
 TicketNode *TicketNode::getImpl(LLVMContext &Context, StringRef Name,
                                 Digest::DigestType const &Digest,
-                                GlobalValue::LinkageTypes Linkage,
-                                StorageType Storage,
-                                bool ShouldCreate) {
+                                GlobalValue::LinkageTypes Linkage, bool Pruned,
+                                StorageType Storage, bool ShouldCreate) {
   MDString *MDName = nullptr;
   if (!Name.empty())
     MDName = MDString::get(Context, Name);
@@ -108,7 +106,7 @@ TicketNode *TicketNode::getImpl(LLVMContext &Context, StringRef Name,
   // Array implementation that the hash is outputed as char/string.
   ConstantAsMetadata *MDDigest = ConstantAsMetadata::get(
       ConstantArray::get(llvm::ArrayType::get(Int8Ty, Size), Field));
-  return getImpl(Context, MDName, MDDigest, Linkage, Storage,
+  return getImpl(Context, MDName, MDDigest, Linkage, Pruned, Storage,
                  ShouldCreate);
 }
 

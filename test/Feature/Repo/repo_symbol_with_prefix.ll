@@ -22,9 +22,9 @@ declare i32 @printf(i8*, ...)
 
 !repo.tickets = !{!0, !1, !2}
 
-!0 = !TicketNode(name: ".str", digest: [16 x i8] c"\FE\15n\B4!\B1\FC{(\E5^>\E5\E2\F5\00", linkage: private)
-!1 = !TicketNode(name: ".str.1", digest: [16 x i8] c"\FE\15n\B4!\B1\FC{(\E5^>\E5\E2\F5\00", linkage: private)
-!2 = !TicketNode(name: "main", digest: [16 x i8] c"|!wp\FB\AE\8F\D0\CE\D3\1AO\E4\17\A3\C2", linkage: external)
+!0 = !TicketNode(name: ".str", digest: [16 x i8] c"\FE\15n\B4!\B1\FC{(\E5^>\E5\E2\F5\00", linkage: private, pruned: false)
+!1 = !TicketNode(name: ".str.1", digest: [16 x i8] c"\FE\15n\B4!\B1\FC{(\E5^>\E5\E2\F5\00", linkage: private, pruned: false)
+!2 = !TicketNode(name: "main", digest: [16 x i8] c"|!wp\FB\AE\8F\D0\CE\D3\1AO\E4\17\A3\C2", linkage: external, pruned: false)
 
 ;CHECK: insert name: .str
 ;CHECK: insert name: .str.1

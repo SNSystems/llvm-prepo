@@ -96,6 +96,7 @@ bool RepoPruning::runOnModule(Module &M) {
       GO.setComdat(nullptr);
       // Remove all metadata except fragment.
       MD = GO.getMetadata(LLVMContext::MD_repo_ticket);
+      dyn_cast<TicketNode>(MD)->setPruned(true);
       GO.clearMetadata();
       GO.setMetadata(LLVMContext::MD_repo_ticket, MD);
       GO.setLinkage(GlobalValue::ExternalLinkage);

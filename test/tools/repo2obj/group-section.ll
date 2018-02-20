@@ -25,7 +25,7 @@ entry:
 
 !repo.tickets = !{!0}
 
-!0 = !TicketNode(name: "f", digest: [16 x i8] c"C\8A\B2\B7\D7=\EA\DA\91\CAhn\0A\C3B\82", linkage: linkonce_odr)
+!0 = !TicketNode(name: "f", digest: [16 x i8] c"C\8A\B2\B7\D7=\EA\DA\91\CAhn\0A\C3B\82", linkage: linkonce_odr, pruned: false)
 
 ;CHECK:   Group {
 ;CHECK:     Name: .group ({{[0-9]+}})

@@ -11,7 +11,7 @@ entry:
 
 !repo.tickets = !{!0}
 
-!0 = !TicketNode(name: "_Z4testv", digest: [16 x i8] c"\B1\8C\0A\BD\C2P~\D7\12xf\7F\B5\D2a\88", linkage: external)
+!0 = !TicketNode(name: "_Z4testv", digest: [16 x i8] c"\B1\8C\0A\BD\C2P~\D7\12xf\7F\B5\D2a\88", linkage: external, pruned: false)
 
 ;CHECK: section type 'mergeable_const_8' and alignment 8
 ;CHECK: section type 'text' and alignment 16

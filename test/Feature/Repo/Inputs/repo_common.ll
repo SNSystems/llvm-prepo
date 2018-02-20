@@ -4,4 +4,4 @@ target triple = "x86_64-pc-linux-gnu-repo"
 
 !repo.tickets = !{!0}
 
-!0 = !TicketNode(name: ".str", digest: [16 x i8] c"\FE\15n\B4!\B1\FC{(\E5^>\E5\E2\F5\00", linkage: private)
+!0 = !TicketNode(name: ".str", digest: [16 x i8] c"\FE\15n\B4!\B1\FC{(\E5^>\E5\E2\F5\00", linkage: private, pruned: false)

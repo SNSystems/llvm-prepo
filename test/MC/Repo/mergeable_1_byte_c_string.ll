@@ -17,7 +17,7 @@ declare i32 @printf(i8*, ...)
 
 !repo.tickets = !{!0, !1}
 
-!0 = !TicketNode(name: ".str", digest: [16 x i8] c"\90\FB$Vd\95\00\A7C\FD\C5\B8\94v\19\08", linkage: private)
-!1 = !TicketNode(name: "main", digest: [16 x i8] c"\B5\E18\DD4~}\D4\0C\B2\C5I\AF\0E\F2q", linkage: external)
+!0 = !TicketNode(name: ".str", digest: [16 x i8] c"\90\FB$Vd\95\00\A7C\FD\C5\B8\94v\19\08", linkage: private, pruned: false)
+!1 = !TicketNode(name: "main", digest: [16 x i8] c"\B5\E18\DD4~}\D4\0C\B2\C5I\AF\0E\F2q", linkage: external, pruned: false)
 
 ;CHECK: section type 'mergeable_1_byte_c_string' and alignment 1

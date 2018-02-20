@@ -83,6 +83,8 @@ private:
   using NamesWithPrefixContainer =
       SmallVector<std::unique_ptr<std::string>, 16>;
 
+  // TODO: investigate changing the Key type from Digest::DigestType to
+  // pstore::index::digest.
   using ContentsType =
       std::map<Digest::DigestType,
                SmallVector<std::unique_ptr<pstore::repo::section_content>, 4>>;
@@ -146,7 +148,8 @@ public:
                                  NamesWithPrefixContainer &Symbols);
 
   void buildTicketRecord(const MCAssembler &Asm, ModuleNamesContainer &Names,
-                         NamesWithPrefixContainer &Symbols);
+                         NamesWithPrefixContainer &Symbols,
+                         const ContentsType &Fragments);
 
   static pstore::repo::linkage_type
   toPstoreLinkage(GlobalValue::LinkageTypes L);
@@ -515,7 +518,8 @@ StringRef RepoObjectWriter::getSymbolName(const MCAssembler &Asm,
 
 void RepoObjectWriter::buildTicketRecord(const MCAssembler &Asm,
                                          ModuleNamesContainer &Names,
-                                         NamesWithPrefixContainer &Symbols) {
+                                         NamesWithPrefixContainer &Symbols,
+                                         const ContentsType &Fragments) {
   for (const TicketNode *const Ticket : Asm.getContext().getTickets()) {
     Digest::DigestType const D = Ticket->getDigest();
     // Insert this name into the module-wide string set. This set is later
@@ -528,6 +532,10 @@ void RepoObjectWriter::buildTicketRecord(const MCAssembler &Asm,
             .first;
     // We're storing pointer to the string address into the ticket.
     auto NamePtr = reinterpret_cast<std::uintptr_t>(&(*It));
+    // If the global object was removed during LLVM's transform passes, this
+    // ticket is not emitted and doesn't contribute to the hash.
+    if (!Ticket->getPruned() && Fragments.find(D) == Fragments.end())
+      continue;
     TicketContents.emplace_back(pstore::index::digest{D.high(), D.low()},
                                 pstore::address{NamePtr},
                                 toPstoreLinkage(Ticket->getLinkage()));
@@ -616,7 +624,7 @@ void RepoObjectWriter::writeObject(MCAssembler &Asm,
     writeSectionData(Fragments, Asm, Section, Layout, Names);
   }
 
-  buildTicketRecord(Asm, Names, PrefixedNames);
+  buildTicketRecord(Asm, Names, PrefixedNames, Fragments);
 
   pstore::database &Db = llvm::getRepoDatabase();
 

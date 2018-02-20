@@ -15,7 +15,7 @@ entry:
   ret i32 %add
 }
 
-!0 = !TicketNode(name: "sum", digest: [16 x i8] c"qd\BD6r\8A=\BB\05\8B\D8.\AA\BA\04P", linkage: external)
+!0 = !TicketNode(name: "sum", digest: [16 x i8] c"qd\BD6r\8A=\BB\05\8B\D8.\AA\BA\04P", linkage: external, pruned: false)
 
 ; CHECK: Failed to get 'repo.tickets' module metadata!
 

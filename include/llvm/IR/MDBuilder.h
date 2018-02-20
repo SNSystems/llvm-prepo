@@ -101,7 +101,8 @@ public:
 
   /// \brief Return metadata containing global object ticket information.
   TicketNode *createTicketNode(StringRef Name, Digest::DigestType const &Bytes,
-                               GlobalValue::LinkageTypes Linkage);
+                               GlobalValue::LinkageTypes Linkage,
+                               bool Pruned = false);
 
   //===------------------------------------------------------------------===//
   // AA metadata.

@@ -3802,8 +3802,8 @@ struct LinkageField : public MDUnsignedField {
       : MDUnsignedField(0, GlobalValue::LinkageTypes::CommonLinkage) {}
 };
 
-struct ComdatField : public MDBoolField {
-  ComdatField() : MDBoolField() {}
+struct PrunedField : public MDBoolField {
+  PrunedField() : MDBoolField() {}
 };
 
 } // end anonymous namespace
@@ -4156,7 +4156,7 @@ bool LLParser::ParseMDField(LocTy Loc, StringRef Name, LinkageField &Result) {
 }
 
 template <>
-bool LLParser::ParseMDField(LocTy Loc, StringRef Name, ComdatField &Result) {
+bool LLParser::ParseMDField(LocTy Loc, StringRef Name, PrunedField &Result) {
   return ParseMDField(Loc, Name, static_cast<MDBoolField &>(Result));
 }
 
@@ -4825,19 +4825,20 @@ bool LLParser::ParseDIImportedEntity(MDNode *&Result, bool IsDistinct) {
 }
 
 /// ParseTicketNode:
-///   ::= !TicketNode(name: "foo", digest: !0, linkage: 0)
+///   ::= !TicketNode(name: "foo", digest: !0, linkage: external, pruned: false)
 bool LLParser::ParseTicketNode(MDNode *&Result, bool IsDistinct) {
 #define VISIT_MD_FIELDS(OPTIONAL, REQUIRED)                                    \
   REQUIRED(name, MDStringField, );                                             \
   REQUIRED(digest, MDField, );                                                 \
-  REQUIRED(linkage, LinkageField, );
+  REQUIRED(linkage, LinkageField, );                                           \
+  REQUIRED(pruned, PrunedField, );
   PARSE_MD_FIELDS();
 #undef VISIT_MD_FIELDS
 
   Result = GET_OR_DISTINCT(
       TicketNode,
       (Context, name.Val, dyn_cast<ConstantAsMetadata>(digest.Val),
-       static_cast<GlobalValue::LinkageTypes>(linkage.Val)));
+       static_cast<GlobalValue::LinkageTypes>(linkage.Val), pruned.Val));
   return false;
 }
 

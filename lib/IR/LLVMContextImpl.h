@@ -463,21 +463,23 @@ template <> struct MDNodeKeyImpl<TicketNode> {
   Metadata *Name;
   Metadata *Digest;
   GlobalValue::LinkageTypes Linkage;
+  bool Pruned;
 
-  MDNodeKeyImpl(GlobalValue::LinkageTypes Linkage, Metadata *Name, Metadata *Digest)
-      : Name(Name), Digest(Digest), Linkage(Linkage) {}
+  MDNodeKeyImpl(GlobalValue::LinkageTypes Linkage, bool Pruned, Metadata *Name,
+                Metadata *Digest)
+      : Name(Name), Digest(Digest), Linkage(Linkage), Pruned(Pruned) {}
 
   MDNodeKeyImpl(const TicketNode *RHS)
       : Name(RHS->getNameAsMD()), Digest(RHS->getDigestAsMD()),
-        Linkage(RHS->getLinkage()) {}
+        Linkage(RHS->getLinkage()), Pruned(RHS->getPruned()) {}
 
   bool isKeyOf(const TicketNode *RHS) const {
     return Name == RHS->getNameAsMD() && Digest == RHS->getDigestAsMD() &&
-           Linkage == RHS->getLinkage();
+           Linkage == RHS->getLinkage() && Pruned == RHS->getPruned();
   }
 
   unsigned getHashValue() const {
-    return hash_combine(Linkage, Name, Digest);
+    return hash_combine(Linkage, Name, Digest, Pruned);
   }
 };
 
