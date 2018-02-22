@@ -77,6 +77,7 @@
 #include "llvm/IR/Metadata.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Operator.h"
+#include "llvm/IR/RepoHashCalculator.h"
 #include "llvm/IR/Type.h"
 #include "llvm/IR/Value.h"
 #include "llvm/MC/MCAsmInfo.h"
@@ -111,8 +112,6 @@
 #include "llvm/Target/TargetLoweringObjectFile.h"
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/Target/TargetOptions.h"
-// FIXME: Should move this header to Support directory??
-#include "llvm/Transforms/Utils/RepoHashCalculator.h"
 #include <algorithm>
 #include <cassert>
 #include <cinttypes>
@@ -1489,13 +1488,13 @@ bool AsmPrinter::doFinalization(Module &M) {
                                      nullptr, "__morestack_addr");
       // Calculate the global varible MoreStack hash value.
       VariableHashCalculator GVHC{MoreStack};
-      GVHC.calculateHash(M);
+      GVHC.calculateHash();
       // Since the __morestack_addr for each module, the ModuleID need to be
       // considered in the Hash value.
       auto Str = M.getModuleIdentifier();
       ArrayRef<uint8_t> SVal((const uint8_t *)Str.data(), Str.size());
       GVHC.update(SVal);
-      Digest::set(M, MoreStack, GVHC.getHashResult());
+      Digest::set(MoreStack, GVHC.getHashResult());
     }
     MCSection *ReadOnlySection = getObjFileLowering().getSectionForConstant(
         getDataLayout(), SectionKind::getReadOnly(),

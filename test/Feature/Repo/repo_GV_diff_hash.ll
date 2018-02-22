@@ -19,11 +19,11 @@ entry:
   ret i32 2
 }
 
-;CHECK: !0 = !TicketNode(name: "fp_foo", digest: [16 x i8] c"<c\930z>i>\AFXi\17G[\A1\A0", linkage: external, pruned: false)
-;CHECK: !1 = !TicketNode(name: "fp_bar", digest: [16 x i8] c"\9F\F2!\9F}(\D8\83\EAS\9E>\CE\F4\B5\B1", linkage: external, pruned: false)
-;CHECK: !2 = !TicketNode(name: "a", digest: [16 x i8] c"Wb|\8D\9B\03\D9\D3\F0\D7\0E\92l=\E8\D0", linkage: internal, pruned: false)
-;CHECK: !3 = !TicketNode(name: "vp_a", digest: [16 x i8] c"z\80\E7\D5-\E3\BE*?\88\E1o\BA*\DF\BB", linkage: external, pruned: false)
-;CHECK: !4 = !TicketNode(name: "b", digest: [16 x i8] c"\E1\DA<\FA\BA\EC\F1G(xz\0CwVE2", linkage: internal, pruned: false)
-;CHECK: !5 = !TicketNode(name: "vp_b", digest: [16 x i8] c"\D3`\C6\B8\DF4\E2B?Z\C9W\99\DA\1C\12", linkage: external, pruned: false)
-;CHECK: !6 = !TicketNode(name: "foo", digest: [16 x i8] c"\F1\E3\F1\0DG\D1Z\9C\BC\01\BF_+Z8L", linkage: internal, pruned: false)
-;CHECK: !7 = !TicketNode(name: "bar", digest: [16 x i8] c"\A5\0A\E8),\9A\E7\9D\B99\7F\9E\E3\BE+$", linkage: internal, pruned: false)
+;CHECK: !0 = !TicketNode(name: "fp_foo", digest: [16 x i8] c"\D1\F38W\C8[\FE\D1b\1B\D4\08\05hd\A9", linkage: external, pruned: false)
+;CHECK: !1 = !TicketNode(name: "fp_bar", digest: [16 x i8] c"[d\93\860\9Ca\A6\E7\DE\BEp\CBq2&", linkage: external, pruned: false)
+;CHECK: !2 = !TicketNode(name: "a", digest: [16 x i8] c"\FF\8By\DD\A10N%\A1X/?<9\C0E", linkage: internal, pruned: false)
+;CHECK: !3 = !TicketNode(name: "vp_a", digest: [16 x i8] c"\04x\14\B0\D3\09]D;,X\EE,\FB\C8a", linkage: external, pruned: false)
+;CHECK: !4 = !TicketNode(name: "b", digest: [16 x i8] c"\98\B70\A7)>\AC\118^\8BM\C1\B2U\97", linkage: internal, pruned: false)
+;CHECK: !5 = !TicketNode(name: "vp_b", digest: [16 x i8] c"\B0\AC\97&[\A6\DD\D6OW\1A(9L\12\F3", linkage: external, pruned: false)
+;CHECK: !6 = !TicketNode(name: "foo", digest: [16 x i8] c"\B5\B00\055\C0j\D0s\150<\0B&\C5\07", linkage: internal, pruned: false)
+;CHECK: !7 = !TicketNode(name: "bar", digest: [16 x i8] c"E\DB\FDg\86z\F5)\07\109%\FD\FF\04\83", linkage: internal, pruned: false)

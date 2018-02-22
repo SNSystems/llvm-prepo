@@ -17,13 +17,13 @@
 #include "llvm/IR/Metadata.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/RepoGlobals.h"
+#include "llvm/IR/RepoHashCalculator.h"
 #include "llvm/IR/RepoTicket.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/Error.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Transforms/IPO.h"
 #include "llvm/Transforms/Utils/GlobalStatus.h"
-#include "llvm/Transforms/Utils/RepoHashCalculator.h"
 #include <iostream>
 #include <set>
 using namespace llvm;
@@ -87,9 +87,10 @@ bool RepoPruning::runOnModule(Module &M) {
                                        llvm::Statistic &NumGO) -> bool {
     if (GO.isDeclaration() || GO.hasAvailableExternallyLinkage())
       return false;
-    auto Result = Digest::get(&GO);
+    auto const Result = Digest::get(&GO);
+    assert(!Result.second && "The repo_ticket metadata doesn't exist!");
 
-    auto const Key = pstore::index::digest{Result.high(), Result.low()};
+    auto const Key = pstore::index::digest{Result.first.high(), Result.first.low()};
     if (Digests->find(Key) != Digests->end()) {
       Changed = true;
       ++NumGO;

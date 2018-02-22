@@ -12,7 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/Transforms/Utils/RepoHashCalculator.h"
+#include "llvm/IR/RepoHashCalculator.h"
 #include "llvm/IR/CallSite.h"
 #include "llvm/IR/GetElementPtrTypeIterator.h"
 #include "llvm/IR/InlineAsm.h"
@@ -315,11 +315,14 @@ void HashCalculator::hashGlobalValue(const GlobalValue *V) {
   }
 }
 
-void HashCalculator::hashModule(Module &M) {
+void HashCalculator::hashDataLayout(StringRef DataLayout) {
   Hash.update(HashKind::TAG_Datalayout);
-  hashMem(M.getDataLayoutStr());
+  hashMem(DataLayout);
+}
+
+void HashCalculator::hashTriple(StringRef Triple) {
   Hash.update(HashKind::TAG_Triple);
-  hashMem(M.getTargetTriple());
+  hashMem(Triple);
 }
 
 std::string &HashCalculator::get(MD5::MD5Result &HashRes) {
@@ -516,10 +519,8 @@ void FunctionHashCalculator::hashBasicBlock(const BasicBlock *BB) {
   } while (Inst != InstE);
 }
 
-void FunctionHashCalculator::calculateHash(Module &M) {
-  FnHash.beginCalculate();
+void FunctionHashCalculator::hashFunction() {
   update(HashKind::TAG_GlobalFunction);
-  FnHash.hashModule(M);
   hashSignature(Fn);
 
   // We do a CFG-ordered walk since the actual ordering of the blocks in the
@@ -546,16 +547,21 @@ void FunctionHashCalculator::calculateHash(Module &M) {
   }
 }
 
+void FunctionHashCalculator::calculateHash() {
+  FnHash.beginCalculate();
+  const Module *M = Fn->getParent();
+  FnHash.hashDataLayout(M->getDataLayoutStr());
+  FnHash.hashTriple(M->getTargetTriple());
+  hashFunction();
+}
+
 /// Calculate the function hash and return the result as the words.
 MD5::MD5Result FunctionHashCalculator::getHashResult() {
   return FnHash.getHashResult();
 }
 
-// Calculate the global Variable hash value.
-void VariableHashCalculator::calculateHash(Module &M) {
+void VariableHashCalculator::hashVariable() {
   update(HashKind::TAG_GlobalVariable);
-  GvHash.beginCalculate();
-  GvHash.hashModule(M);
   GvHash.hashType(Gv->getValueType());
   // If global variable is constant, accumulate the const attribute.
   update(HashKind::TAG_GVIsConstant);
@@ -575,4 +581,13 @@ void VariableHashCalculator::calculateHash(Module &M) {
   GvHash.hashConstant((Gv->hasName() && Gv->hasDefinitiveInitializer())
                           ? Gv->getInitializer()
                           : Constant::getNullValue(Gv->getValueType()));
+}
+
+// Calculate the global Variable hash value.
+void VariableHashCalculator::calculateHash() {
+  GvHash.beginCalculate();
+  const Module *M = Gv->getParent();
+  GvHash.hashDataLayout(M->getDataLayoutStr());
+  GvHash.hashTriple(M->getTargetTriple());
+  hashVariable();
 }

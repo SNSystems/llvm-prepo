@@ -153,8 +153,11 @@ public:
   /// identify the same gobals across function calls.
   void hashGlobalValue(const GlobalValue *V);
 
-  /// Accumulate the hash for the target datalayout and triple.
-  void hashModule(Module &M);
+  /// Accumulate the hash for the target datalayout.
+  void hashDataLayout(StringRef DataLayout);
+
+  /// Accumulate the hash for the target triple.
+  void hashTriple(StringRef Triple);
 
   /// Return the computed hash as a string.
   std::string &get(MD5::MD5Result &HashRes);
@@ -207,7 +210,7 @@ public:
   FunctionHashCalculator(const Function *F) : Fn(F) {}
 
   /// Calculate the hash for the function.
-  void calculateHash(Module &M);
+  void calculateHash();
 
   /// Return the function hash result.
   MD5::MD5Result getHashResult();
@@ -230,6 +233,9 @@ protected:
 
   /// Accumulate the hash for the basic block.
   void hashBasicBlock(const BasicBlock *BB);
+
+  /// Accumulate the hash for the function Fn.
+  void hashFunction();
 
   void hashOperandBundles(const Instruction *V);
 
@@ -267,7 +273,7 @@ public:
   VariableHashCalculator(const GlobalVariable *V) : Gv(V) {}
 
   /// Calculate the global Variable Gv hash value.
-  void calculateHash(Module &M);
+  void calculateHash();
 
   std::string &get(MD5::MD5Result &HashRes) { return GvHash.get(HashRes); }
 
@@ -279,12 +285,35 @@ public:
   }
 
 private:
+  /// Accumulate the hash for the variable Gv.
+  void hashVariable();
+
   // The Variable undergoing calculation.
   const GlobalVariable *Gv;
 
   // Hold the Variable hash value.
   HashCalculator GvHash;
 };
+
+template <typename T> // primary template
+struct DigestCalculator {};
+
+template <> // explicit specialization for T = GlobalVariable
+struct DigestCalculator<GlobalVariable> {
+  using Calculator = VariableHashCalculator;
+};
+
+template <> // explicit specialization for T = Function
+struct DigestCalculator<Function> {
+  using Calculator = FunctionHashCalculator;
+};
+
+template <typename T> Digest::DigestType calculateDigest(const T *GO) {
+  // Calculate the global object hash value.
+  typename DigestCalculator<T>::Calculator GOHC{GO};
+  GOHC.calculateHash();
+  return GOHC.getHashResult();
+}
 
 } // end namespace llvm
 

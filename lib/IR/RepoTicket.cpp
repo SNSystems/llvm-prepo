@@ -19,6 +19,7 @@
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/MDBuilder.h"
 #include "llvm/IR/Module.h"
+#include "llvm/IR/RepoHashCalculator.h"
 #include "llvm/Support/FileSystem.h"
 #include <cassert>
 
@@ -26,28 +27,39 @@ using namespace llvm;
 
 namespace llvm {
 
-class MDNode;
-
-void Digest::set(Module &M, GlobalObject *GO, Digest::DigestType const &D) {
-  MDBuilder MDB(M.getContext());
+void Digest::set(GlobalObject *GO, Digest::DigestType const &D) {
+  auto M = GO->getParent();
+  MDBuilder MDB(M->getContext());
   auto MD = MDB.createTicketNode(GO->getName(), D, GO->getLinkage());
   assert(MD && "TicketNode cannot be NULL!");
   GO->setMetadata(LLVMContext::MD_repo_ticket, MD);
-  NamedMDNode *NMD = M.getOrInsertNamedMetadata("repo.tickets");
+  NamedMDNode *NMD = M->getOrInsertNamedMetadata("repo.tickets");
   assert(NMD && "NamedMDNode cannot be NULL!");
   NMD->addOperand(MD);
 }
 
-Digest::DigestType Digest::get(const GlobalObject *GO) {
-  // Use the digest in the MCSectionRepo.
-  TicketNode *MD =
-      dyn_cast<TicketNode>(GO->getMetadata(LLVMContext::MD_repo_ticket));
-  if (!MD) {
+auto Digest::get(const GlobalObject *GO)
+    -> std::pair<Digest::DigestType, bool> {
+
+  if (const auto *const T = GO->getMetadata(LLVMContext::MD_repo_ticket)) {
+    const TicketNode *const MD = dyn_cast<TicketNode>(T);
+    if (const TicketNode *const MD = dyn_cast<TicketNode>(T)) {
+      return std::make_pair(MD->getDigest(), false);
+    }
     // If invalid, report the error with report_fatal_error.
     report_fatal_error("Failed to get TicketNode metadata for global object '" +
                        GO->getName() + "'.");
   }
-  return MD->getDigest();
+
+  if (const auto *const GVar = dyn_cast<GlobalVariable>(GO)) {
+    return std::make_pair(calculateDigest<GlobalVariable>(GVar), true);
+  }
+
+  if (const auto *const GF = dyn_cast<Function>(GO)) {
+    return std::make_pair(calculateDigest<Function>(GF), true);
+  }
+
+  llvm_unreachable("Unknown global object type!");
 }
 
 const Constant *Digest::getAliasee(const GlobalAlias *GA) {

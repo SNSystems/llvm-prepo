@@ -6,7 +6,8 @@
 // License. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
-#include "llvm/Transforms/Utils/RepoHashCalculator.h"
+
+#include "llvm/IR/RepoHashCalculator.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Instructions.h"
@@ -53,7 +54,7 @@ public:
   Digest::DigestType getHash() { return getHashResult(); }
 
   Digest::DigestType testCalculate(Module &M) {
-    calculateHash(M);
+    calculateHash();
     return getHash();
   }
 
@@ -175,8 +176,8 @@ protected:
 
   bool isEqualHash() {
     VariableHashCalculator GVH0{GV0}, GVH1{GV1};
-    GVH0.calculateHash(*M0);
-    GVH1.calculateHash(*M1);
+    GVH0.calculateHash();
+    GVH1.calculateHash();
     return GVH0.getHashResult() == GVH1.getHashResult();
   }
 

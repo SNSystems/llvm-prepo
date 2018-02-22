@@ -47,6 +47,7 @@ add_llvm_library(LLVMCore
   SafepointIRVerifier.cpp
   ProfileSummary.cpp
   RepoGlobals.cpp
+  RepoHashCalculator.cpp
   RepoTicket.cpp
   Statepoint.cpp
   Type.cpp

@@ -13,6 +13,7 @@
 #include "llvm/IR/MDBuilder.h"
 #include "llvm/IR/Metadata.h"
 #include "llvm/IR/Module.h"
+#include "llvm/IR/RepoHashCalculator.h"
 #include "llvm/IR/RepoTicket.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/CommandLine.h"
@@ -20,7 +21,6 @@
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Format.h"
 #include "llvm/Transforms/IPO.h"
-#include "llvm/Transforms/Utils/RepoHashCalculator.h"
 
 using namespace llvm;
 
@@ -62,33 +62,16 @@ ModulePass *llvm::createRepoTicketGenerationPass() {
 }
 
 using GlobalValueMap = Digest::GlobalValueMap;
-namespace {
-
-template <typename T> // primary template
-struct DigestCalculator {};
-
-template <> // explicit specialization for T = GlobalVariable
-struct DigestCalculator<GlobalVariable> {
-  using Calculator = VariableHashCalculator;
-};
-
-template <> // explicit specialization for T = Function
-struct DigestCalculator<Function> {
-  using Calculator = FunctionHashCalculator;
-};
-} // namespace
 
 template <typename T>
-static void setMetadata(Module &M, T &GO, GlobalValueMap &DigestMap,
-                        bool &Changed, llvm::Statistic &Num) {
+static void setMetadata(T &GO, GlobalValueMap &DigestMap, bool &Changed,
+                        llvm::Statistic &Num) {
   if (GO.isDeclaration() || GO.hasAvailableExternallyLinkage())
     return;
   // Calculate the global object hash value.
-  typename DigestCalculator<T>::Calculator GOHC{&GO};
-  GOHC.calculateHash(M);
-  Digest::DigestType Result = GOHC.getHashResult();
+  Digest::DigestType Result = calculateDigest<T>(&GO);
   DigestMap.emplace(&GO, Result);
-  Digest::set(M, &GO, Result);
+  Digest::set(&GO, Result);
   Changed = true;
   ++Num;
 }
@@ -103,11 +86,11 @@ bool RepoTicketGeneration::runOnModule(Module &M) {
   GlobalValueMap DigestMap;
 
   for (GlobalVariable &GV : M.globals()) {
-    setMetadata<GlobalVariable>(M, GV, DigestMap, Changed, NumVariables);
+    setMetadata<GlobalVariable>(GV, DigestMap, Changed, NumVariables);
   }
 
   for (Function &Func : M) {
-    setMetadata<Function>(M, Func, DigestMap, Changed, NumFunctions);
+    setMetadata<Function>(Func, DigestMap, Changed, NumFunctions);
   }
 
   for (GlobalAlias &GA : M.aliases()) {
