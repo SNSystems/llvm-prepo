@@ -42,7 +42,6 @@ auto Digest::get(const GlobalObject *GO)
     -> std::pair<Digest::DigestType, bool> {
 
   if (const auto *const T = GO->getMetadata(LLVMContext::MD_repo_ticket)) {
-    const TicketNode *const MD = dyn_cast<TicketNode>(T);
     if (const TicketNode *const MD = dyn_cast<TicketNode>(T)) {
       return std::make_pair(MD->getDigest(), false);
     }
