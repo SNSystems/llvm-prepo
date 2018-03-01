@@ -683,14 +683,15 @@ MCSection *TargetLoweringObjectFileRepo::createXXtorsSection(MCContext &Ctx,
   // TODO: this is a linear search through a potentially large collection of
   // metatdata nodes.
   auto CtorsPos =
-      std::find_if(std::begin(Tickets), End, [Name](const TicketNode *T) {
-        return T->getNameAsString() == Name;
-      });
+      std::find_if(std::begin(Tickets), End,
+                   [Name](const MCContext::RepoTicketContainer::value_type &P) {
+                     return P.first->getNameAsString() == Name;
+                   });
   if (CtorsPos == End) {
     return nullptr;
   }
   return Ctx.getRepoSection(MCContext::RepoSection::ReadOnlySection,
-                            (*CtorsPos)->getDigest());
+                            (*CtorsPos).first->getDigest());
 }
 
 void TargetLoweringObjectFileRepo::Initialize(MCContext &Ctx,
@@ -710,7 +711,8 @@ static MCSectionRepo *selectRepoSectionForGlobal(MCContext &Ctx,
            "TicketNode should be NULL!");
     MDBuilder MDB(GO->getParent()->getContext());
     Ctx.addTicketNode(
-        MDB.createTicketNode(GO->getName(), Result.first, GO->getLinkage()));
+        MDB.createTicketNode(GO->getName(), Result.first, GO->getLinkage()),
+        true /* Created by LLVM backend? */);
   }
 
   // Repo: the repo sections are keyed off the global value. This gets us the

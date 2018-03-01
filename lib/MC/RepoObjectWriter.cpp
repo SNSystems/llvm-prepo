@@ -90,7 +90,6 @@ private:
                SmallVector<std::unique_ptr<pstore::repo::section_content>, 4>>;
 
   std::vector<pstore::repo::ticket_member> TicketContents;
-  StringRef OutputFile;
 
   BumpPtrAllocator Alloc;
   StringSaver VersionSymSaver{Alloc};
@@ -126,8 +125,6 @@ public:
       support::endian::Writer<support::big>(getStream()).write(Val);
   }
 
-  pstore::index::digest ticketHash() const;
-
   void recordRelocation(MCAssembler &Asm, const MCAsmLayout &Layout,
                         const MCFragment *Fragment, const MCFixup &Fixup,
                         MCValue Target, uint64_t &FixedValue) override;
@@ -147,9 +144,11 @@ public:
                                  const ModuleNamesContainer &Names,
                                  NamesWithPrefixContainer &Symbols);
 
-  void buildTicketRecord(const MCAssembler &Asm, ModuleNamesContainer &Names,
-                         NamesWithPrefixContainer &Symbols,
-                         const ContentsType &Fragments);
+  pstore::index::digest buildTicketRecord(const MCAssembler &Asm,
+                                          ModuleNamesContainer &Names,
+                                          NamesWithPrefixContainer &Symbols,
+                                          const ContentsType &Fragments,
+                                          StringRef OutputFile);
 
   static pstore::repo::linkage_type
   toPstoreLinkage(GlobalValue::LinkageTypes L);
@@ -516,32 +515,6 @@ StringRef RepoObjectWriter::getSymbolName(const MCAssembler &Asm,
   return StringRef(*Symbols.back().get());
 }
 
-void RepoObjectWriter::buildTicketRecord(const MCAssembler &Asm,
-                                         ModuleNamesContainer &Names,
-                                         NamesWithPrefixContainer &Symbols,
-                                         const ContentsType &Fragments) {
-  for (const TicketNode *const Ticket : Asm.getContext().getTickets()) {
-    Digest::DigestType const D = Ticket->getDigest();
-    // Insert this name into the module-wide string set. This set is later
-    // added to the whole-program string set and the ticket name addresses
-    // corrected at that time.
-    const StringRef TicketSymbolName =
-        getSymbolName(Asm, *Ticket, Names, Symbols);
-    auto It =
-        Names.insert(std::make_pair(TicketSymbolName, pstore::address::null()))
-            .first;
-    // We're storing pointer to the string address into the ticket.
-    auto NamePtr = reinterpret_cast<std::uintptr_t>(&(*It));
-    // If the global object was removed during LLVM's transform passes, this
-    // ticket is not emitted and doesn't contribute to the hash.
-    if (!Ticket->getPruned() && Fragments.find(D) == Fragments.end())
-      continue;
-    TicketContents.emplace_back(pstore::index::digest{D.high(), D.low()},
-                                pstore::address{NamePtr},
-                                toPstoreLinkage(Ticket->getLinkage()));
-  }
-}
-
 namespace {
 
 using TransactionType = pstore::transaction<pstore::transaction_lock>;
@@ -583,22 +556,41 @@ template <typename T> ArrayRef<std::uint8_t> makeByteArrayRef(T const &Value) {
 
 } // namespace
 
-pstore::index::digest RepoObjectWriter::ticketHash() const {
+pstore::index::digest RepoObjectWriter::buildTicketRecord(
+    const MCAssembler &Asm, ModuleNamesContainer &Names,
+    NamesWithPrefixContainer &Symbols, const ContentsType &Fragments,
+    StringRef OutputFile) {
   MD5 ticket_hash;
 
   ticket_hash.update(OutputFile.size());
   ticket_hash.update(OutputFile);
 
-  ticket_hash.update(TicketContents.size());
-  for (pstore::repo::ticket_member const &TicketMember : TicketContents) {
-    ticket_hash.update(makeByteArrayRef(TicketMember.digest));
-    ticket_hash.update(makeByteArrayRef(TicketMember.linkage));
-
-    auto MNC = reinterpret_cast<ModuleNamesContainer::value_type const *>(
-        TicketMember.name.absolute());
-    StringRef const Name = MNC->first;
-    ticket_hash.update(Name.size());
-    ticket_hash.update(Name);
+  for (const auto TicketPair : Asm.getContext().getTickets()) {
+    const TicketNode *const Ticket = TicketPair.first;
+    Digest::DigestType const D = Ticket->getDigest();
+    // Insert this name into the module-wide string set. This set is later
+    // added to the whole-program string set and the ticket name addresses
+    // corrected at that time.
+    const StringRef Name = getSymbolName(Asm, *Ticket, Names, Symbols);
+    auto It = Names.insert(std::make_pair(Name, pstore::address::null())).first;
+    // We're storing pointer to the string address into the ticket.
+    auto NamePtr = reinterpret_cast<std::uintptr_t>(&(*It));
+    // If the global object was removed during LLVM's transform passes,
+    // this member is not emitted and doesn't contribute to the hash.
+    if (!Ticket->getPruned() && Fragments.find(D) == Fragments.end())
+      continue;
+    auto DigestVal = pstore::index::digest{D.high(), D.low()};
+    auto Linkage = toPstoreLinkage(Ticket->getLinkage());
+    TicketContents.emplace_back(DigestVal, pstore::address{NamePtr}, Linkage);
+    // If this TicketNode was created by the backend, it might not be generated
+    // when the same input file is built again. Therefore, it doesn't contribute
+    // to the ticket hash.
+    if (!TicketPair.second) {
+      ticket_hash.update(makeByteArrayRef(DigestVal));
+      ticket_hash.update(makeByteArrayRef(Linkage));
+      ticket_hash.update(Name.size());
+      ticket_hash.update(Name);
+    }
   }
 
   MD5::MD5Result digest;
@@ -624,7 +616,8 @@ void RepoObjectWriter::writeObject(MCAssembler &Asm,
     writeSectionData(Fragments, Asm, Section, Layout, Names);
   }
 
-  buildTicketRecord(Asm, Names, PrefixedNames, Fragments);
+  pstore::index::digest const TicketDigest =
+      buildTicketRecord(Asm, Names, PrefixedNames, Fragments, OutputFile);
 
   pstore::database &Db = llvm::getRepoDatabase();
 
@@ -632,7 +625,6 @@ void RepoObjectWriter::writeObject(MCAssembler &Asm,
       pstore::index::get_ticket_index(Db);
   assert(TicketIndex);
 
-  pstore::index::digest const TicketDigest = this->ticketHash();
   if (TicketIndex->find(TicketDigest) != TicketIndex->end()) {
     DEBUG(dbgs() << "ticket " << TicketDigest << " exists. skipping\n");
   } else {

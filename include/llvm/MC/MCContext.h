@@ -65,7 +65,10 @@ namespace llvm {
   class MCContext {
   public:
     using SymbolTable = StringMap<MCSymbol *, BumpPtrAllocator &>;
-    using RepoTicketContainer = std::vector<const TicketNode *>;
+    /// Pair of TicketNode and a flag which shows whether the TicketNode was
+    /// created by the backend.
+    using RepoTicketContainer =
+        std::vector<std::pair<const TicketNode *, bool>>;
 
   private:
     /// The SourceMgr for this object, if any.
@@ -396,9 +399,9 @@ namespace llvm {
     /// \name TicketNode Management
     /// @{
 
-    /// Set value for a Ticket node.
-    void addTicketNode(const TicketNode *Ticket) {
-      TicketNodes.emplace_back(Ticket);
+    /// Add a Ticket node to the ticket table.
+    void addTicketNode(const TicketNode *Ticket, bool Backend = false) {
+      TicketNodes.emplace_back(Ticket, Backend);
     }
 
     /// getTickets - Get a reference for the ticket table.
