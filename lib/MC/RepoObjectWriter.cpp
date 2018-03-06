@@ -575,13 +575,9 @@ pstore::index::digest RepoObjectWriter::buildTicketRecord(
     auto It = Names.insert(std::make_pair(Name, pstore::address::null())).first;
     // We're storing pointer to the string address into the ticket.
     auto NamePtr = reinterpret_cast<std::uintptr_t>(&(*It));
-    // If the global object was removed during LLVM's transform passes,
-    // this member is not emitted and doesn't contribute to the hash.
-    if (!Ticket->getPruned() && Fragments.find(D) == Fragments.end())
-      continue;
+
     auto DigestVal = pstore::index::digest{D.high(), D.low()};
     auto Linkage = toPstoreLinkage(Ticket->getLinkage());
-    TicketContents.emplace_back(DigestVal, pstore::address{NamePtr}, Linkage);
     // If this TicketNode was created by the backend, it might not be generated
     // when the same input file is built again. Therefore, it doesn't contribute
     // to the ticket hash.
@@ -591,6 +587,11 @@ pstore::index::digest RepoObjectWriter::buildTicketRecord(
       ticket_hash.update(Name.size());
       ticket_hash.update(Name);
     }
+    // If the global object was removed during LLVM's transform passes, this
+    // member is not emitted and doesn't insert to the database, but it does
+    // contribute to the hash.
+    if (Ticket->getPruned() || Fragments.find(D) != Fragments.end())
+      TicketContents.emplace_back(DigestVal, pstore::address{NamePtr}, Linkage);
   }
 
   MD5::MD5Result digest;
