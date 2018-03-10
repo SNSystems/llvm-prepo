@@ -45,15 +45,14 @@
 #include <unordered_map>
 #include <vector>
 
-#include "pstore/hamt_map.hpp"
-#include "pstore/hamt_set.hpp"
-#include "pstore/index_types.hpp"
-#include "pstore/sstring_view_archive.hpp"
-#include "pstore/transaction.hpp"
-#include "pstore_mcrepo/fragment.hpp"
-#include "pstore_mcrepo/ticket.hpp"
-#include "pstore_support/sstring_view.hpp"
-
+#include "pstore/core/hamt_map.hpp"
+#include "pstore/core/hamt_set.hpp"
+#include "pstore/core/index_types.hpp"
+#include "pstore/core/sstring_view_archive.hpp"
+#include "pstore/core/transaction.hpp"
+#include "pstore/mcrepo/fragment.hpp"
+#include "pstore/mcrepo/ticket.hpp"
+#include "pstore/support/sstring_view.hpp"
 
 using namespace llvm;
 

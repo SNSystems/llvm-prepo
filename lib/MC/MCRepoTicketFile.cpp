@@ -9,7 +9,7 @@
 
 #include "llvm/MC/MCRepoTicketFile.h"
 
-#include "pstore/index_types.hpp"
+#include "pstore/core/index_types.hpp"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/Endian.h"
 #include "llvm/Support/FileSystem.h"

@@ -8,7 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/IR/RepoGlobals.h"
-#include "pstore/transaction.hpp"
+#include "pstore/core/transaction.hpp"
 
 using namespace llvm;
 

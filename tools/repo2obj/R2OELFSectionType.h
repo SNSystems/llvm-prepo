@@ -9,7 +9,7 @@
 #ifndef LLVM_TOOLS_REPO2OBJ_ELFSECTIONTYPE_H
 #define LLVM_TOOLS_REPO2OBJ_ELFSECTIONTYPE_H
 
-#include "pstore_mcrepo/fragment.hpp"
+#include "pstore/mcrepo/fragment.hpp"
 
 // clang-format off
 #define X(a) a,

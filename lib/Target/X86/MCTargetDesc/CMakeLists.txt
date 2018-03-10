@@ -11,4 +11,4 @@ add_llvm_library(LLVMX86Desc
   X86WinCOFFTargetStreamer.cpp
   )
 
-target_link_libraries (LLVMX86Desc PRIVATE pstore)
+target_link_libraries (LLVMX86Desc PRIVATE pstore-core)

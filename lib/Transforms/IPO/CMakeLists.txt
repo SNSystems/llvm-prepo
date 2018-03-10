@@ -44,4 +44,4 @@ add_llvm_library(LLVMipo
   DEPENDS
   intrinsics_gen
   )
-target_link_libraries (LLVMipo PRIVATE pstore)
+target_link_libraries (LLVMipo PRIVATE pstore-core)

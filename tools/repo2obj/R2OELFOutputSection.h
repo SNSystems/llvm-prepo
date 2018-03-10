@@ -11,9 +11,9 @@
 
 #include "llvm/Object/ELF.h"
 
-#include "pstore/sstring_view_archive.hpp"
-#include "pstore_mcrepo/ticket.hpp"
-#include "pstore_support/sstring_view.hpp"
+#include "pstore/core/sstring_view_archive.hpp"
+#include "pstore/mcrepo/ticket.hpp"
+#include "pstore/support/sstring_view.hpp"
 
 #include "R2OELFSectionType.h"
 #include "R2OELFStringTable.h"

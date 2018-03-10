@@ -10,5 +10,5 @@ add_llvm_tool (repo2obj
     R2OELFStringTable.cpp
     WriteHelpers.cpp
 )
-target_link_libraries (repo2obj pstore)
+target_link_libraries (repo2obj pstore-core)
 #eof CMakeLists.txt

@@ -11,10 +11,10 @@
 
 #include "llvm/Support/Debug.h"
 
-#include "pstore/database.hpp"
-#include "pstore/db_archive.hpp"
+#include "pstore/core/database.hpp"
+#include "pstore/core/db_archive.hpp"
+#include "pstore/core/sstring_view_archive.hpp"
 #include "pstore/serialize/standard_types.hpp"
-#include "pstore/sstring_view_archive.hpp"
 
 // stringToSStringView
 // ~~~~~~~~~~~~~~~~~~~

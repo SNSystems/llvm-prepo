@@ -7,9 +7,9 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "pstore/database.hpp"
-#include "pstore/hamt_map.hpp"
-#include "pstore/index_types.hpp"
+#include "pstore/core/database.hpp"
+#include "pstore/core/hamt_map.hpp"
+#include "pstore/core/index_types.hpp"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/ADT/Triple.h"
 #include "llvm/IR/CallSite.h"

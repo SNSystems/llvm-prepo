@@ -1,4 +1,4 @@
-#include "pstore/index_types.hpp"
+#include "pstore/core/index_types.hpp"
 #include "llvm/MC/MCRepoTicketFile.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/raw_ostream.h"

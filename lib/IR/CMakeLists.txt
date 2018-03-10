@@ -65,4 +65,4 @@ add_llvm_library(LLVMCore
   intrinsics_gen
   )
 
-target_link_libraries (LLVMCore PRIVATE pstore)
+target_link_libraries (LLVMCore PRIVATE pstore-core)
