@@ -375,10 +375,9 @@ int main(int argc, char *argv[]) {
       }
       // Go through the sections that this fragment contains create the
       // corresponding ELF section(s) as necessary.
-      for (auto const Key : Fragment->sections().get_indices()) {
+      for (pstore::repo::section_type SectionType : *Fragment) {
         // The section type and "discriminator" together identify the ELF output
         // section to which this fragment's section data will be appended.
-        auto const SectionType = static_cast<pstore::repo::section_type>(Key);
         auto const Id = std::make_tuple(
             getELFSectionType(SectionType, TM.name, Magics), Discriminator);
 
@@ -412,17 +411,16 @@ int main(int argc, char *argv[]) {
         // assign to this data. We need to account for any alignment padding
         // that that function may place before the data itself (hence the call
         // to alignedContributionSize()).
-        OutputSections[Key] = OutputSection<ELFT>::SectionInfo(
+        OutputSections[static_cast <unsigned> (SectionType)] = OutputSection<ELFT>::SectionInfo(
             OSection, OSection->alignedContributionSize(
                           (*Fragment)[SectionType].align()));
       }
 
       // This can't currently be folded into the first loop because the need the
       // OutputSections array to be built.
-      for (auto const Key : Fragment->sections().get_indices()) {
-        pstore::repo::section const &Section =
-            (*Fragment)[static_cast<pstore::repo::section_type>(Key)];
-        OutputSections[Key].section()->append(
+      for (pstore::repo::section_type SectionType : *Fragment) {
+        pstore::repo::section const &Section = (*Fragment)[SectionType];
+        OutputSections[static_cast <unsigned> (SectionType)].section()->append(
             TM, SectionPtr{std::static_pointer_cast<void const>(Fragment),
                            &Section},
             State.Symbols, OutputSections);
