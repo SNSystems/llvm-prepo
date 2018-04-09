@@ -22,5 +22,5 @@ define internal void @__cxx_global_var_init() section ".text.startup" personalit
 declare i32 @__gxx_personality_v0(...)
 
 ;CHECK: !0 = !TicketNode(name: ".str",
-;CHECK: !1 = !TicketNode(name: "__cxx_global_var_init",
+;CHECK-NEXT: !1 = !TicketNode(name: "__cxx_global_var_init",
 ;CHECK-NOT: !2 = !TicketNode(name:

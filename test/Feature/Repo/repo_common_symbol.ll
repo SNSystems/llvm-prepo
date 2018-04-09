@@ -1,8 +1,8 @@
 ; Check Repo supports common symbols.
 ;
-; RUN: rm -f %T/clang.db
-; RUN: env REPOFILE=%T/clang.db llc -filetype=obj %s -o %t
-; RUN: repo2obj %t --repo %T/clang.db -o %t1
+; RUN: rm -f %t.db
+; RUN: env REPOFILE=%t.db llc -filetype=obj %s -o %t
+; RUN: repo2obj %t --repo %t.db -o %t1
 ; RUN: llvm-readobj -t %t1 | FileCheck %s
 
 

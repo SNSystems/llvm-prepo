@@ -16,7 +16,6 @@
 #include "llvm/IR/CallSite.h"
 #include "llvm/IR/GetElementPtrTypeIterator.h"
 #include "llvm/IR/InlineAsm.h"
-#include "llvm/IR/Module.h"
 #include "llvm/IR/RepoTicket.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/Path.h"
@@ -315,16 +314,6 @@ void HashCalculator::hashGlobalValue(const GlobalValue *V) {
   }
 }
 
-void HashCalculator::hashDataLayout(StringRef DataLayout) {
-  Hash.update(HashKind::TAG_Datalayout);
-  hashMem(DataLayout);
-}
-
-void HashCalculator::hashTriple(StringRef Triple) {
-  Hash.update(HashKind::TAG_Triple);
-  hashMem(Triple);
-}
-
 std::string &HashCalculator::get(MD5::MD5Result &HashRes) {
   SmallString<32> Result;
   MD5::stringifyResult(HashRes, Result);
@@ -398,12 +387,39 @@ void FunctionHashCalculator::hashInstruction(const Instruction *V) {
   FnHash.hashType(V->getType());
   FnHash.hashNumber(V->getRawSubclassOptionalData());
 
+  if (const CallInst *CI = dyn_cast<CallInst>(V)) {
+    update(HashKind::TAG_CallInst);
+    FnHash.hashType(V->getOperand(0)->getType());
+    update(CI->isTailCall());
+    FnHash.hashAttributeList(CI->getAttributes());
+    hashOperandBundles(CI);
+    FnHash.hashRangeMetadata(CI->getMetadata(LLVMContext::MD_range));
+    if (const Function *F = CI->getCalledFunction()) {
+      FnHash.getDependencies().emplace_back(F);
+    } else {
+      FnHash.hashValue(V->getOperand(0));
+    }
+    return;
+  }
+  if (const InvokeInst *II = dyn_cast<InvokeInst>(V)) {
+    update(HashKind::TAG_InvokeInst);
+    FnHash.hashType(V->getOperand(0)->getType());
+    FnHash.hashNumber(II->getCallingConv());
+    FnHash.hashAttributeList(II->getAttributes());
+    hashOperandBundles(II);
+    FnHash.hashRangeMetadata(II->getMetadata(LLVMContext::MD_range));
+    if (const Function *F = II->getCalledFunction()) {
+      FnHash.getDependencies().emplace_back(F);
+    } else {
+      FnHash.hashValue(V->getOperand(0));
+    }
+    return;
+  }
   // Accumulate the instruction operands type and value.
   for (unsigned I = 0, E = V->getNumOperands(); I != E; ++I) {
     FnHash.hashType(V->getOperand(I)->getType());
     FnHash.hashValue(V->getOperand(I));
   }
-
   // special GetElementPtrInst instruction.
   if (const GetElementPtrInst *GEP = dyn_cast<GetElementPtrInst>(V)) {
     update(HashKind::TAG_GetElementPtrInst);
@@ -438,28 +454,6 @@ void FunctionHashCalculator::hashInstruction(const Instruction *V) {
   if (const CmpInst *CI = dyn_cast<CmpInst>(V)) {
     update(HashKind::TAG_CmpInst);
     update(CI->getPredicate());
-    return;
-  }
-  if (const CallInst *CI = dyn_cast<CallInst>(V)) {
-    update(HashKind::TAG_CallInst);
-    update(CI->isTailCall());
-    FnHash.hashAttributeList(CI->getAttributes());
-    hashOperandBundles(CI);
-    FnHash.hashRangeMetadata(CI->getMetadata(LLVMContext::MD_range));
-    if (const Function *F = CI->getCalledFunction()) {
-      FnHash.hashMem(F->getName());
-    }
-    return;
-  }
-  if (const InvokeInst *II = dyn_cast<InvokeInst>(V)) {
-    update(HashKind::TAG_InvokeInst);
-    FnHash.hashNumber(II->getCallingConv());
-    FnHash.hashAttributeList(II->getAttributes());
-    hashOperandBundles(II);
-    FnHash.hashRangeMetadata(II->getMetadata(LLVMContext::MD_range));
-    if (const Function *F = II->getCalledFunction()) {
-      FnHash.hashMem(F->getName());
-    }
     return;
   }
   if (const InsertValueInst *IVI = dyn_cast<InsertValueInst>(V)) {
@@ -548,10 +542,7 @@ void FunctionHashCalculator::hashFunction() {
 }
 
 void FunctionHashCalculator::calculateHash() {
-  FnHash.beginCalculate();
-  const Module *M = Fn->getParent();
-  FnHash.hashDataLayout(M->getDataLayoutStr());
-  FnHash.hashTriple(M->getTargetTriple());
+  FnHash.beginCalculate(*Fn->getParent());
   hashFunction();
 }
 
@@ -585,9 +576,6 @@ void VariableHashCalculator::hashVariable() {
 
 // Calculate the global Variable hash value.
 void VariableHashCalculator::calculateHash() {
-  GvHash.beginCalculate();
-  const Module *M = Gv->getParent();
-  GvHash.hashDataLayout(M->getDataLayoutStr());
-  GvHash.hashTriple(M->getTargetTriple());
+  GvHash.beginCalculate(*Gv->getParent());
   hashVariable();
 }

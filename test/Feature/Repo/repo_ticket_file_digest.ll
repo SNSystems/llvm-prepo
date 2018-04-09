@@ -1,9 +1,9 @@
 ; This test checks that the ticket file digests are the same between two time
 ; builds if the input file does not change.
 ;
-; RUN: rm -rf clang.db
-; RUN: llc -filetype=obj -debug-only repo-object %s -o %t 2>&1 
-; RUN: llc -filetype=obj -debug-only repo-object %s -o %t 2>&1 | FileCheck %s
+; RUN: rm -f %t.db
+; RUN: env REPOFILE=%t.db llc -filetype=obj -debug-only repo-object %s -o %t 2>&1
+; RUN: env REPOFILE=%t.db llc -filetype=obj -debug-only repo-object %s -o %t 2>&1 | FileCheck %s
 
 ; REQUIRES: asserts
 

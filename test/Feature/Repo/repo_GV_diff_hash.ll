@@ -19,11 +19,11 @@ entry:
   ret i32 2
 }
 
-;CHECK: !0 = !TicketNode(name: "fp_foo", digest: [16 x i8] c"\D1\F38W\C8[\FE\D1b\1B\D4\08\05hd\A9", linkage: external, pruned: false)
-;CHECK: !1 = !TicketNode(name: "fp_bar", digest: [16 x i8] c"[d\93\860\9Ca\A6\E7\DE\BEp\CBq2&", linkage: external, pruned: false)
-;CHECK: !2 = !TicketNode(name: "a", digest: [16 x i8] c"\FF\8By\DD\A10N%\A1X/?<9\C0E", linkage: internal, pruned: false)
-;CHECK: !3 = !TicketNode(name: "vp_a", digest: [16 x i8] c"\04x\14\B0\D3\09]D;,X\EE,\FB\C8a", linkage: external, pruned: false)
-;CHECK: !4 = !TicketNode(name: "b", digest: [16 x i8] c"\98\B70\A7)>\AC\118^\8BM\C1\B2U\97", linkage: internal, pruned: false)
-;CHECK: !5 = !TicketNode(name: "vp_b", digest: [16 x i8] c"\B0\AC\97&[\A6\DD\D6OW\1A(9L\12\F3", linkage: external, pruned: false)
-;CHECK: !6 = !TicketNode(name: "foo", digest: [16 x i8] c"\B5\B00\055\C0j\D0s\150<\0B&\C5\07", linkage: internal, pruned: false)
-;CHECK: !7 = !TicketNode(name: "bar", digest: [16 x i8] c"E\DB\FDg\86z\F5)\07\109%\FD\FF\04\83", linkage: internal, pruned: false)
+;CHECK: !0 = !TicketNode(name: "fp_foo", digest: [16 x i8] c"qK\99\8A\15wR\18\7F\97\C1\BA\B0Hg\D8", linkage: external, pruned: false)
+;CHECK: !1 = !TicketNode(name: "fp_bar", digest: [16 x i8] c"\5C5p{\C6%\16\E8\AAl\88b\E34M\B2", linkage: external, pruned: false)
+;CHECK: !2 = !TicketNode(name: "a", digest: [16 x i8] c"\95A\10\0B\A6IO\DCP\E1\C9\11\F8\0Em,", linkage: internal, pruned: false)
+;CHECK: !3 = !TicketNode(name: "vp_a", digest: [16 x i8] c"\06\92\BE\C3b=\DA<\7F,k'\06g\97t", linkage: external, pruned: false)
+;CHECK: !4 = !TicketNode(name: "b", digest: [16 x i8] c"%X\05\8Bk\F1\B3\CFu\FE\DD\AE\12,\AEK", linkage: internal, pruned: false)
+;CHECK: !5 = !TicketNode(name: "vp_b", digest: [16 x i8] c"\0E\15r+-\B5\C8\D0CA\96+\DA[\DA\E3", linkage: external, pruned: false)
+;CHECK: !6 = !TicketNode(name: "foo", digest: [16 x i8] c"\92Q\12N\C2\94\987\22q\91+\D8\F1f\D3", linkage: internal, pruned: false)
+;CHECK: !7 = !TicketNode(name: "bar", digest: [16 x i8] c"a\18v\A1\80\98^\E1\9C\1DN\B8\B3\D0\F5\E7", linkage: internal, pruned: false)

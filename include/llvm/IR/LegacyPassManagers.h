@@ -19,6 +19,7 @@
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/Pass.h"
+#include "llvm/Support/MD5.h"
 #include <vector>
 
 //===----------------------------------------------------------------------===//
@@ -219,6 +220,16 @@ public:
     IndirectPassManagers.push_back(Manager);
   }
 
+  // Compute the hash of passes managed by this top level manager.
+  MD5::MD5Result computeTopLevelPassesHash(const Module &M,
+                                           const MD5::MD5Result &Hash) const;
+  // Compute the hash of the target triple and the data layout for the module's
+  // target platform.
+  MD5::MD5Result computeTripleAndDatalayoutHash(const Module &M) const;
+  // Compute the module hash, which includes the name of enabled passes, the
+  // target triple and the data layout for the module's target platform.
+  void computeModuleHash(Module &M) const;
+
   // Print passes managed by this top level manager.
   void dumpPasses() const;
   void dumpArguments() const;
@@ -372,6 +383,9 @@ public:
 
   unsigned getDepth() const { return Depth; }
   void setDepth(unsigned newDepth) { Depth = newDepth; }
+
+  // Compute hash of passes (used by the RepoTicketGeneration pass).
+  void computeDataPassesHash(const Module &M, MD5 &PassesHash) const;
 
   // Print routines used by debug-pass
   void dumpLastUses(Pass *P, unsigned Offset) const;

@@ -16,6 +16,7 @@
 #define LLVM_TRANSFORMS_UTILS_REPOHASHCALCULATOR_H
 
 #include "llvm/IR/Function.h"
+#include "llvm/IR/Module.h"
 #include "llvm/IR/Operator.h"
 #include "llvm/IR/RepoTicket.h"
 #include "llvm/IR/ValueMap.h"
@@ -84,10 +85,10 @@ enum HashKind {
 class HashCalculator {
 public:
   /// Start the calculation.
-  void beginCalculate() {
+  void beginCalculate(const Module &M) {
     SNMap.clear();
     GlobalNumbers.clear();
-    reset();
+    reset(M);
   }
 
   /// Incrementally add the bytes in \p Data to the hash.
@@ -103,7 +104,11 @@ public:
     return Result;
   }
 
-  void reset() { Hash = MD5(); }
+  void reset(const Module &M) {
+    Hash = MD5();
+    assert(M.getModuleHash().hasValue());
+    Hash.update(M.getModuleHash().getValue().Bytes);
+  }
 
   template <typename Ty> void hashNumber(Ty V) {
     Hash.update(
@@ -153,19 +158,20 @@ public:
   /// identify the same gobals across function calls.
   void hashGlobalValue(const GlobalValue *V);
 
-  /// Accumulate the hash for the target datalayout.
-  void hashDataLayout(StringRef DataLayout);
-
-  /// Accumulate the hash for the target triple.
-  void hashTriple(StringRef Triple);
-
   /// Return the computed hash as a string.
   std::string &get(MD5::MD5Result &HashRes);
+
+  Digest::DependenciesType &getDependencies() {
+    return Dependencies;
+  }
 
 private:
   // Accumulate the hash of basicblocks, instructions and variables etc in the
   // function Fn.
   MD5 Hash;
+
+  // Hold the global object list which the function hash depenendent on.
+  Digest::DependenciesType Dependencies;
 
   /// Assign serial numbers to values from the function.
   /// Explanation:

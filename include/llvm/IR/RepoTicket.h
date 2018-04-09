@@ -27,6 +27,7 @@ namespace llvm {
 /// Global value digest description.
 struct Digest {
   using DigestType = MD5::MD5Result;
+  using DependenciesType = SmallVector<const GlobalObject *, 1>;
   static constexpr size_t DigestSize = 16;
   using GlobalValueMap = std::map<const GlobalValue *, const DigestType>;
   static const Constant *getAliasee(const GlobalAlias *GA);

@@ -53,73 +53,73 @@ public:
 
   Digest::DigestType getHash() { return getHashResult(); }
 
-  Digest::DigestType testCalculate(Module &M) {
+  Digest::DigestType testCalculate() {
     calculateHash();
     return getHash();
   }
 
   Digest::DigestType testHashSignature() {
-    functionHash().beginCalculate();
+    functionHash().beginCalculate(*function()->getParent());
     hashSignature(function());
     return getHash();
   }
 
   Digest::DigestType testHashBasicBlock(const BasicBlock *BB) {
-    functionHash().beginCalculate();
+    functionHash().beginCalculate(*function()->getParent());
     hashBasicBlock(BB);
     return getHash();
   }
 
   Digest::DigestType testHashConstant(const Constant *V) {
-    functionHash().beginCalculate();
+    functionHash().beginCalculate(*function()->getParent());
     functionHash().hashConstant(V);
     return getHash();
   }
 
   Digest::DigestType testHashGlobalValue(const GlobalValue *V) {
-    functionHash().beginCalculate();
+    functionHash().beginCalculate(*function()->getParent());
     functionHash().hashGlobalValue(V);
     return getHash();
   }
 
   Digest::DigestType testHashValue(const Value *V) {
-    functionHash().beginCalculate();
+    functionHash().beginCalculate(*function()->getParent());
     functionHash().hashValue(V);
     return getHash();
   }
 
   Digest::DigestType testHashInstruction(const Instruction *V) {
-    functionHash().beginCalculate();
+    functionHash().beginCalculate(*function()->getParent());
     hashInstruction(V);
     return getHash();
   }
 
   Digest::DigestType testHashType(Type *Ty) {
-    functionHash().beginCalculate();
+    functionHash().beginCalculate(*function()->getParent());
     functionHash().hashType(Ty);
     return getHash();
   }
 
   Digest::DigestType testHashNumber(uint64_t V) {
-    functionHash().beginCalculate();
+    functionHash().beginCalculate(*function()->getParent());
     functionHash().hashNumber(V);
     return getHash();
   }
 
   Digest::DigestType testHashAPInt(const APInt &V) {
-    functionHash().beginCalculate();
+    functionHash().beginCalculate(*function()->getParent());
     functionHash().hashAPInt(V);
     return getHash();
   }
 
   Digest::DigestType testHashAPFloat(const APFloat &V) {
-    functionHash().beginCalculate();
+    functionHash().beginCalculate(*function()->getParent());
     functionHash().hashAPFloat(V);
     return getHash();
   }
 
   Digest::DigestType testHashMem(StringRef V) {
-    functionHash().beginCalculate();
+    functionHash().beginCalculate(*function()->getParent());
     functionHash().hashMem(V);
     return getHash();
   }
@@ -129,6 +129,8 @@ public:
 TEST(HashCalculatorTest, TestFunction) {
   LLVMContext C;
   Module M("test", C);
+  MD5::MD5Result Hash = {};
+  M.setModuleHash(Hash);
   TestFunction F1(C, M, 27);
   TestFunction F2(C, M, 28);
   TestFunction F3(C, M, 27);
@@ -138,8 +140,8 @@ TEST(HashCalculatorTest, TestFunction) {
   TestHash F3H(F3.F);
 
   EXPECT_TRUE(F1H.testFunctionAccess(F1.F));
-  EXPECT_NE(F1H.testCalculate(M), F2H.testCalculate(M));
-  EXPECT_EQ(F1H.testCalculate(M), F3H.testCalculate(M));
+  EXPECT_NE(F1H.testCalculate(), F2H.testCalculate());
+  EXPECT_EQ(F1H.testCalculate(), F3H.testCalculate());
   EXPECT_EQ(F1H.testHashSignature(), F2H.testHashSignature());
   EXPECT_NE(F1H.testHashBasicBlock(F1.BB), F2H.testHashBasicBlock(F2.BB));
   EXPECT_EQ(F1H.testHashBasicBlock(F1.BB), F3H.testHashBasicBlock(F3.BB));
@@ -166,6 +168,9 @@ protected:
   VariableHash() {
     M0.reset(new Module("Module", Ctx));
     M1.reset(new Module("Module1", Ctx));
+    MD5::MD5Result Hash = {};
+    M0->setModuleHash(Hash);
+    M1->setModuleHash(Hash);
     GV0 = new GlobalVariable(*M0, Type::getInt8Ty(Ctx), true,
                              GlobalValue::ExternalLinkage, nullptr, "GV0");
     GV1 = new GlobalVariable(*M1, Type::getInt8Ty(Ctx), true,
@@ -188,17 +193,26 @@ protected:
   GlobalVariable *GV1;
 };
 
-// The triple will affect the hash value.
-TEST_F(VariableHash, CheckTriple) {
-  M0->setTargetTriple("x86_64-unknown-linux-gnu");
-  M1->setTargetTriple("arm-unknown-linux-gnu");
-  EXPECT_FALSE(isEqualHash());
+// The module hash will affect the hash value.
+TEST_F(VariableHash, SameModuleHash) {
+  MD5 Hash;
+  Hash.update("foo");
+  MD5::MD5Result Result;
+  Hash.final(Result);
+  M0->setModuleHash(Result);
+  M1->setModuleHash(Result);
+  EXPECT_TRUE(isEqualHash());
 }
 
-// The target datalayout will affect the hash value.
-TEST_F(VariableHash, CheckDatalayout) {
-  M0->setDataLayout("e-n32");
-  M1->setDataLayout("e");
+TEST_F(VariableHash, DiffModuleHash) {
+  MD5 Hash;
+  Hash.update("foo");
+  MD5::MD5Result Result;
+  Hash.final(Result);
+  M0->setModuleHash(Result);
+  Hash.update("bar");
+  Hash.final(Result);
+  M1->setModuleHash(Result);
   EXPECT_FALSE(isEqualHash());
 }
 

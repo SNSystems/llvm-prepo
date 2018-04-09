@@ -1,5 +1,6 @@
-; RUN: llc -filetype=obj %S/Inputs/repo_common.ll -o /dev/null 2>&1
-; RUN: llc -filetype=obj -debug-only repo-object %s -o /dev/null 2>&1 | FileCheck %s
+; RUN: rm -rf %t.db
+; RUN: env REPOFILE=%t.db llc -filetype=obj %S/Inputs/repo_common.ll -o /dev/null 2>&1
+; RUN: env REPOFILE=%t.db llc -filetype=obj -debug-only repo-object %s -o /dev/null 2>&1 | FileCheck %s
 
 ; REQUIRES: asserts
 

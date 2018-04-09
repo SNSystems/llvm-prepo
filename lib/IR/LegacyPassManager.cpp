@@ -15,11 +15,13 @@
 #include "llvm/ADT/MapVector.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/IR/DiagnosticInfo.h"
+#include "llvm/ADT/Triple.h"
 #include "llvm/IR/IRPrintingPasses.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/LegacyPassManagers.h"
 #include "llvm/IR/LegacyPassNameParser.h"
 #include "llvm/IR/Module.h"
+#include "llvm/IR/RepoHashCalculator.h"
 #include "llvm/Support/Chrono.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
@@ -814,6 +816,60 @@ void PMTopLevelManager::addImmutablePass(ImmutablePass *P) {
     ImmutablePassMap[ImmPI->getTypeInfo()] = P;
 }
 
+MD5::MD5Result
+PMTopLevelManager::computeTopLevelPassesHash(const Module &M,
+                                             const MD5::MD5Result &Hash) const {
+  Triple ModuleTriple(M.getTargetTriple());
+  if (!ModuleTriple.isOSBinFormatRepo())
+    return Hash;
+
+  MD5 PassesHash;
+  PassesHash.update(Hash.Bytes);
+  for (const ImmutablePass *P : ImmutablePasses)
+    if (const PassInfo *PI = findAnalysisPassInfo(P->getPassID())) {
+      assert(PI && "Expected all immutable passes to be initialized");
+      PassesHash.update(PI->getPassArgument());
+      PassesHash.update(makeArrayRef((uint8_t)'\0'));
+    }
+  for (PMDataManager *PM : PassManagers)
+    PM->computeDataPassesHash(M, PassesHash);
+  MD5::MD5Result Result;
+  PassesHash.final(Result);
+  return Result;
+}
+
+MD5::MD5Result
+PMTopLevelManager::computeTripleAndDatalayoutHash(const Module &M) const {
+  Triple ModuleTriple(M.getTargetTriple());
+  if (!ModuleTriple.isOSBinFormatRepo())
+    return {};
+
+  MD5 ModuleHash;
+  // Accumulate the hash for the target datalayout.
+  ModuleHash.update(HashKind::TAG_Datalayout);
+  ModuleHash.update(M.getDataLayoutStr());
+  // Accumulate the hash for the target triple.
+  ModuleHash.update(HashKind::TAG_Triple);
+  ModuleHash.update(M.getTargetTriple());
+  MD5::MD5Result Result;
+  ModuleHash.final(Result);
+  return Result;
+}
+
+void PMTopLevelManager::computeModuleHash(Module &M) const {
+  Triple ModuleTriple(M.getTargetTriple());
+  if (!ModuleTriple.isOSBinFormatRepo())
+    return;
+
+  MD5::MD5Result Result;
+  if (!M.getModuleHash().hasValue()) {
+    Result = computeTripleAndDatalayoutHash(M);
+    M.setModuleHash(Result);
+  }
+  Result = computeTopLevelPassesHash(M, M.getModuleHash().getValue());
+  M.setModuleHash(Result);
+}
+
 // Print passes managed by this top level manager.
 void PMTopLevelManager::dumpPasses() const {
 
@@ -1179,6 +1235,22 @@ void PMDataManager::dumpLastUses(Pass *P, unsigned Offset) const{
   }
 }
 
+void PMDataManager::computeDataPassesHash(const Module &M,
+                                          MD5 &PassesHash) const {
+  Triple ModuleTriple(M.getTargetTriple());
+  if (!ModuleTriple.isOSBinFormatRepo())
+    return;
+
+  for (Pass *P : PassVector) {
+    if (const PMDataManager *PMD = P->getAsPMDataManager())
+      PMD->computeDataPassesHash(M, PassesHash);
+    else if (const PassInfo *PI = TPM->findAnalysisPassInfo(P->getPassID())) {
+      PassesHash.update(PI->getPassArgument());
+      PassesHash.update(makeArrayRef((uint8_t)'\0'));
+    }
+  }
+}
+
 void PMDataManager::dumpPassArguments() const {
   for (Pass *P : PassVector) {
     if (PMDataManager *PMD = P->getAsPMDataManager())
@@ -1478,6 +1550,8 @@ bool FunctionPassManagerImpl::doInitialization(Module &M) {
   dumpArguments();
   dumpPasses();
 
+  computeModuleHash(M);
+
   for (ImmutablePass *ImPass : getImmutablePasses())
     Changed |= ImPass->doInitialization(M);
 
@@ -1765,6 +1839,8 @@ bool PassManagerImpl::run(Module &M) {
 
   dumpArguments();
   dumpPasses();
+
+  computeModuleHash(M);
 
   for (ImmutablePass *ImPass : getImmutablePasses())
     Changed |= ImPass->doInitialization(M);
