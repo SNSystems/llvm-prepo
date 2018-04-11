@@ -63,8 +63,8 @@ INITIALIZE_PASS(RepoPruning, "prepo-pruning",
 ModulePass *llvm::createRepoPruningPass() { return new RepoPruning(); }
 
 using GlobalObjectMap =
-    std::map<const GlobalObject *, const Digest::DigestType>;
-using GlobalValueMap = Digest::GlobalValueMap;
+    std::map<const GlobalObject *, const ticketmd::DigestType>;
+using GlobalValueMap = ticketmd::GlobalValueMap;
 
 bool RepoPruning::runOnModule(Module &M) {
   if (skipModule(M) || !isObjFormatRepo(M))
@@ -87,7 +87,7 @@ bool RepoPruning::runOnModule(Module &M) {
                                        llvm::Statistic &NumGO) -> bool {
     if (GO.isDeclaration() || GO.hasAvailableExternallyLinkage())
       return false;
-    auto const Result = Digest::get(&GO);
+    auto const Result = ticketmd::get(&GO);
     assert(!Result.second && "The repo_ticket metadata doesn't exist!");
 
     auto const Key = pstore::index::digest{Result.first.high(), Result.first.low()};

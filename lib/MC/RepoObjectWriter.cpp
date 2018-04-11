@@ -82,10 +82,10 @@ private:
   using NamesWithPrefixContainer =
       SmallVector<std::unique_ptr<std::string>, 16>;
 
-  // TODO: investigate changing the Key type from Digest::DigestType to
+  // TODO: investigate changing the Key type from ticketmd::DigestType to
   // pstore::index::digest.
   using ContentsType =
-      std::map<Digest::DigestType,
+      std::map<ticketmd::DigestType,
                SmallVector<std::unique_ptr<pstore::repo::section_content>, 4>>;
 
   std::vector<pstore::repo::ticket_member> TicketContents;
@@ -566,7 +566,7 @@ pstore::index::digest RepoObjectWriter::buildTicketRecord(
 
   for (const auto TicketPair : Asm.getContext().getTickets()) {
     const TicketNode *const Ticket = TicketPair.first;
-    Digest::DigestType const D = Ticket->getDigest();
+    ticketmd::DigestType const D = Ticket->getDigest();
     // Insert this name into the module-wide string set. This set is later
     // added to the whole-program string set and the ticket name addresses
     // corrected at that time.

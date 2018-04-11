@@ -24,7 +24,7 @@ MCSectionRepo::MCSectionRepo(SectionKind K, MCSymbol *Begin)
     : MCSection(SV_Repo, K, Begin), Index{++idx} {}
 
 MCSectionRepo::MCSectionRepo(SectionKind K, MCSymbol *Begin,
-                             Digest::DigestType Digest)
+                             ticketmd::DigestType Digest)
     : MCSection(SV_Repo, K, Begin), Digest{std::move(Digest)}, Index{++idx} {}
 
 MCSectionRepo::~MCSectionRepo() {}

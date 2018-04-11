@@ -27,7 +27,9 @@ using namespace llvm;
 
 namespace llvm {
 
-void Digest::set(GlobalObject *GO, Digest::DigestType const &D) {
+namespace ticketmd {
+
+void set(GlobalObject *GO, ticketmd::DigestType const &D) {
   auto M = GO->getParent();
   MDBuilder MDB(M->getContext());
   auto MD = MDB.createTicketNode(GO->getName(), D, GO->getLinkage());
@@ -38,8 +40,7 @@ void Digest::set(GlobalObject *GO, Digest::DigestType const &D) {
   NMD->addOperand(MD);
 }
 
-auto Digest::get(const GlobalObject *GO)
-    -> std::pair<Digest::DigestType, bool> {
+auto get(const GlobalObject *GO) -> std::pair<ticketmd::DigestType, bool> {
 
   if (const auto *const T = GO->getMetadata(LLVMContext::MD_repo_ticket)) {
     if (const TicketNode *const MD = dyn_cast<TicketNode>(T)) {
@@ -61,7 +62,7 @@ auto Digest::get(const GlobalObject *GO)
   llvm_unreachable("Unknown global object type!");
 }
 
-const Constant *Digest::getAliasee(const GlobalAlias *GA) {
+const Constant *getAliasee(const GlobalAlias *GA) {
   auto Aliasee = GA->getAliasee();
   assert(Aliasee && "Aliasee cannot be NULL!");
   auto Target = Aliasee->stripPointerCasts();
@@ -71,7 +72,7 @@ const Constant *Digest::getAliasee(const GlobalAlias *GA) {
   assert(isa<GlobalValue>(Target) && "Aliasee should be only GlobalValue");
   return Target;
 }
-
+} // namespace ticketmd
 #ifndef NDEBUG
 static bool isCanonical(const MDString *S) {
   return !S || !S->getString().empty();
@@ -101,14 +102,14 @@ TicketNode *TicketNode::getImpl(LLVMContext &Context, MDString *Name,
 }
 
 TicketNode *TicketNode::getImpl(LLVMContext &Context, StringRef Name,
-                                Digest::DigestType const &Digest,
+                                ticketmd::DigestType const &Digest,
                                 GlobalValue::LinkageTypes Linkage, bool Pruned,
                                 StorageType Storage, bool ShouldCreate) {
   MDString *MDName = nullptr;
   if (!Name.empty())
     MDName = MDString::get(Context, Name);
   MDBuilder MDB(Context);
-  const auto Size = Digest::DigestSize;
+  const auto Size = ticketmd::DigestSize;
   llvm::Constant *Field[Size];
   Type *Int8Ty = Type::getInt8Ty(Context);
   for (unsigned Idx = 0; Idx < Size; ++Idx) {
@@ -121,11 +122,11 @@ TicketNode *TicketNode::getImpl(LLVMContext &Context, StringRef Name,
                  ShouldCreate);
 }
 
-Digest::DigestType TicketNode::getDigest() const {
+ticketmd::DigestType TicketNode::getDigest() const {
   ConstantAsMetadata const *C = getDigestAsMDConstant();
   auto const ArrayType = C->getType();
   auto const Elems = ArrayType->getArrayNumElements();
-  Digest::DigestType D;
+  ticketmd::DigestType D;
 
   assert(Elems == D.Bytes.max_size() &&
          "Global object has invalid digest array size.");

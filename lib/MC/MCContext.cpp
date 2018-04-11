@@ -455,7 +455,8 @@ MCSectionCOFF *MCContext::getCOFFSection(StringRef Section,
   return Result;
 }
 
-MCSectionRepo *MCContext::getRepoSection(RepoSection K, Digest::DigestType const &Digest) {
+MCSectionRepo *MCContext::getRepoSection(RepoSection K,
+                                         ticketmd::DigestType const &Digest) {
 
   // Do the lookup, if we have a hit, return it.
   RepoSectionKey key = std::make_pair(Digest, K);

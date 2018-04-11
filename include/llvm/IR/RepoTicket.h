@@ -24,20 +24,20 @@ namespace llvm {
 
 	struct Ticket;
 
-/// Global value digest description.
-struct Digest {
+/// Global value ticket metadata description.
+namespace ticketmd {
   using DigestType = MD5::MD5Result;
   using DependenciesType = SmallVector<const GlobalObject *, 1>;
   static constexpr size_t DigestSize = 16;
   using GlobalValueMap = std::map<const GlobalValue *, const DigestType>;
-  static const Constant *getAliasee(const GlobalAlias *GA);
+  const Constant *getAliasee(const GlobalAlias *GA);
   /// Set global object ticket metadata value and add the metadata to
   /// the module level metadta named repo.tickets.
-  static void set(GlobalObject *GO, DigestType const &D);
+  void set(GlobalObject *GO, DigestType const &D);
   /// Get global object digest metadata value. Create the Metadat if it does not
   /// exist.
-  static std::pair<DigestType, bool> get(const GlobalObject *GO);
-};
+  std::pair<DigestType, bool> get(const GlobalObject *GO);
+}
 
 /// Global value ticket node description.
 class TicketNode : public MDNode {
@@ -74,7 +74,7 @@ class TicketNode : public MDNode {
                              StorageType Storage, bool ShouldCreate = true);
 
   static TicketNode *getImpl(LLVMContext &Context, StringRef Name,
-                             Digest::DigestType const &Digest,
+                             ticketmd::DigestType const &Digest,
                              GlobalValue::LinkageTypes Linkage, bool Pruned,
                              StorageType Storage, bool ShouldCreate = true);
 
@@ -93,7 +93,7 @@ public:
   }
 
   static TicketNode *get(LLVMContext &Context, StringRef Name,
-                         Digest::DigestType const &Digest,
+                         ticketmd::DigestType const &Digest,
                          GlobalValue::LinkageTypes Linkage, bool Pruned) {
     return getImpl(Context, Name, Digest, Linkage, Pruned, Uniqued);
   }
@@ -107,7 +107,7 @@ public:
   }
 
   static TicketNode *getIfExists(LLVMContext &Context, StringRef Name,
-                                 Digest::DigestType const &Digest,
+                                 ticketmd::DigestType const &Digest,
                                  GlobalValue::LinkageTypes Linkage,
                                  bool Pruned) {
     return getImpl(Context, Name, Digest, Linkage, Pruned, Uniqued,
@@ -122,7 +122,7 @@ public:
   }
 
   static TicketNode *getDistinct(LLVMContext &Context, StringRef Name,
-                                 Digest::DigestType const &Digest,
+                                 ticketmd::DigestType const &Digest,
                                  GlobalValue::LinkageTypes Linkage,
                                  bool Pruned) {
     return getImpl(Context, Name, Digest, Linkage, Pruned, Distinct);
@@ -137,7 +137,7 @@ public:
   }
 
   static TempTicketNode getTemporary(LLVMContext &Context, StringRef Name,
-                                     Digest::DigestType const &Digest,
+                                     ticketmd::DigestType const &Digest,
                                      GlobalValue::LinkageTypes Linkage,
                                      bool Pruned) {
     return TempTicketNode(
@@ -164,7 +164,7 @@ public:
   ConstantAsMetadata *getDigestAsMDConstant() const {
     return cast<ConstantAsMetadata>(getDigestAsMD());
   }
-  Digest::DigestType getDigest() const;
+  ticketmd::DigestType getDigest() const;
 
   static bool classof(const Metadata *MD) {
     return MD->getMetadataID() == TicketNodeKind;

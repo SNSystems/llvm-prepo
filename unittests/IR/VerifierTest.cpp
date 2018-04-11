@@ -200,7 +200,7 @@ TEST(VerifierTest, TicketNodeVariable) {
                          GlobalValue::ExternalLinkage, nullptr, "Some Global");
   // Valid TicketNode.
   GV->setMetadata(LLVMContext::MD_repo_ticket,
-                  MDB.createTicketNode(GV->getName(), Digest::DigestType(),
+                  MDB.createTicketNode(GV->getName(), ticketmd::DigestType(),
                                        GV->getLinkage(), false));
   EXPECT_FALSE(verifyModule(M));
 }
@@ -213,7 +213,8 @@ TEST(VerifierTest, TicketNodeFunction) {
   auto Func = Function::Create(FTy, GlobalValue::ExternalLinkage, "foo", &M);
   // Valid global variable name.
   Func->setMetadata(LLVMContext::MD_repo_ticket,
-                    MDB.createTicketNode(Func->getName(), Digest::DigestType(),
+                    MDB.createTicketNode(Func->getName(),
+                                         ticketmd::DigestType(),
                                          Func->getLinkage(), false));
   EXPECT_FALSE(verifyModule(M));
 }

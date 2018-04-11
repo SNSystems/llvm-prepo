@@ -100,7 +100,8 @@ public:
   //===------------------------------------------------------------------===//
 
   /// \brief Return metadata containing global object ticket information.
-  TicketNode *createTicketNode(StringRef Name, Digest::DigestType const &Bytes,
+  TicketNode *createTicketNode(StringRef Name,
+                               ticketmd::DigestType const &Bytes,
                                GlobalValue::LinkageTypes Linkage,
                                bool Pruned = false);
 

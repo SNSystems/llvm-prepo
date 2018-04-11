@@ -1494,7 +1494,7 @@ bool AsmPrinter::doFinalization(Module &M) {
       auto Str = M.getModuleIdentifier();
       ArrayRef<uint8_t> SVal((const uint8_t *)Str.data(), Str.size());
       GVHC.update(SVal);
-      Digest::set(MoreStack, GVHC.getHashResult());
+      ticketmd::set(MoreStack, GVHC.getHashResult());
     }
     MCSection *ReadOnlySection = getObjFileLowering().getSectionForConstant(
         getDataLayout(), SectionKind::getReadOnly(),

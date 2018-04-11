@@ -22,7 +22,7 @@ namespace llvm {
 
 class MCSectionRepo : public MCSection {
 private:
-  ::llvm::Digest::DigestType Digest;
+  ::llvm::ticketmd::DigestType Digest;
   /// Monotonically increases for each section.
   unsigned const Index;
   /// A dummy section is created for the assembler's initial setup. Is this the
@@ -31,7 +31,7 @@ private:
 
   friend class MCContext;
   MCSectionRepo(SectionKind K, MCSymbol *Begin);
-  MCSectionRepo(SectionKind K, MCSymbol *Begin, Digest::DigestType digest);
+  MCSectionRepo(SectionKind K, MCSymbol *Begin, ticketmd::DigestType digest);
 
   void PrintSwitchToSection(const MCAsmInfo &MAI, const Triple &T,
                             raw_ostream &OS,
@@ -45,7 +45,7 @@ public:
 
   void markAsDummy () { IsDummy = true; }
   bool isDummy () const { return IsDummy; }
-  Digest::DigestType hash() const { return Digest; }
+  ticketmd::DigestType hash() const { return Digest; }
 
   static bool classof(const MCSection *S) { return S->getVariant() == SV_Repo; }
 };

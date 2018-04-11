@@ -61,7 +61,7 @@ ModulePass *llvm::createRepoTicketGenerationPass() {
   return new RepoTicketGeneration();
 }
 
-using GlobalValueMap = Digest::GlobalValueMap;
+using GlobalValueMap = ticketmd::GlobalValueMap;
 
 template <typename T>
 static void setMetadata(T &GO, GlobalValueMap &DigestMap, bool &Changed,
@@ -69,9 +69,9 @@ static void setMetadata(T &GO, GlobalValueMap &DigestMap, bool &Changed,
   if (GO.isDeclaration() || GO.hasAvailableExternallyLinkage())
     return;
   // Calculate the global object hash value.
-  Digest::DigestType Result = calculateDigest<T>(&GO);
+  ticketmd::DigestType Result = calculateDigest<T>(&GO);
   DigestMap.emplace(&GO, Result);
-  Digest::set(&GO, Result);
+  ticketmd::set(&GO, Result);
   Changed = true;
   ++Num;
 }
@@ -94,7 +94,7 @@ bool RepoTicketGeneration::runOnModule(Module &M) {
   }
 
   for (GlobalAlias &GA : M.aliases()) {
-    auto GAAliasee = dyn_cast<GlobalValue>(Digest::getAliasee(&GA));
+    auto GAAliasee = dyn_cast<GlobalValue>(ticketmd::getAliasee(&GA));
     auto GADigest = DigestMap[GAAliasee];
     DigestMap.emplace(&GA, GADigest);
     Changed = true;

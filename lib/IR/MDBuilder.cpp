@@ -92,7 +92,7 @@ MDNode *MDBuilder::createRange(const APInt &Lo, const APInt &Hi) {
 }
 
 TicketNode *MDBuilder::createTicketNode(StringRef Name,
-                                        Digest::DigestType const &Bytes,
+                                        ticketmd::DigestType const &Bytes,
                                         GlobalValue::LinkageTypes Linkage,
                                         bool Pruned) {
   return TicketNode::get(Context, Name, Bytes, Linkage, Pruned);

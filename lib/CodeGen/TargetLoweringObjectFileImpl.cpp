@@ -704,7 +704,7 @@ void TargetLoweringObjectFileRepo::Initialize(MCContext &Ctx,
 static MCSectionRepo *selectRepoSectionForGlobal(MCContext &Ctx,
                                                  const GlobalObject *GO,
                                                  SectionKind Kind) {
-  const std::pair<Digest::DigestType, bool> Result = Digest::get(GO);
+  const std::pair<ticketmd::DigestType, bool> Result = ticketmd::get(GO);
   if (Result.second) {
     // Add new created digest to the TicketNodes.
     assert(!GO->getMetadata(LLVMContext::MD_repo_ticket) &&

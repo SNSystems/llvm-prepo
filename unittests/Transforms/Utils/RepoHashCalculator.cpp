@@ -51,74 +51,74 @@ public:
 
   bool testFunctionAccess(const Function *F1) { return F1 == function(); }
 
-  Digest::DigestType getHash() { return getHashResult(); }
+  ticketmd::DigestType getHash() { return getHashResult(); }
 
-  Digest::DigestType testCalculate() {
+  ticketmd::DigestType testCalculate() {
     calculateHash();
     return getHash();
   }
 
-  Digest::DigestType testHashSignature() {
+  ticketmd::DigestType testHashSignature() {
     functionHash().beginCalculate(*function()->getParent());
     hashSignature(function());
     return getHash();
   }
 
-  Digest::DigestType testHashBasicBlock(const BasicBlock *BB) {
+  ticketmd::DigestType testHashBasicBlock(const BasicBlock *BB) {
     functionHash().beginCalculate(*function()->getParent());
     hashBasicBlock(BB);
     return getHash();
   }
 
-  Digest::DigestType testHashConstant(const Constant *V) {
+  ticketmd::DigestType testHashConstant(const Constant *V) {
     functionHash().beginCalculate(*function()->getParent());
     functionHash().hashConstant(V);
     return getHash();
   }
 
-  Digest::DigestType testHashGlobalValue(const GlobalValue *V) {
+  ticketmd::DigestType testHashGlobalValue(const GlobalValue *V) {
     functionHash().beginCalculate(*function()->getParent());
     functionHash().hashGlobalValue(V);
     return getHash();
   }
 
-  Digest::DigestType testHashValue(const Value *V) {
+  ticketmd::DigestType testHashValue(const Value *V) {
     functionHash().beginCalculate(*function()->getParent());
     functionHash().hashValue(V);
     return getHash();
   }
 
-  Digest::DigestType testHashInstruction(const Instruction *V) {
+  ticketmd::DigestType testHashInstruction(const Instruction *V) {
     functionHash().beginCalculate(*function()->getParent());
     hashInstruction(V);
     return getHash();
   }
 
-  Digest::DigestType testHashType(Type *Ty) {
+  ticketmd::DigestType testHashType(Type *Ty) {
     functionHash().beginCalculate(*function()->getParent());
     functionHash().hashType(Ty);
     return getHash();
   }
 
-  Digest::DigestType testHashNumber(uint64_t V) {
+  ticketmd::DigestType testHashNumber(uint64_t V) {
     functionHash().beginCalculate(*function()->getParent());
     functionHash().hashNumber(V);
     return getHash();
   }
 
-  Digest::DigestType testHashAPInt(const APInt &V) {
+  ticketmd::DigestType testHashAPInt(const APInt &V) {
     functionHash().beginCalculate(*function()->getParent());
     functionHash().hashAPInt(V);
     return getHash();
   }
 
-  Digest::DigestType testHashAPFloat(const APFloat &V) {
+  ticketmd::DigestType testHashAPFloat(const APFloat &V) {
     functionHash().beginCalculate(*function()->getParent());
     functionHash().hashAPFloat(V);
     return getHash();
   }
 
-  Digest::DigestType testHashMem(StringRef V) {
+  ticketmd::DigestType testHashMem(StringRef V) {
     functionHash().beginCalculate(*function()->getParent());
     functionHash().hashMem(V);
     return getHash();

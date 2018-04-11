@@ -161,9 +161,7 @@ public:
   /// Return the computed hash as a string.
   std::string &get(MD5::MD5Result &HashRes);
 
-  Digest::DependenciesType &getDependencies() {
-    return Dependencies;
-  }
+  ticketmd::DependenciesType &getDependencies() { return Dependencies; }
 
 private:
   // Accumulate the hash of basicblocks, instructions and variables etc in the
@@ -171,7 +169,7 @@ private:
   MD5 Hash;
 
   // Hold the global object list which the function hash depenendent on.
-  Digest::DependenciesType Dependencies;
+  ticketmd::DependenciesType Dependencies;
 
   /// Assign serial numbers to values from the function.
   /// Explanation:
@@ -314,7 +312,7 @@ struct DigestCalculator<Function> {
   using Calculator = FunctionHashCalculator;
 };
 
-template <typename T> Digest::DigestType calculateDigest(const T *GO) {
+template <typename T> ticketmd::DigestType calculateDigest(const T *GO) {
   // Calculate the global object hash value.
   typename DigestCalculator<T>::Calculator GOHC{GO};
   GOHC.calculateHash();
