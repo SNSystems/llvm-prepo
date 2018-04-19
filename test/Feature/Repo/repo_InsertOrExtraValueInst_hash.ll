@@ -1,7 +1,8 @@
 ; The 'insertvalue' instruction hash is calculated incorrectly,
 ; which prevent the repository pruning.
 ;
-; RUN: opt -S %s -o %t
+; RUN: rm -f %t.db
+; RUN: env REPOFILE=%t.db opt -S %s -o %t
 ; RUN: opt -S %t | FileCheck %s
 
 target triple = "x86_64-pc-linux-gnu-repo"

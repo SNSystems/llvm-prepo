@@ -1,4 +1,5 @@
-; RUN: llc -filetype=obj -debug-only repo-object %s -o %t.o
+; RUN: rm -f %t.db
+; RUN: env REPOFILE=%t.db llc -filetype=obj -debug-only repo-object %s -o %t.o
 
 ; REQUIRES: asserts
 

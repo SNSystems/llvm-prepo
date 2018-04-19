@@ -2,8 +2,9 @@
 ;       Once we have yaml2repo tool, the yaml2repo command will
 ;       be used (instead of llc) to generate the repo object file. 
 ;
-; RUN: env REPOFILE=%T/clang.db llc -filetype=obj %s -o %t.o
-; RUN: repo2obj %t.o --repo %T/clang.db -o %t.elf
+; RUN: rm -f %t.db
+; RUN: env REPOFILE=%t.db llc -filetype=obj %s -o %t.o
+; RUN: repo2obj %t.o --repo  %t.db -o %t.elf
 ; RUN: llvm-readobj -elf-section-groups %t.elf | FileCheck %s
 
 target triple = "x86_64-pc-linux-gnu-repo"

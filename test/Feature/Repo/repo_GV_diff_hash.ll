@@ -1,4 +1,5 @@
-; RUN: opt -S %s | FileCheck %s
+; RUN: rm -f %t.db
+; RUN: env REPOFILE=%t.db opt -S %s | FileCheck %s
 
 target triple = "x86_64-pc-linux-gnu-repo"
 

@@ -1,4 +1,5 @@
-; RUN: opt -S %s -o %t
+; RUN: rm -f %t.db
+; RUN: env REPOFILE=%t.db opt -S %s -o %t
 ; RUN: llc -filetype=obj %t -o %t2
 
 target triple = "x86_64-pc-linux-gnu-repo"
