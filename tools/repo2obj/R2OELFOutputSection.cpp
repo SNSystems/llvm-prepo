@@ -19,7 +19,8 @@ SectionMap const SectionAttributes{
      {".bss", ELF::SHT_NOBITS, ELF::SHF_ALLOC | ELF::SHF_WRITE}},
     {ELFSectionType::data,
      {".data", ELF::SHT_PROGBITS, ELF::SHF_ALLOC | ELF::SHF_WRITE}},
-    // X (RelRo)
+    {ELFSectionType::rel_ro,
+     {".data.rel.ro", ELF::SHT_PROGBITS, ELF::SHF_ALLOC | ELF::SHF_WRITE}},
     {ELFSectionType::text,
      {".text", ELF::SHT_PROGBITS, ELF::SHF_ALLOC | ELF::SHF_EXECINSTR}},
     {ELFSectionType::mergeable_1_byte_c_string,

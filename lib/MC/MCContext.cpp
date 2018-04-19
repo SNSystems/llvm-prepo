@@ -507,6 +507,9 @@ MCSectionRepo *MCContext::getRepoSection(RepoSection K,
   case RepoSection::ReadOnlySection:
     Kind = SectionKind::getReadOnly();
     break;
+  case RepoSection::ReadOnlyWithRelSection:
+    Kind = SectionKind::getReadOnlyWithRel();
+    break;
   }
 
   auto Result = new MCSectionRepo(Kind, nullptr /*symbol*/, Digest);

@@ -744,6 +744,8 @@ static MCSectionRepo *selectRepoSectionForGlobal(MCContext &Ctx,
     K = MCContext::RepoSection::MergeableConst32Section;
   } else if (Kind.isReadOnly()) {
     K = MCContext::RepoSection::ReadOnlySection;
+  } else if (Kind.isReadOnlyWithRel ()){
+    K = MCContext::RepoSection::ReadOnlyWithRelSection;
   } else {
     llvm_unreachable("selectRepoSectionForGlobal: unknown section type");
   }

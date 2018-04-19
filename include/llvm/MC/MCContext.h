@@ -272,6 +272,7 @@ namespace llvm {
       MergeableConst16Section,
       MergeableConst32Section,
       ReadOnlySection,
+      ReadOnlyWithRelSection,
     };
 
   private:
