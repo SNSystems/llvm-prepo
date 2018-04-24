@@ -107,31 +107,31 @@ ModuleTuple calculateInitialDigestAndDependencies(Module &M) {
 }
 
 // Update the GO's hash value by adding the hash of its dependents.
-static unsigned updateDigestUseCallDependencies(const GlobalObject *GO,
-                                                GOInfoMap &GOI, MD5 &GOHash,
-                                                unsigned NumVisited = 0) {
-  auto It = GOI.find(GO);
-  assert(It != GOI.end());
-  GOInfo &GOInformation = It->second;
-  if (GOInformation.Visited) {
-    // If GO is visited, use the letter 'R' as the marker and use its Index as
+template <typename T>
+static void updateDigestUseCallDependencies(const GlobalObject *GO,
+                                            GOInfoMap &GOI, MD5 &GOHash,
+                                            T &Visited) {
+  bool Inserted;
+  typename T::const_iterator StateIt;
+  std::tie(StateIt, Inserted) = Visited.try_emplace(GO, Visited.size());
+  if (!Inserted) {
+    // If GO is visited, use the letter 'R' as the marker and use its state as
     // the value.
     GOHash.update('R');
-    GOHash.update(GOInformation.Index);
-    return NumVisited;
+    GOHash.update(StateIt->second);
+    return;
   }
+
+  auto InfoIt = GOI.find(GO);
+  assert(InfoIt != GOI.end());
+  const GOInfo &GOInformation = InfoIt->second;
 
   GOHash.update('T');
   GOHash.update(GOInformation.InitialDigest.Bytes);
-  // Set the 'Visited' to true and assigned the identical number to 'Index'.
-  GOInformation.Visited = true;
-  GOInformation.Index = ++NumVisited;
 
   // Recursively for all the dependent global objects.
   for (const GlobalObject *D : GOInformation.Dependencies)
-    NumVisited = updateDigestUseCallDependencies(D, GOI, GOHash, NumVisited);
-
-  return NumVisited;
+    updateDigestUseCallDependencies(D, GOI, GOHash, Visited);
 }
 
 std::tuple<bool, unsigned, unsigned> generateTicketMDs(Module &M) {
@@ -143,16 +143,15 @@ std::tuple<bool, unsigned, unsigned> generateTicketMDs(Module &M) {
 
   // Step 2: calculate the final GO hash by adding the hashes of its dependents
   // and create the ticket metadata for GOs.
+  /// Map GO to a unique number in the function call graph.
+  using GOStateMap = DenseMap<const GlobalObject *, unsigned>;
+  GOStateMap Visited;
   for (auto &GO : M.global_objects()) {
     if (!isDefinition(GO))
       continue;
     MD5 Hash = MD5();
-    // TODO: Move Visited and Index to anther DenseMap.
-    // Reset the visited flag in the global objects information.
-    for (auto &Elem : GOIMap) {
-      Elem.second.Visited = false;
-    }
-    updateDigestUseCallDependencies(&GO, GOIMap, Hash);
+    Visited.clear();
+    updateDigestUseCallDependencies(&GO, GOIMap, Hash, Visited);
     MD5::MD5Result Digest;
     Hash.final(Digest);
     set(&GO, Digest);

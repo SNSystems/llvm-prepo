@@ -32,6 +32,7 @@ static constexpr size_t DigestSize =
     std::tuple_size<decltype(DigestType::Bytes)>::value;
 using DependenciesType = SmallVector<const GlobalObject *, 1>;
 using DigestAndDependencies = std::pair<DigestType, DependenciesType>;
+
 const Constant *getAliasee(const GlobalAlias *GA);
 /// Set global object ticket metadata value and add the metadata to
 /// the module level metadta named repo.tickets.
@@ -42,10 +43,6 @@ std::pair<DigestType, bool> get(const GlobalObject *GO);
 
 /// A structure of a global object (GO) information.
 struct GOInfo {
-  /// True if this GO has been visited.
-  bool Visited = false;
-  /// Used to assign a unique number to this GO in the function call graph.
-  unsigned Index = 0;
   /// GO's initial hash value which does not include the hash of its dependents.
   DigestType InitialDigest;
   /// GO's dependent global objects.
