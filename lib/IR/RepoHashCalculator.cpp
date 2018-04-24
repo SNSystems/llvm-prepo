@@ -394,10 +394,10 @@ void FunctionHashCalculator::hashInstruction(const Instruction *V) {
     FnHash.hashAttributeList(CI->getAttributes());
     hashOperandBundles(CI);
     FnHash.hashRangeMetadata(CI->getMetadata(LLVMContext::MD_range));
+    // Instruction operand 0 is the callee name. Accumulate it to the hash.
+    FnHash.hashValue(V->getOperand(0));
     if (const Function *F = CI->getCalledFunction()) {
       FnHash.getDependencies().emplace_back(F);
-    } else {
-      FnHash.hashValue(V->getOperand(0));
     }
     return;
   }
@@ -408,10 +408,10 @@ void FunctionHashCalculator::hashInstruction(const Instruction *V) {
     FnHash.hashAttributeList(II->getAttributes());
     hashOperandBundles(II);
     FnHash.hashRangeMetadata(II->getMetadata(LLVMContext::MD_range));
+    // Instruction operand 0 is the callee name. Accumulate it to the hash.
+    FnHash.hashValue(V->getOperand(0));
     if (const Function *F = II->getCalledFunction()) {
       FnHash.getDependencies().emplace_back(F);
-    } else {
-      FnHash.hashValue(V->getOperand(0));
     }
     return;
   }

@@ -32,6 +32,7 @@ add_llvm_unittest(IRTests
   PassManagerTest.cpp
   PatternMatch.cpp
   RepoModuleHashTest.cpp
+  RepoTicketMDTest.cpp
   TypeBuilderTest.cpp
   TypesTest.cpp
   UseTest.cpp

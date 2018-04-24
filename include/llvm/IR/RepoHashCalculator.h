@@ -224,12 +224,12 @@ public:
     FnHash.update(makeArrayRef(Data));
   }
 
+  /// Return the function hash.
+  HashCalculator &hasher() { return FnHash; }
+
 protected:
   /// Return the function for unit test.
   const Function *function() const { return Fn; }
-
-  /// Return the function hash for unit test.
-  HashCalculator &functionHash() { return FnHash; }
 
   /// Calculate the hash for the signature and other general attributes of the
   /// function.
@@ -288,6 +288,9 @@ public:
     GvHash.update(makeArrayRef(Data));
   }
 
+  /// Return the variable hash.
+  HashCalculator &hasher() { return GvHash; }
+
 private:
   /// Accumulate the hash for the variable Gv.
   void hashVariable();
@@ -312,11 +315,13 @@ struct DigestCalculator<Function> {
   using Calculator = FunctionHashCalculator;
 };
 
-template <typename T> ticketmd::DigestType calculateDigest(const T *GO) {
-  // Calculate the global object hash value.
+template <typename T>
+ticketmd::DigestAndDependencies calculateDigestAndDependencies(const T *GO) {
+  // Calculate the initial global object hash value and dependent list.
   typename DigestCalculator<T>::Calculator GOHC{GO};
   GOHC.calculateHash();
-  return GOHC.getHashResult();
+  return std::make_pair(std::move(GOHC.getHashResult()),
+                        std::move(GOHC.hasher().getDependencies()));
 }
 
 } // end namespace llvm

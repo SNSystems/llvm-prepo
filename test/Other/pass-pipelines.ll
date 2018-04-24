@@ -16,6 +16,9 @@
 ;
 ; CHECK-O2: Pass Arguments:
 ; CHECK-O2: ModulePass Manager
+; Calculate program repository ticket in the begining of the ModulePass.
+; CHECK-O2-NEXT: RepoTicketGenerationPass
+; CHECK-O2-NEXT: RepoPruningPass
 ; CHECK-O2-NOT: Manager
 ; First function pass pipeline just does early opts.
 ; CHECK-O2: FunctionPass Manager
@@ -55,9 +58,6 @@
 ; Next we break out of the main Function passes inside the CGSCC pipeline with
 ; a barrier pass.
 ; CHECK-O2: A No-Op Barrier Pass
-; Calculate program repository ticket ASAP after the inliner.
-; CHECK-O2-NEXT: RepoTicketGenerationPass
-; CHECK-O2-NEXT: RepoPruningPass
 ; Reduce the size of the IR ASAP after the inliner.
 ; CHECK-O2-NEXT: Eliminate Available Externally
 ; Inferring function attribute should be right after the CGSCC pipeline, before

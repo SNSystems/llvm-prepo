@@ -59,68 +59,68 @@ public:
   }
 
   ticketmd::DigestType testHashSignature() {
-    functionHash().beginCalculate(*function()->getParent());
+    hasher().beginCalculate(*function()->getParent());
     hashSignature(function());
     return getHash();
   }
 
   ticketmd::DigestType testHashBasicBlock(const BasicBlock *BB) {
-    functionHash().beginCalculate(*function()->getParent());
+    hasher().beginCalculate(*function()->getParent());
     hashBasicBlock(BB);
     return getHash();
   }
 
   ticketmd::DigestType testHashConstant(const Constant *V) {
-    functionHash().beginCalculate(*function()->getParent());
-    functionHash().hashConstant(V);
+    hasher().beginCalculate(*function()->getParent());
+    hasher().hashConstant(V);
     return getHash();
   }
 
   ticketmd::DigestType testHashGlobalValue(const GlobalValue *V) {
-    functionHash().beginCalculate(*function()->getParent());
-    functionHash().hashGlobalValue(V);
+    hasher().beginCalculate(*function()->getParent());
+    hasher().hashGlobalValue(V);
     return getHash();
   }
 
   ticketmd::DigestType testHashValue(const Value *V) {
-    functionHash().beginCalculate(*function()->getParent());
-    functionHash().hashValue(V);
+    hasher().beginCalculate(*function()->getParent());
+    hasher().hashValue(V);
     return getHash();
   }
 
   ticketmd::DigestType testHashInstruction(const Instruction *V) {
-    functionHash().beginCalculate(*function()->getParent());
+    hasher().beginCalculate(*function()->getParent());
     hashInstruction(V);
     return getHash();
   }
 
   ticketmd::DigestType testHashType(Type *Ty) {
-    functionHash().beginCalculate(*function()->getParent());
-    functionHash().hashType(Ty);
+    hasher().beginCalculate(*function()->getParent());
+    hasher().hashType(Ty);
     return getHash();
   }
 
   ticketmd::DigestType testHashNumber(uint64_t V) {
-    functionHash().beginCalculate(*function()->getParent());
-    functionHash().hashNumber(V);
+    hasher().beginCalculate(*function()->getParent());
+    hasher().hashNumber(V);
     return getHash();
   }
 
   ticketmd::DigestType testHashAPInt(const APInt &V) {
-    functionHash().beginCalculate(*function()->getParent());
-    functionHash().hashAPInt(V);
+    hasher().beginCalculate(*function()->getParent());
+    hasher().hashAPInt(V);
     return getHash();
   }
 
   ticketmd::DigestType testHashAPFloat(const APFloat &V) {
-    functionHash().beginCalculate(*function()->getParent());
-    functionHash().hashAPFloat(V);
+    hasher().beginCalculate(*function()->getParent());
+    hasher().hashAPFloat(V);
     return getHash();
   }
 
   ticketmd::DigestType testHashMem(StringRef V) {
-    functionHash().beginCalculate(*function()->getParent());
-    functionHash().hashMem(V);
+    hasher().beginCalculate(*function()->getParent());
+    hasher().hashMem(V);
     return getHash();
   }
 };

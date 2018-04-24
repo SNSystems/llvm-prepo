@@ -51,9 +51,9 @@ entry:
   ret i32 %call
 }
 
-;CHECK: !0 = !TicketNode(name: "c", digest: [16 x i8] c"\EEh\FC\8B0\FC\A6\D2\17\F1\D7\15\D7\9Bf\B2", linkage: external, pruned: true)
-;CHECK: !1 = !TicketNode(name: "a", digest: [16 x i8] c"\C8\10`\CE\02\22/5\88\F9\B4\A7W\06%\FF", linkage: external, pruned: true)
-;CHECK: !2 = !TicketNode(name: "b", digest: [16 x i8] c"\C8\10`\CE\02\22/5\88\F9\B4\A7W\06%\FF", linkage: internal, pruned: true)
-;CHECK: !3 = !TicketNode(name: "me", digest: [16 x i8] c"\99\E7\C6=\A9\CB\92\97w\C9.~Fe\B6\AC", linkage: linkonce_odr, pruned: true)
-;CHECK: !4 = !TicketNode(name: "foo", digest: [16 x i8] c"\CB\01\0C\F6u\CD\99\94\CD\1Dw\D4\F2\F0\D2/", linkage: internal, pruned: true)
-;CHECK: !5 = !TicketNode(name: "bar", digest: [16 x i8] c"\95\C3\ABr\8F\CE\1F\DC\0F\D54\A4\EC8\A5G", linkage: external, pruned: true)
+;CHECK:      !0 = !TicketNode(name: "c", digest: [16 x i8] c"\84\E5\7F\EE\D7S^\A54R\93H*[\188", linkage: external, pruned: true)
+;CHECK-NEXT: !1 = !TicketNode(name: "a", digest: [16 x i8] c"\82\8E:\15)\9F\13W\12\04l\0C+&z\11", linkage: external, pruned: true)
+;CHECK-NEXT: !2 = !TicketNode(name: "b", digest: [16 x i8] c"\82\8E:\15)\9F\13W\12\04l\0C+&z\11", linkage: internal, pruned: true)
+;CHECK-NEXT: !3 = !TicketNode(name: "me", digest: [16 x i8] c"\85f\14\D9+\CB64\ED\9A<\F7F\CE\83M", linkage: linkonce_odr, pruned: true)
+;CHECK-NEXT: !4 = !TicketNode(name: "foo", digest: [16 x i8] c"\10[q\07I\C0b\14B\22)\F2\05\07\B8\11", linkage: internal, pruned: true)
+;CHECK-NEXT: !5 = !TicketNode(name: "bar", digest: [16 x i8] c")\D6\8C\C0\A3\BA6\EB\1E\A0\AF\85`\98y\0D", linkage: external, pruned: true)

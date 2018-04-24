@@ -28,11 +28,14 @@ using namespace llvm;
 
 STATISTIC(NumFunctions, "Number of functions hashed");
 STATISTIC(NumVariables, "Number of variables hashed");
+#if 0
+// TODO: enable the code once support alias.
 STATISTIC(NumAliases, "Number of aliases hashed");
+#endif
 
 namespace {
 
-/// RepoTicketGeneration finds functions, gloabal variables and calculate the 
+/// RepoTicketGeneration finds functions, global variables and calculate the
 /// hash values.
 class RepoTicketGeneration : public ModulePass {
 public:
@@ -61,38 +64,20 @@ ModulePass *llvm::createRepoTicketGenerationPass() {
   return new RepoTicketGeneration();
 }
 
-using GlobalValueMap = ticketmd::GlobalValueMap;
-
-template <typename T>
-static void setMetadata(T &GO, GlobalValueMap &DigestMap, bool &Changed,
-                        llvm::Statistic &Num) {
-  if (GO.isDeclaration() || GO.hasAvailableExternallyLinkage())
-    return;
-  // Calculate the global object hash value.
-  ticketmd::DigestType Result = calculateDigest<T>(&GO);
-  DigestMap.emplace(&GO, Result);
-  ticketmd::set(&GO, Result);
-  Changed = true;
-  ++Num;
-}
-
 bool RepoTicketGeneration::runOnModule(Module &M) {
   if (skipModule(M) || !isObjFormatRepo(M))
     return false;
 
-  bool Changed = false;
-  MDBuilder MDB(M.getContext());
+  auto Result = ticketmd::generateTicketMDs(M);
+  NumVariables += std::get<1>(Result);
+  NumFunctions += std::get<2>(Result);
+  DEBUG(dbgs() << "Size of module: " << M.size() << '\n');
+  DEBUG(dbgs() << "Number of hashed functions: " << NumFunctions << '\n');
+  DEBUG(dbgs() << "Number of hashed variables: " << NumVariables << '\n');
 
-  GlobalValueMap DigestMap;
-
-  for (GlobalVariable &GV : M.globals()) {
-    setMetadata<GlobalVariable>(GV, DigestMap, Changed, NumVariables);
-  }
-
-  for (Function &Func : M) {
-    setMetadata<Function>(Func, DigestMap, Changed, NumFunctions);
-  }
-
+#if 0
+  // TODO: enable the code once support alias.
+  std::map<const GlobalValue *, ticketmd::DigestType> DigestMap;
   for (GlobalAlias &GA : M.aliases()) {
     auto GAAliasee = dyn_cast<GlobalValue>(ticketmd::getAliasee(&GA));
     auto GADigest = DigestMap[GAAliasee];
@@ -100,11 +85,7 @@ bool RepoTicketGeneration::runOnModule(Module &M) {
     Changed = true;
     ++NumAliases;
   }
-
-  DEBUG(dbgs() << "size of module: " << M.size() << '\n');
-  DEBUG(dbgs() << "size of hashed functions: " << NumFunctions << '\n');
-  DEBUG(dbgs() << "size of hashed variables: " << NumVariables << '\n');
   DEBUG(dbgs() << "size of hashed aliases: " << NumAliases << '\n');
-
-  return true;
+#endif
+  return std::get<0>(Result);
 }

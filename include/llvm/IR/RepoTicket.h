@@ -19,25 +19,65 @@
 #include "llvm/Support/MD5.h"
 
 #include <map>
+#include <tuple>
 
 namespace llvm {
 
-	struct Ticket;
+struct Ticket;
 
 /// Global value ticket metadata description.
 namespace ticketmd {
-  using DigestType = MD5::MD5Result;
-  using DependenciesType = SmallVector<const GlobalObject *, 1>;
-  static constexpr size_t DigestSize = 16;
-  using GlobalValueMap = std::map<const GlobalValue *, const DigestType>;
-  const Constant *getAliasee(const GlobalAlias *GA);
-  /// Set global object ticket metadata value and add the metadata to
-  /// the module level metadta named repo.tickets.
-  void set(GlobalObject *GO, DigestType const &D);
-  /// Get global object digest metadata value. Create the Metadat if it does not
-  /// exist.
-  std::pair<DigestType, bool> get(const GlobalObject *GO);
-}
+using DigestType = MD5::MD5Result;
+static constexpr size_t DigestSize =
+    std::tuple_size<decltype(DigestType::Bytes)>::value;
+using DependenciesType = SmallVector<const GlobalObject *, 1>;
+using DigestAndDependencies = std::pair<DigestType, DependenciesType>;
+const Constant *getAliasee(const GlobalAlias *GA);
+/// Set global object ticket metadata value and add the metadata to
+/// the module level metadta named repo.tickets.
+void set(GlobalObject *GO, DigestType const &D);
+/// Get global object digest metadata value. Create the Metadat if it does not
+/// exist.
+std::pair<DigestType, bool> get(const GlobalObject *GO);
+
+/// A structure of a global object (GO) information.
+struct GOInfo {
+  /// True if this GO has been visited.
+  bool Visited = false;
+  /// Used to assign a unique number to this GO in the function call graph.
+  unsigned Index = 0;
+  /// GO's initial hash value which does not include the hash of its dependents.
+  DigestType InitialDigest;
+  /// GO's dependent global objects.
+  DependenciesType Dependencies;
+
+  GOInfo(DigestType &&Digest, DependenciesType &&Dependencies)
+      : InitialDigest(std::move(Digest)),
+        Dependencies(std::move(Dependencies)) {}
+};
+using GOInfoMap = DenseMap<GlobalObject *, GOInfo>;
+
+/// A tuple containing the global object information and two unsigned values
+/// which are the number of global variables and functions respectively.
+using ModuleTuple = std::tuple<GOInfoMap, unsigned, unsigned>;
+
+/// Calculate the initial hash value and dependent lists for all module global
+/// objects. The value does not include the hash value of its dependent globals.
+/// \param M Called module.
+/// \returns a tuple containing the global object information and two
+/// unsigned values which are the number of global variables and functions
+/// respectively.
+ModuleTuple calculateInitialDigestAndDependencies(Module &M);
+
+/// Compute the hash value and set the ticket metadata for all global objects
+/// inside of the Module M.
+/// \param M Called module.
+/// \returns a tuple containing a global object information map which include if
+/// the module M has been changed, and two unsigned values which are the number
+/// of global variables and functions respectively.
+std::tuple<bool, unsigned, unsigned> generateTicketMDs(Module &M);
+
+} // namespace ticketmd
 
 /// Global value ticket node description.
 class TicketNode : public MDNode {
