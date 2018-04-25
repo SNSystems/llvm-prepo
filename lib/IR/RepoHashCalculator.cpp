@@ -377,10 +377,6 @@ void FunctionHashCalculator::hashOperandBundles(const Instruction *V) {
   }
 }
 
-static bool isDefinition(const GlobalObject &GO) {
-  return !GO.isDeclaration() && !GO.hasAvailableExternallyLinkage();
-}
-
 /// Accumulate the instruction hash. The opcodes, type, operand types, operands
 /// value and any other factors affecting the operation must be considered.
 void FunctionHashCalculator::hashInstruction(const Instruction *V) {
@@ -393,32 +389,13 @@ void FunctionHashCalculator::hashInstruction(const Instruction *V) {
 
   if (const CallInst *CI = dyn_cast<CallInst>(V)) {
     update(HashKind::TAG_CallInst);
-    FnHash.hashType(V->getOperand(0)->getType());
     update(CI->isTailCall());
-    FnHash.hashAttributeList(CI->getAttributes());
-    hashOperandBundles(CI);
-    FnHash.hashRangeMetadata(CI->getMetadata(LLVMContext::MD_range));
-    // Instruction operand 0 is the callee name. Accumulate it to the hash.
-    FnHash.hashValue(V->getOperand(0));
-    if (const Function *F = CI->getCalledFunction()) {
-      if (isDefinition(*F))
-        FnHash.getDependencies().emplace_back(F);
-    }
+    hashCallInvoke(CI);
     return;
   }
   if (const InvokeInst *II = dyn_cast<InvokeInst>(V)) {
     update(HashKind::TAG_InvokeInst);
-    FnHash.hashType(V->getOperand(0)->getType());
-    FnHash.hashNumber(II->getCallingConv());
-    FnHash.hashAttributeList(II->getAttributes());
-    hashOperandBundles(II);
-    FnHash.hashRangeMetadata(II->getMetadata(LLVMContext::MD_range));
-    // Instruction operand 0 is the callee name. Accumulate it to the hash.
-    FnHash.hashValue(V->getOperand(0));
-    if (const Function *F = II->getCalledFunction()) {
-      if (isDefinition(*F))
-        FnHash.getDependencies().emplace_back(F);
-    }
+    hashCallInvoke(II);
     return;
   }
   // Accumulate the instruction operands type and value.
