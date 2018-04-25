@@ -211,13 +211,14 @@ TEST_F(SingleModule, OneCalleeDiffNameDiffBody) {
 
 //
 //  IR forming a following call graph.
-//     foo             bar
-//      |               |
-//      v               v
-//      g               p
-//  (declare only)  (declare only)
+//       foo               bar
+//        |                 |
+//        v                 v
+//        g                 p
+//  (declare only)   (declare only)
+//  (Indirect call)  (Indirect call)
 //
-TEST_F(SingleModule, UndefinedCallee) {
+TEST_F(SingleModule, IndirectCall) {
   const char *ModuleString =
       "define i32 @foo() {\n"
       "entry:\n"
@@ -236,6 +237,36 @@ TEST_F(SingleModule, UndefinedCallee) {
   EXPECT_TRUE(std::get<0>(Result)) << "Expected Module M to be changed";
   EXPECT_EQ(std::get<1>(Result), 0u) << "Expected zero global variables";
   EXPECT_EQ(std::get<2>(Result), 2u) << "Expected two global functions";
+  const Function *Foo = M->getFunction("foo");
+  const Function *Bar = M->getFunction("bar");
+  EXPECT_FALSE(isEqualDigest(Foo, Bar))
+      << "Functions of foo and bar should have the different digest";
+}
+
+//
+//  IR forming a following call graph.
+//       foo               bar
+//        |                 |
+//        v                 v
+//        g                 p
+//  (declare only)   (declare only)
+//  (direct call)    (direct call)
+//
+TEST_F(SingleModule, DirectCall) {
+  const char *ModuleString = "define i32 @foo() {\n"
+                             "entry:\n"
+                             "  %call = call i32 (...) @g()\n"
+                             "  ret i32 %call\n"
+                             "}\n"
+                             "define i32 @bar() {\n"
+                             "entry:\n"
+                             "  %call = call i32 (...) @p()\n"
+                             "  ret i32 %call\n"
+                             "}\n"
+                             "declare i32 @g(...)\n"
+                             "declare i32 @p(...)\n";
+  M = parseAssembly(ModuleString);
+  ticketmd::generateTicketMDs(*M);
   const Function *Foo = M->getFunction("foo");
   const Function *Bar = M->getFunction("bar");
   EXPECT_FALSE(isEqualDigest(Foo, Bar))

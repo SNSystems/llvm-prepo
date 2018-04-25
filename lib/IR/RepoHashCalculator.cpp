@@ -377,6 +377,10 @@ void FunctionHashCalculator::hashOperandBundles(const Instruction *V) {
   }
 }
 
+static bool isDefinition(const GlobalObject &GO) {
+  return !GO.isDeclaration() && !GO.hasAvailableExternallyLinkage();
+}
+
 /// Accumulate the instruction hash. The opcodes, type, operand types, operands
 /// value and any other factors affecting the operation must be considered.
 void FunctionHashCalculator::hashInstruction(const Instruction *V) {
@@ -397,7 +401,8 @@ void FunctionHashCalculator::hashInstruction(const Instruction *V) {
     // Instruction operand 0 is the callee name. Accumulate it to the hash.
     FnHash.hashValue(V->getOperand(0));
     if (const Function *F = CI->getCalledFunction()) {
-      FnHash.getDependencies().emplace_back(F);
+      if (isDefinition(*F))
+        FnHash.getDependencies().emplace_back(F);
     }
     return;
   }
@@ -411,7 +416,8 @@ void FunctionHashCalculator::hashInstruction(const Instruction *V) {
     // Instruction operand 0 is the callee name. Accumulate it to the hash.
     FnHash.hashValue(V->getOperand(0));
     if (const Function *F = II->getCalledFunction()) {
-      FnHash.getDependencies().emplace_back(F);
+      if (isDefinition(*F))
+        FnHash.getDependencies().emplace_back(F);
     }
     return;
   }
