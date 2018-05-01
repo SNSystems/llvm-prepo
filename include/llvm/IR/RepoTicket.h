@@ -14,7 +14,7 @@
 #ifndef LLVM_IR_REPO_TICKET_H
 #define LLVM_IR_REPO_TICKET_H
 
-#include "llvm/IR/GlobalValue.h"
+#include "llvm/IR/GlobalObject.h"
 #include "llvm/IR/Metadata.h"
 #include "llvm/Support/MD5.h"
 
@@ -32,14 +32,23 @@ static constexpr size_t DigestSize =
     std::tuple_size<decltype(DigestType::Bytes)>::value;
 using DependenciesType = SmallVector<const GlobalObject *, 1>;
 using DigestAndDependencies = std::pair<DigestType, DependenciesType>;
+/// Map GO to a unique number in the function call graph.
+using GOStateMap = llvm::DenseMap<const GlobalObject *, unsigned>;
 
 const Constant *getAliasee(const GlobalAlias *GA);
-/// Set global object ticket metadata value and add the metadata to
-/// the module level metadta named repo.tickets.
+/// Set global object ticket metadata value and add this to the module level
+/// metadata named repo.tickets.
 void set(GlobalObject *GO, DigestType const &D);
-/// Get global object digest metadata value. Create the Metadat if it does not
-/// exist.
+/// Get global object digest metadata value.
+/// \param GO The global object.
+/// \return A pair of the global object's hash value and a bool which is true if
+/// GO does not contain the ticket metadata.
 std::pair<DigestType, bool> get(const GlobalObject *GO);
+
+struct GONumber {
+  unsigned FuncNum = 0;
+  unsigned VarNum = 0;
+};
 
 /// A structure of a global object (GO) information.
 struct GOInfo {
@@ -52,19 +61,25 @@ struct GOInfo {
       : InitialDigest(std::move(Digest)),
         Dependencies(std::move(Dependencies)) {}
 };
-using GOInfoMap = DenseMap<GlobalObject *, GOInfo>;
+using GOInfoMap = DenseMap<const GlobalObject *, GOInfo>;
 
 /// A tuple containing the global object information and two unsigned values
 /// which are the number of global variables and functions respectively.
 using ModuleTuple = std::tuple<GOInfoMap, unsigned, unsigned>;
 
-/// Calculate the initial hash value and dependent lists for all module global
-/// objects. The value does not include the hash value of its dependent globals.
-/// \param M Called module.
-/// \returns a tuple containing the global object information and two
-/// unsigned values which are the number of global variables and functions
-/// respectively.
-ModuleTuple calculateInitialDigestAndDependencies(Module &M);
+/// Calculate the initial hash value and dependent lists for the global object
+/// 'G'. The value does not include the hash value of its dependent globals.
+/// \param G Calculated global object.
+/// \param GOI a DenseMap containing the global object information.
+/// \return an iterator pointing to a GOI element with key of G.
+///
+template <typename GlobalType>
+GOInfoMap::const_iterator
+calculateInitialDigestAndDependencies(const GlobalType *G, GOInfoMap &GOI) {
+  DigestAndDependencies Result = calculateDigestAndDependencies(G);
+  return GOI.try_emplace(G, std::move(Result.first), std::move(Result.second))
+      .first;
+}
 
 /// Compute the hash value and set the ticket metadata for all global objects
 /// inside of the Module M.
@@ -74,6 +89,10 @@ ModuleTuple calculateInitialDigestAndDependencies(Module &M);
 /// of global variables and functions respectively.
 std::tuple<bool, unsigned, unsigned> generateTicketMDs(Module &M);
 
+/// Compute the hash value for the given global object GO.
+/// \param GO The global object.
+/// \return The global object's digest value.
+DigestType calculateDigest(const GlobalObject *GO);
 } // namespace ticketmd
 
 /// Global value ticket node description.
