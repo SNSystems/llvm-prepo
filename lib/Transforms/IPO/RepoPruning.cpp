@@ -75,9 +75,9 @@ bool RepoPruning::runOnModule(Module &M) {
   pstore::database &Repository = getRepoDatabase();
 
   MDNode *MD = nullptr;
-  pstore::index::digest_index const *const Digests =
+  std::shared_ptr<pstore::index::digest_index const> const Digests =
       pstore::index::get_digest_index(Repository, false);
-  if (Digests == nullptr) {
+  if (!Digests) {
     return false;
   }
 

@@ -231,7 +231,7 @@ private:
 };
 
 void SpecialNames::initialize(pstore::database &Db) {
-  pstore::index::name_index const *const NameIndex =
+  std::shared_ptr<pstore::index::name_index const> const NameIndex =
       pstore::index::get_name_index(Db);
   if (!NameIndex) {
     errs() << "Warning: name index was not found.\n";
@@ -308,13 +308,13 @@ int main(int argc, char *argv[]) {
   DEBUG(dbgs() << "'" << TicketPath << "' : " << Digest << '\n');
 
   pstore::database Db(getRepoPath(), pstore::database::access_mode::read_only);
-  pstore::index::ticket_index const *const TicketIndex =
+  std::shared_ptr<pstore::index::ticket_index const> const TicketIndex =
       pstore::index::get_ticket_index(Db);
   if (!TicketIndex) {
     errs() << "Error: ticket index was not found.\n";
     return EXIT_FAILURE;
   }
-  pstore::index::digest_index const *const FragmentIndex =
+  std::shared_ptr<pstore::index::digest_index const> const FragmentIndex =
       pstore::index::get_digest_index(Db);
   if (!FragmentIndex) {
     errs() << "Error: fragment index was not found.\n";

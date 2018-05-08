@@ -636,11 +636,11 @@ void RepoObjectWriter::writeObject(MCAssembler &Asm,
   if (!isExistingTicket(Db, TicketDigest)) {
     TransactionType &Transaction = getRepoTransaction();
 
-    pstore::index::ticket_index *const TicketIndex =
+    std::shared_ptr<pstore::index::ticket_index> const TicketIndex =
         pstore::index::get_ticket_index(Db);
     assert(TicketIndex);
 
-    pstore::index::name_index *const NamesIndex =
+    std::shared_ptr<pstore::index::name_index> const NamesIndex =
         pstore::index::get_name_index(Db);
     assert(NamesIndex);
 
@@ -653,7 +653,7 @@ void RepoObjectWriter::writeObject(MCAssembler &Asm,
       NameAddress.second = It.get_address();
     }
 
-    pstore::index::digest_index *const DigestsIndex =
+    std::shared_ptr<pstore::index::digest_index> const DigestsIndex =
         pstore::index::get_digest_index(Db);
     assert(DigestsIndex);
 
