@@ -598,6 +598,18 @@ pstore::index::digest RepoObjectWriter::buildTicketRecord(
   return {digest.high(), digest.low()};
 }
 
+/// Return true if this ticket is already existing in the database ticket index.
+static bool isExistingTicket(pstore::database &Db,
+                             const pstore::index::digest &TicketDigest) {
+  if (auto TicketIndex = pstore::index::get_ticket_index(Db, false)) {
+    if (TicketIndex->find(TicketDigest) != TicketIndex->end()) {
+      DEBUG(dbgs() << "ticket " << TicketDigest << " exists. skipping\n");
+      return true;
+    }
+  }
+  return false;
+}
+
 void RepoObjectWriter::writeObject(MCAssembler &Asm,
                                    const MCAsmLayout &Layout) {
 
@@ -621,14 +633,12 @@ void RepoObjectWriter::writeObject(MCAssembler &Asm,
 
   pstore::database &Db = llvm::getRepoDatabase();
 
-  pstore::index::ticket_index *const TicketIndex =
-      pstore::index::get_ticket_index(Db);
-  assert(TicketIndex);
-
-  if (TicketIndex->find(TicketDigest) != TicketIndex->end()) {
-    DEBUG(dbgs() << "ticket " << TicketDigest << " exists. skipping\n");
-  } else {
+  if (!isExistingTicket(Db, TicketDigest)) {
     TransactionType &Transaction = getRepoTransaction();
+
+    pstore::index::ticket_index *const TicketIndex =
+        pstore::index::get_ticket_index(Db);
+    assert(TicketIndex);
 
     pstore::index::name_index *const NamesIndex =
         pstore::index::get_name_index(Db);
