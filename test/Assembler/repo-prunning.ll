@@ -56,4 +56,4 @@ entry:
 ;CHECK-NEXT: !2 = !TicketNode(name: "b", digest: [16 x i8] c"\82\8E:\15)\9F\13W\12\04l\0C+&z\11", linkage: internal, pruned: true)
 ;CHECK-NEXT: !3 = !TicketNode(name: "me", digest: [16 x i8] c"\85f\14\D9+\CB64\ED\9A<\F7F\CE\83M", linkage: linkonce_odr, pruned: true)
 ;CHECK-NEXT: !4 = !TicketNode(name: "foo", digest: [16 x i8] c"\10[q\07I\C0b\14B\22)\F2\05\07\B8\11", linkage: internal, pruned: true)
-;CHECK-NEXT: !5 = !TicketNode(name: "bar", digest: [16 x i8] c"\EF\F8\95y\B2\F4\90+\0A>\D2\D2\04\84\F8B", linkage: external, pruned: true)
+;CHECK-NEXT: !5 = !TicketNode(name: "bar", digest: [16 x i8] c"\98D\D5\90\00b!\92&\BA\0F\03\80fh\D2", linkage: external, pruned: true)

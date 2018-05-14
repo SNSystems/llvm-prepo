@@ -269,14 +269,12 @@ void HashCalculator::hashConstant(const Constant *V) {
 /// detect mismatches on next use. See comments in declaration for more details.
 void HashCalculator::hashValue(const Value *V) {
   Hash.update(HashKind::TAG_Value);
-  const Constant *ConstV = dyn_cast<Constant>(V);
-  if (ConstV) {
+  if (const Constant *ConstV = dyn_cast<Constant>(V)) {
     hashConstant(ConstV);
     return;
   }
 
-  const InlineAsm *InlineAsmV = dyn_cast<InlineAsm>(V);
-  if (InlineAsmV) {
+  if (const InlineAsm *InlineAsmV = dyn_cast<InlineAsm>(V)) {
     hashInlineAsm(InlineAsmV);
     return;
   }

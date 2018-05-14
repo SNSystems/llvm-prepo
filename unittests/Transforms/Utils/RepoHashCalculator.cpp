@@ -163,6 +163,82 @@ TEST(HashCalculatorTest, TestFunction) {
             F2H.testHashAPFloat(APFloat(5.0)));
 }
 
+/// Generates a simple test CallInst.
+struct TestCallInvoke {
+  Function *F;
+  TestCallInvoke(LLVMContext &Ctx, Module &M, Type *ArgType) {
+    FunctionType *FTy = FunctionType::get(Type::getVoidTy(Ctx), ArgType, false);
+    F = Function::Create(FTy, Function::ExternalLinkage, "", &M);
+  }
+};
+
+// A test for the CallInst with the same argument type and argument value.
+TEST(HashCalculatorTest, CallInstWithSameTypeValue) {
+  LLVMContext C;
+  Module M("test", C);
+  MD5::MD5Result Hash = {};
+  M.setModuleHash(Hash);
+
+  Type *Int8Ty = Type::getInt8Ty(C);
+  const int Val = 20;
+  TestCallInvoke F1(C, M, Int8Ty);
+
+  Value *Const = ConstantInt::get(Int8Ty, Val);
+  TestHash F1H(F1.F);
+  std::unique_ptr<CallInst> Call1(CallInst::Create(F1.F, Const));
+  std::unique_ptr<CallInst> Call2(CallInst::Create(F1.F, Const));
+  EXPECT_EQ(F1H.testHashInstruction(Call1.get()),
+            F1H.testHashInstruction(Call2.get()))
+      << "Instructions of Call1 and Call2 should have the same hash since "
+         "they have the same argument type and value";
+}
+
+// The CallInst with the same argument type and different argument value.
+TEST(HashCalculatorTest, CallInstWithSameTypeDiffValue) {
+  LLVMContext C;
+  Module M("test", C);
+  MD5::MD5Result Hash = {};
+  M.setModuleHash(Hash);
+
+  Type *Int8Ty = Type::getInt8Ty(C);
+  const int Val1 = 20;
+  const int Val2 = 30;
+  TestCallInvoke F1(C, M, Int8Ty);
+  TestHash F1H(F1.F);
+  Value *Const1 = ConstantInt::get(Int8Ty, Val1);
+  Value *Const2 = ConstantInt::get(Int8Ty, Val2);
+  std::unique_ptr<CallInst> Call1(CallInst::Create(F1.F, Const1));
+  std::unique_ptr<CallInst> Call2(CallInst::Create(F1.F, Const2));
+  EXPECT_NE(F1H.testHashInstruction(Call1.get()),
+            F1H.testHashInstruction(Call2.get()))
+      << "Instructions of Call1 and Call2 should have the different hash "
+         "since they have the different argument value.";
+}
+
+// The CallInst with the different argument type and same argument value.
+TEST(HashCalculatorTest, CallInstWithDiffTypeSameValue) {
+  LLVMContext C;
+  Module M("test", C);
+  MD5::MD5Result Hash = {};
+  M.setModuleHash(Hash);
+
+  Type *Int8Ty = Type::getInt8Ty(C);
+  Type *Int32Ty = Type::getInt32Ty(C);
+  TestCallInvoke F1(C, M, Int8Ty);
+  TestCallInvoke F2(C, M, Int32Ty);
+
+  TestHash F1H(F1.F);
+  const int Val = 20;
+  Value *Const1 = ConstantInt::get(Int8Ty, Val);
+  Value *Const2 = ConstantInt::get(Int32Ty, Val);
+  std::unique_ptr<CallInst> Call1(CallInst::Create(F1.F, Const1));
+  std::unique_ptr<CallInst> Call2(CallInst::Create(F2.F, Const2));
+  EXPECT_NE(F1H.testHashInstruction(Call1.get()),
+            F1H.testHashInstruction(Call2.get()))
+      << "Instructions of Call1 and Call2 should have the different hash "
+         "since they have the different argument value.";
+}
+
 class VariableHash : public testing::Test {
 protected:
   VariableHash() {
