@@ -77,7 +77,8 @@ private:
   // the std::unordered_map operation is faster than std::unordered_map, we
   // should use the std::unordered_map and store the ordered module string set
   // into the database later.
-  using ModuleNamesContainer = std::map<StringRef, pstore::address>;
+  using ModuleNamesContainer =
+      std::map<pstore::raw_sstring_view, pstore::address>;
 
   using NamesWithPrefixContainer =
       SmallVector<std::unique_ptr<std::string>, 16>;
@@ -138,10 +139,10 @@ public:
                         MCSection &Sec, const MCAsmLayout &Layout,
                         ModuleNamesContainer &Names);
 
-  static StringRef getSymbolName(const MCAssembler &Asm,
-                                 const TicketNode &TicketMember,
-                                 const ModuleNamesContainer &Names,
-                                 NamesWithPrefixContainer &Symbols);
+  static pstore::raw_sstring_view
+  getSymbolName(const MCAssembler &Asm, const TicketNode &TicketMember,
+                const ModuleNamesContainer &Names,
+                NamesWithPrefixContainer &Symbols);
 
   pstore::index::digest buildTicketRecord(const MCAssembler &Asm,
                                           ModuleNamesContainer &Names,
@@ -273,6 +274,15 @@ void RepoObjectWriter::recordRelocation(MCAssembler &Asm,
 }
 
 namespace {
+
+pstore::raw_sstring_view stringRefAsView(StringRef S) {
+  return {S.data(), S.size()};
+}
+
+StringRef stringViewAsRef(pstore::raw_sstring_view S) {
+  return {S.data(), S.size()};
+}
+
 /// A raw_ostream that writes to an SmallVector or SmallString.  This is a
 /// simple adaptor class. This class does not encounter output errors.
 /// raw_svector_ostream operates without a buffer, delegating all memory
@@ -432,8 +442,8 @@ void RepoObjectWriter::writeSectionData(ContentsType &Fragments,
     // TU we reduce the number of insertions into the global name set (which are
     // performed with the transaction lock held).
     auto It = Names
-                  .insert(std::make_pair(Relocation.Symbol->getName(),
-                                         pstore::address::null()))
+                  .emplace(stringRefAsView(Relocation.Symbol->getName()),
+                           pstore::address::null())
                   .first;
     auto NamePtr = reinterpret_cast<std::uintptr_t>(&(*It));
 
@@ -493,12 +503,14 @@ RepoObjectWriter::toPstoreLinkage(GlobalValue::LinkageTypes L) {
   }
 }
 
-StringRef RepoObjectWriter::getSymbolName(const MCAssembler &Asm,
-                                          const TicketNode &TicketMember,
-                                          const ModuleNamesContainer &Names,
-                                          NamesWithPrefixContainer &Symbols) {
-  if (!GlobalValue::isPrivateLinkage(TicketMember.getLinkage()))
-    return TicketMember.getNameAsString();
+pstore::raw_sstring_view RepoObjectWriter::getSymbolName(
+    const MCAssembler &Asm, const TicketNode &TicketMember,
+    const ModuleNamesContainer &Names, NamesWithPrefixContainer &Symbols) {
+
+  if (!GlobalValue::isPrivateLinkage(TicketMember.getLinkage())) {
+    StringRef S = TicketMember.getNameAsString();
+    return stringRefAsView(S);
+  }
 
   SmallString<256> Buf;
   const StringRef NameRef =
@@ -506,12 +518,12 @@ StringRef RepoObjectWriter::getSymbolName(const MCAssembler &Asm,
        Twine(TicketMember.getNameAsString()))
           .toStringRef(Buf);
 
-  auto It = Names.find(NameRef);
+  auto It = Names.find(stringRefAsView(NameRef));
   if (It != Names.end())
     return It->first;
 
   Symbols.push_back(llvm::make_unique<std::string>(NameRef.str()));
-  return StringRef(*Symbols.back().get());
+  return pstore::make_sstring_view(*Symbols.back().get());
 }
 
 namespace {
@@ -545,10 +557,6 @@ StringRef streamPath(raw_fd_ostream &Stream, StringStorage &ResultPath) {
   return OutputFile;
 }
 
-pstore::sstring_view<char const *> stringRefAsView(StringRef S) {
-  return {S.data(), S.size()};
-}
-
 template <typename T> ArrayRef<std::uint8_t> makeByteArrayRef(T const &Value) {
   return {reinterpret_cast<std::uint8_t const *>(&Value), sizeof(Value)};
 }
@@ -570,8 +578,9 @@ pstore::index::digest RepoObjectWriter::buildTicketRecord(
     // Insert this name into the module-wide string set. This set is later
     // added to the whole-program string set and the ticket name addresses
     // corrected at that time.
-    const StringRef Name = getSymbolName(Asm, *Ticket, Names, Symbols);
-    auto It = Names.insert(std::make_pair(Name, pstore::address::null())).first;
+    const pstore::raw_sstring_view Name =
+        getSymbolName(Asm, *Ticket, Names, Symbols);
+    auto It = Names.emplace(Name, pstore::address::null()).first;
     // We're storing pointer to the string address into the ticket.
     auto NamePtr = reinterpret_cast<std::uintptr_t>(&(*It));
 
@@ -584,7 +593,7 @@ pstore::index::digest RepoObjectWriter::buildTicketRecord(
       ticket_hash.update(makeByteArrayRef(DigestVal));
       ticket_hash.update(makeByteArrayRef(Linkage));
       ticket_hash.update(Name.size());
-      ticket_hash.update(Name);
+      ticket_hash.update(stringViewAsRef(Name));
     }
     // If the global object was removed during LLVM's transform passes, this
     // member is not emitted and doesn't insert to the database, but it does
@@ -620,7 +629,7 @@ void RepoObjectWriter::writeObject(MCAssembler &Asm,
   SmallString<64> ResultPath;
   StringRef OutputFile =
       streamPath(static_cast<raw_fd_ostream &>(this->getStream()), ResultPath);
-  Names.insert(std::make_pair(OutputFile, pstore::address::null()));
+  Names.emplace(stringRefAsView(OutputFile), pstore::address::null());
 
   // Convert the Asm sections to repository fragment sections.
   for (MCSection &Sec : Asm) {
@@ -632,6 +641,7 @@ void RepoObjectWriter::writeObject(MCAssembler &Asm,
       buildTicketRecord(Asm, Names, PrefixedNames, Fragments, OutputFile);
 
   pstore::database &Db = llvm::getRepoDatabase();
+  pstore::indirect_string_adder NameAdder(Names.size());
 
   if (!isExistingTicket(Db, TicketDigest)) {
     TransactionType &Transaction = getRepoTransaction();
@@ -644,14 +654,20 @@ void RepoObjectWriter::writeObject(MCAssembler &Asm,
         pstore::index::get_name_index(Db);
     assert(NamesIndex);
 
-    // Insert the names from this module into the global name set.
+    // Insert the names from this module into the global name set. This loop
+    // writes the "indirect_string" records which will become pointers to the
+    // real string body. This clusters the pointers together nicely which should
+    // help to limit the virtual memory consumption of the repo-linker's
+    // store-shadow memory.
     for (ModuleNamesContainer::value_type &NameAddress : Names) {
-      DEBUG(dbgs() << "insert name: " << NameAddress.first << '\n');
-      pstore::index::name_index::iterator It =
-          NamesIndex->insert(Transaction, stringRefAsView(NameAddress.first))
-              .first;
-      NameAddress.second = It.get_address();
+      DEBUG(dbgs() << "insert name: " << stringViewAsRef(NameAddress.first)
+                   << '\n');
+      pstore::index::name_index::iterator const Pos =
+          NameAdder.add(Transaction, NamesIndex, &NameAddress.first).first;
+      NameAddress.second = Pos.get_address();
     }
+    // Flush the name bodies.
+    NameAdder.flush(Transaction);
 
     std::shared_ptr<pstore::index::digest_index> const DigestsIndex =
         pstore::index::get_digest_index(Db);
@@ -691,7 +707,7 @@ void RepoObjectWriter::writeObject(MCAssembler &Asm,
     }
 
     // Find the store address of the output file path.
-    auto OutputFilePos = Names.find(OutputFile);
+    auto const OutputFilePos = Names.find(stringRefAsView(OutputFile));
     assert(OutputFilePos != Names.end() && "Output file can't be found!");
     auto OutputPathAddr = OutputFilePos->second;
 
@@ -710,8 +726,9 @@ void RepoObjectWriter::writeObject(MCAssembler &Asm,
       auto MNC = reinterpret_cast<ModuleNamesContainer::value_type const *>(
           TicketMember.name.absolute());
       TicketMember.name = MNC->second;
-      DEBUG(dbgs() << "ticket name '" << MNC->first << "' digest '"
-                   << TicketMember.digest << "' adding." << '\n');
+      DEBUG(dbgs() << "ticket name '" << stringViewAsRef(MNC->first)
+                   << "' digest '" << TicketMember.digest << "' adding."
+                   << '\n');
     }
 
     // Store the Ticket.

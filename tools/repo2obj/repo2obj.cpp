@@ -25,6 +25,7 @@
 #include "pstore/core/sstring_view_archive.hpp"
 #include "pstore/mcrepo/fragment.hpp"
 #include "pstore/mcrepo/ticket.hpp"
+#include "pstore/support/array_elements.hpp"
 
 #include "R2OELFOutputSection.h"
 #include "WriteHelpers.h"
@@ -227,7 +228,7 @@ public:
 
 private:
   static pstore::address findString(pstore::index::name_index const &NameIndex,
-                                    std::string str);
+                                    pstore::raw_sstring_view sstring);
 };
 
 void SpecialNames::initialize(pstore::database &Db) {
@@ -239,16 +240,23 @@ void SpecialNames::initialize(pstore::database &Db) {
     // Get the address of the global tors names from the names set. If the
     // string is missing, use null since we know that can't appear as a ticket's
     // name.
-    CtorName = findString(*NameIndex, "llvm.global_ctors");
-    DtorName = findString(*NameIndex, "llvm.global_dtors");
+    static char const global_ctors[] = "llvm.global_ctors";
+    static char const global_dtors[] = "llvm.global_dtors";
+    CtorName =
+        findString(*NameIndex,
+                   pstore::make_sstring_view(
+                       global_ctors, pstore::array_elements(global_ctors) - 1));
+    DtorName =
+        findString(*NameIndex,
+                   pstore::make_sstring_view(
+                       global_dtors, pstore::array_elements(global_dtors) - 1));
   }
 }
 
 pstore::address
 SpecialNames::findString(pstore::index::name_index const &NameIndex,
-                         std::string str) {
-  auto Pos = NameIndex.find(
-      pstore::sstring_view<char const *>{str.data(), str.length()});
+                         pstore::raw_sstring_view sstring) {
+  auto Pos = NameIndex.find(pstore::indirect_string{NameIndex.db(), &sstring});
   return (Pos != NameIndex.end()) ? Pos.get_address() : pstore::address::null();
 }
 
