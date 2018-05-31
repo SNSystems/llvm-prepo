@@ -51,7 +51,7 @@ auto get(const GlobalObject *GO) -> std::pair<ticketmd::DigestType, bool> {
                        GO->getName() + "'.");
   }
 
-  return std::make_pair(std::move(calculateDigest(GO)), true);
+  return {calculateDigest(GO), true};
 }
 
 const Constant *getAliasee(const GlobalAlias *GA) {
@@ -107,7 +107,7 @@ const DependenciesType &updateDigestAndGetDependencies(const GlobalObject *GO,
     if (const TicketNode *TN = dyn_cast<TicketNode>(GOMD)) {
       DigestType D = TN->getDigest();
       GOHash.update(D.Bytes);
-      return GOIMap.try_emplace(GO, std::move(D), std::move(DependenciesType()))
+      return GOIMap.try_emplace(GO, std::move(D), DependenciesType())
           .first->second.Dependencies;
     }
     report_fatal_error("Failed to get TicketNode metadata!");
@@ -180,7 +180,7 @@ DigestType calculateDigest(const GlobalObject *GO) {
                                   updateDigestAndGetDependencies);
   MD5::MD5Result Digest;
   Hash.final(Digest);
-  return std::move(Digest);
+  return Digest;
 }
 
 } // namespace ticketmd
