@@ -296,19 +296,24 @@ void HashCalculator::hashValue(const Value *V) {
 
 void HashCalculator::hashGlobalValue(const GlobalValue *V) {
   hashMem(V->getName());
-  if (auto *GV = dyn_cast<GlobalVariable>(V)) {
-    // Calculate the global variable hash.
-    Hash.update(HashKind::TAG_GlobalVariable);
-    DenseMap<const GlobalValue *, unsigned>::iterator GVI =
-        GlobalNumbers.find(GV);
-    if (GVI == GlobalNumbers.end()) {
-      GlobalNumbers.insert(std::make_pair(GV, GlobalNumbers.size()));
-      if (GV->hasDefinitiveInitializer())
-        hashConstant(GV->getInitializer());
-    } else {
-      hashNumber(GVI->second);
-    }
+  DenseMap<const GlobalValue *, unsigned>::iterator GVI = GlobalNumbers.find(V);
+  if (GVI != GlobalNumbers.end()) {
+    hashNumber(GVI->second);
     return;
+  }
+
+  GlobalNumbers.insert(std::make_pair(V, GlobalNumbers.size()));
+  if (auto *GV = dyn_cast<GlobalVariable>(V)) {
+    // Accumulate the initial value of global variable .
+    Hash.update(HashKind::TAG_GlobalVariable);
+    if (GV->hasDefinitiveInitializer())
+      hashConstant(GV->getInitializer());
+  }
+
+  if (auto *GO = dyn_cast<GlobalObject>(V)) {
+    // Push GO into the dependent list.
+    if (!GO->isDeclaration() && !GO->hasAvailableExternallyLinkage())
+      getDependencies().emplace_back(GO);
   }
 }
 
@@ -384,6 +389,12 @@ void FunctionHashCalculator::hashInstruction(const Instruction *V) {
   // Instruction return type.
   FnHash.hashType(V->getType());
   FnHash.hashNumber(V->getRawSubclassOptionalData());
+  // Accumulate the instruction operands type and value.
+  for (unsigned I = 0, E = V->getNumOperands(); I != E; ++I) {
+    const auto *Operand = V->getOperand(I);
+    FnHash.hashType(Operand->getType());
+    FnHash.hashValue(Operand);
+  }
 
   if (const CallInst *CI = dyn_cast<CallInst>(V)) {
     update(HashKind::TAG_CallInst);
@@ -396,11 +407,7 @@ void FunctionHashCalculator::hashInstruction(const Instruction *V) {
     hashCallInvoke(II);
     return;
   }
-  // Accumulate the instruction operands type and value.
-  for (unsigned I = 0, E = V->getNumOperands(); I != E; ++I) {
-    FnHash.hashType(V->getOperand(I)->getType());
-    FnHash.hashValue(V->getOperand(I));
-  }
+
   // special GetElementPtrInst instruction.
   if (const GetElementPtrInst *GEP = dyn_cast<GetElementPtrInst>(V)) {
     update(HashKind::TAG_GetElementPtrInst);
@@ -550,7 +557,7 @@ void VariableHashCalculator::hashVariable() {
   // Global variable is constant type. Accumulate the initial value.
   // This accumulation also cover the "llvm.global_ctors",
   // "llvm.global_dtors", "llvm.used" and "llvm.compiler.used" cases.
-  GvHash.hashConstant((Gv->hasName() && Gv->hasDefinitiveInitializer())
+  GvHash.hashConstant((Gv->hasDefinitiveInitializer())
                           ? Gv->getInitializer()
                           : Constant::getNullValue(Gv->getValueType()));
 }

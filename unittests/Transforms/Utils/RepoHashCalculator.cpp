@@ -255,12 +255,14 @@ protected:
 
   ~VariableHash() {}
 
-  bool isEqualHash() {
-    VariableHashCalculator GVH0{GV0}, GVH1{GV1};
+  bool isEqualHash(GlobalVariable *G0, GlobalVariable *G1) {
+    VariableHashCalculator GVH0{G0}, GVH1{G1};
     GVH0.calculateHash();
     GVH1.calculateHash();
     return GVH0.getHashResult() == GVH1.getHashResult();
   }
+
+  bool isEqualHash() { return isEqualHash(GV0, GV1); }
 
   LLVMContext Ctx;
   std::unique_ptr<Module> M0;
@@ -341,4 +343,49 @@ TEST_F(VariableHash, CheckType) {
   GV1 = new GlobalVariable(*M1, Type::getInt32Ty(Ctx), true,
                            GlobalValue::ExternalLinkage, nullptr);
   EXPECT_FALSE(isEqualHash());
+}
+
+// int a = 1;
+// int vp_a = &a;
+// If 'a' hash value modifies, the 'vp_a' value will change as well.
+TEST_F(VariableHash, ReferenceToGlobalVariable) {
+  Type *Int8Ty = Type::getInt8Ty(Ctx);
+  Constant *Zero = ConstantInt::get(Int8Ty, 0);
+  // The name of global variable 'a' contributed to the vp_a hash calculation.
+  GV0->setInitializer(Zero);
+  Constant *PtrGV0 = ConstantExpr::getPtrToInt(GV0, Int8Ty);
+  GlobalVariable *Ref_GV0 = new GlobalVariable(
+      *M0, Int8Ty, false, GlobalValue::ExternalLinkage, PtrGV0);
+  GV1->setInitializer(Zero);
+  Constant *PtrGV1 = ConstantExpr::getPtrToInt(GV1, Int8Ty);
+  GlobalVariable *Ref_GV1 = new GlobalVariable(
+      *M1, Int8Ty, false, GlobalValue::ExternalLinkage, PtrGV1);
+  EXPECT_TRUE(isEqualHash(GV0, GV1))
+      << "GV0 and GV1 should have the same hash value.";
+  EXPECT_FALSE(isEqualHash(Ref_GV0, Ref_GV1))
+      << " Ref_GV0 and Ref_GV1 should have the different hash value since GV0 "
+         "and GV1 have different name";
+
+  // The hash of the global variable 'a' contributed to the vp_a hash
+  // calculation.
+  GlobalVariable *GV0_M1 =
+      new GlobalVariable(*M1, Type::getInt8Ty(Ctx), true,
+                         GlobalValue::ExternalLinkage, nullptr, "GV0");
+  GV0_M1->setInitializer(Zero);
+  EXPECT_TRUE(isEqualHash(GV0, GV0_M1))
+      << "GV0 and GV0_M1 should have the same hash value.";
+  Constant *PtrGV0_M1 = ConstantExpr::getPtrToInt(GV0_M1, Int8Ty);
+  GlobalVariable *Ref_GV0_M1 = new GlobalVariable(
+      *M1, Int8Ty, false, GlobalValue::ExternalLinkage, PtrGV0_M1);
+  EXPECT_TRUE(isEqualHash(Ref_GV0, Ref_GV0_M1))
+      << " Ref_GV0 and Ref_GV0_M1 should have same hashes since GV0 "
+         "and GV0_M1 have same name and same hash value";
+
+  Constant *One = ConstantInt::get(Int8Ty, 1);
+  GV0_M1->setInitializer(One);
+  EXPECT_FALSE(isEqualHash(GV0, GV0_M1))
+      << "GV0 and GV0_M1 should have the different hash value.";
+  EXPECT_FALSE(isEqualHash(Ref_GV0, Ref_GV0_M1))
+      << " Ref_GV0 and Ref_GV0_M1 should have different hashes since GV0 "
+         "and GV0_M1 have different hash value";
 }

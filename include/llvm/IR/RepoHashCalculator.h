@@ -245,22 +245,10 @@ protected:
 
   /// Accumulate the common parts of Call and Invoke instructions.
   template <typename T> void hashCallInvoke(const T *Instruction) {
-    // Accumulate the instruction operands type and value.
-    for (unsigned I = 0, E = Instruction->getNumOperands(); I != E; ++I) {
-      const auto * Operand = Instruction->getOperand(I);
-      FnHash.hashType(Operand->getType());
-      FnHash.hashValue(Operand);
-    }
     FnHash.hashNumber(Instruction->getCallingConv());
     FnHash.hashAttributeList(Instruction->getAttributes());
     hashOperandBundles(Instruction);
     FnHash.hashRangeMetadata(Instruction->getMetadata(LLVMContext::MD_range));
-    if (const Function *F = Instruction->getCalledFunction()) {
-      // Accumulate the callee name to the hash.
-      FnHash.hashMem(F->getName());
-      if (!F->isDeclaration() && !F->hasAvailableExternallyLinkage())
-        FnHash.getDependencies().emplace_back(F);
-    }
   }
 
   /// Calculate the Instruction hash.
