@@ -47,7 +47,7 @@ public:
   };
 
   struct Value {
-    Value() {}
+    Value() = default;
     Value(std::uint64_t NameOffset_, llvm::Optional<SymbolTarget> Target_)
         : NameOffset{NameOffset_}, Target{std::move(Target_)} {}
 
@@ -72,7 +72,7 @@ public:
   /// \param Name  The symbol name.
   /// \returns A pointer to pre-existing entry for this name in the symbol
   /// table. If not found, return nullptr.
-  Value *findSymbol(SString Name);
+  Value *findSymbol(pstore::indirect_string const &Name);
 
   /// Creates a definition in the symbol table.
   /// \param Name  The symbol name.
@@ -83,9 +83,9 @@ public:
   /// \param Linkage  The symbol's linkage.
   /// \returns A pointer to the newly created or pre-existing entry for this
   /// name in the symbol table.
-  Value *insertSymbol(SString Name, OutputSection<ELFT> const *Section,
-                      std::uint64_t Offset, std::uint64_t Size,
-                      pstore::repo::linkage_type Linkage);
+  Value *insertSymbol(pstore::indirect_string const &Name,
+                      OutputSection<ELFT> const *Section, std::uint64_t Offset,
+                      std::uint64_t Size, pstore::repo::linkage_type Linkage);
 
   /// If not already in the symbol table, an undef entry is created. This may be
   /// later turned into a proper definition by a subsequent call to insertSymbol
@@ -98,7 +98,8 @@ public:
   /// \param Type  The symbol relocation type.
   /// \returns A pointer to the newly created or pre-existing entry for this
   /// name in the symbol table.
-  Value *insertSymbol(SString Name, pstore::repo::relocation_type Type);
+  Value *insertSymbol(pstore::indirect_string const &Name,
+                      pstore::repo::relocation_type Type);
 
   /// \returns A tuple of two values, the first of which is the file offset at
   /// which the section data was written; the second is the number of bytes that
@@ -118,12 +119,12 @@ private:
   static unsigned sectionToSymbolType(ELFSectionType T);
   static bool isTLSRelocation(pstore::repo::relocation_type Type);
 
-  Value *insertSymbol(SString Name, llvm::Optional<SymbolTarget> const &Target);
+  Value *insertSymbol(pstore::indirect_string const &Name,
+                      llvm::Optional<SymbolTarget> const &Target);
 
   typedef typename llvm::object::ELFFile<ELFT>::Elf_Sym Elf_Sym;
 
-  using SymbolMapType = std::map<SString, Value>;
-  SymbolMapType SymbolMap_;
+  std::map<pstore::indirect_string, Value> SymbolMap_;
   StringTable &Strings_;
 };
 
@@ -186,7 +187,8 @@ bool SymbolTable<ELFT>::isTLSRelocation(pstore::repo::relocation_type Type) {
 // findSymbol
 // ~~~~~~~~~~
 template <typename ELFT>
-auto SymbolTable<ELFT>::findSymbol(SString Name) -> Value * {
+auto SymbolTable<ELFT>::findSymbol(pstore::indirect_string const &Name)
+    -> Value * {
   auto Pos = SymbolMap_.find(Name);
   return Pos != SymbolMap_.end() ? &Pos->second : nullptr;
 }
@@ -194,7 +196,7 @@ auto SymbolTable<ELFT>::findSymbol(SString Name) -> Value * {
 // insertSymbol
 // ~~~~~~~~~~~~
 template <typename ELFT>
-auto SymbolTable<ELFT>::insertSymbol(SString Name,
+auto SymbolTable<ELFT>::insertSymbol(pstore::indirect_string const &Name,
                                      OutputSection<ELFT> const *Section,
                                      std::uint64_t Offset, std::uint64_t Size,
                                      pstore::repo::linkage_type Linkage)
@@ -210,7 +212,7 @@ auto SymbolTable<ELFT>::insertSymbol(SString Name,
 }
 
 template <typename ELFT>
-auto SymbolTable<ELFT>::insertSymbol(SString Name,
+auto SymbolTable<ELFT>::insertSymbol(pstore::indirect_string const &Name,
                                      pstore::repo::relocation_type Type)
     -> Value * {
   auto SV = this->insertSymbol(Name, llvm::None);
@@ -219,7 +221,7 @@ auto SymbolTable<ELFT>::insertSymbol(SString Name,
 }
 
 template <typename ELFT>
-auto SymbolTable<ELFT>::insertSymbol(SString Name,
+auto SymbolTable<ELFT>::insertSymbol(pstore::indirect_string const &Name,
                                      llvm::Optional<SymbolTarget> const &Target)
     -> Value * {
   typename decltype(SymbolMap_)::iterator Pos;

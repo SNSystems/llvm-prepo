@@ -16,59 +16,65 @@
 #include "pstore/core/sstring_view_archive.hpp"
 #include "pstore/serialize/standard_types.hpp"
 
-// stringToSStringView
-// ~~~~~~~~~~~~~~~~~~~
-SString stringToSStringView(llvm::StringRef Ref) {
-  auto const Length = Ref.size();
-  // TODO: check for make_shared array support from C++20.
-  auto Ptr =
-      std::shared_ptr<char>(new char[Length], [](char *P) { delete[] P; });
-  std::copy(std::begin(Ref), std::end(Ref), Ptr.get());
-  return {std::static_pointer_cast<char const>(Ptr), Length};
-}
-
 // getString
 // ~~~~~~~~~
-SString getString(pstore::database const &Db, pstore::address Addr) {
+pstore::indirect_string getString(pstore::database const &Db,
+                                  pstore::address Addr) {
   using namespace pstore::serialize;
-  archive::database_reader Source(Db, Addr);
-  return read<SString>(Source);
+  return read<pstore::indirect_string>(archive::make_reader(Db, Addr));
 }
 
-// insert
-// ~~~~~~
-std::uint64_t StringTable::insert(SString const &Name) {
+//*   ___                       _          _ _  _                    *
+//*  / __|___ _ _  ___ _ _ __ _| |_ ___ __| | \| |__ _ _ __  ___ ___ *
+//* | (_ / -_) ' \/ -_) '_/ _` |  _/ -_) _` | .` / _` | '  \/ -_|_-< *
+//*  \___\___|_||_\___|_| \__,_|\__\___\__,_|_|\_\__,_|_|_|_\___/__/ *
+//*                                                                  *
+pstore::indirect_string
+GeneratedNames::add(pstore::shared_sstring_view const &Name) {
+  auto Pos =
+      Storage_.emplace(Name, pstore::raw_sstring_view{Name.data(), Name.size()})
+          .first;
+  return {Db_, &Pos->second};
+}
+
+//*  ___ _       _          _____     _    _      *
+//* / __| |_ _ _(_)_ _  __ |_   _|_ _| |__| |___  *
+//* \__ \  _| '_| | ' \/ _` || |/ _` | '_ \ / -_) *
+//* |___/\__|_| |_|_||_\__, ||_|\__,_|_.__/_\___| *
+//*                    |___/                      *
+std::uint64_t StringTable::insert(pstore::indirect_string const &Name) {
   typename container::iterator Pos;
   bool DidInsert;
   std::tie(Pos, DidInsert) = Strings_.emplace(Name, 0);
   if (DidInsert) {
+    pstore::shared_sstring_view Owner;
+    pstore::raw_sstring_view View = Name.as_string_view(&Owner);
+
     DEBUG_WITH_TYPE("repo2obj",
                     (llvm::dbgs() << "  strtab insert "
-                                  << llvm::StringRef{Name.data(), Name.length()}
+                                  << llvm::StringRef{View.data(), View.length()}
                                   << " at " << DataSize_ << '\n'));
     Pos->second = DataSize_;
-    DataSize_ += Name.length() + 1;
+    DataSize_ += View.length() + 1;
     Data_.push_back(Name);
   }
   return Pos->second;
 }
 
-// position
-// ~~~~~~~~~
-std::uint64_t StringTable::position(SString const &Name) const {
+std::uint64_t StringTable::position(pstore::indirect_string const &Name) const {
   auto Pos = Strings_.find(Name);
   return Pos != Strings_.end() ? Pos->second : npos;
 }
 
-// write
-// ~~~~~
 std::tuple<std::uint64_t, std::uint64_t>
 StringTable::write(llvm::raw_ostream &OS) const {
   std::uint64_t Start = OS.tell();
   OS << '\0';
-  for (SString const &Name : Data_) {
+  for (pstore::indirect_string const &Name : Data_) {
     assert(OS.tell() - Start == this->position(Name));
-    OS << llvm::StringRef{Name.data(), Name.length()} << '\0';
+    pstore::shared_sstring_view Owner;
+    pstore::raw_sstring_view const View = Name.as_string_view(&Owner);
+    OS << llvm::StringRef{View.data(), View.length()} << '\0';
   }
 
   std::uint64_t End = OS.tell();

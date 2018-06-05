@@ -67,7 +67,7 @@ template <typename ELFT> struct GroupInfo {
     Members.reserve(2U); // the majority of groups have one or two members.
   }
   pstore::address
-      IdentifyingSymbol; ///< The name that uniquely idenfifies this group.
+      IdentifyingSymbol; ///< The name that uniquely identifies this group.
   std::vector<OutputSection<ELFT> *> Members;
   std::size_t SectionIndex = 0; ///< The section-index of this group.
 };
@@ -108,7 +108,8 @@ public:
     OutputSection<ELFT> *section() { return Section_; }
     /// Returns the symbol associated with this section/offset, creating it if
     /// necessary.
-    typename SymbolTable<ELFT>::Value *symbol(SymbolTable<ELFT> &Symbols);
+    typename SymbolTable<ELFT>::Value *symbol(SymbolTable<ELFT> &Symbols,
+                                              GeneratedNames &Generated);
 
   private:
     OutputSection<ELFT> *Section_ = nullptr;
@@ -117,7 +118,7 @@ public:
   };
 
   void append(pstore::repo::ticket_member const &TM, SectionPtr SectionData,
-              SymbolTable<ELFT> &Symbols,
+              SymbolTable<ELFT> &Symbols, GeneratedNames &Generated,
               std::vector<SectionInfo> &OutputSections);
 
   /// \returns The number of ELF sections added by this OutputSection.
@@ -131,12 +132,14 @@ public:
   /// \param OS The binary output stream to which the contents of the output
   /// sections are written.
   /// \param SectionNames  The collection of section names.
-  /// \param OutShdr  An output iterator to which will be written one or more
-  /// instance of the Elf_Shdr type as the write function creates sections in
-  /// the output.
+  /// \param Generated  The object managing names created during object-file
+  /// generation.
+  /// \param OutShdr  An output iterator to which will be written
+  /// one or more instance of the Elf_Shdr type as the write function creates
+  /// sections in the output.
   template <typename OutputIt>
   OutputIt write(llvm::raw_ostream &OS, StringTable &SectionNames,
-                 OutputIt OutShdr) const;
+                 GeneratedNames &Generated, OutputIt OutShdr) const;
 
   ELFSectionType getType() const { return std::get<0>(Id_); }
   unsigned getIndex() const {
@@ -216,15 +219,15 @@ constexpr bool IsMips64EL = false;
 
 template <typename ELFT>
 typename SymbolTable<ELFT>::Value *
-OutputSection<ELFT>::SectionInfo::symbol(SymbolTable<ELFT> &Symbols) {
+OutputSection<ELFT>::SectionInfo::symbol(SymbolTable<ELFT> &Symbols,
+                                         GeneratedNames &Generated) {
   using namespace llvm;
   if (Symbol_ == nullptr) {
     // FIXME: a static local isn't a great way to implement this. I just need to
     // be able to generate a unique name.
     static auto PrivateSymbolCount = 0U;
 
-    auto Name =
-        stringToSStringView(".LR" + std::to_string(PrivateSymbolCount++));
+    auto Name = Generated.add(".LR" + std::to_string(PrivateSymbolCount++));
     Symbol_ = Symbols.insertSymbol(Name, Section_, Offset_, 0 /*size*/,
                                    pstore::repo::linkage_type::internal);
 
@@ -273,7 +276,7 @@ void OutputSection<ELFT>::writeNopData(llvm::raw_ostream &OS,
 #if 0
   // This CPU doesn't support long nops. If needed add more.
   // FIXME: Can we get this from the subtarget somehow?
-  // FIXME: We could generated something better than plain 0x90.
+  // FIXME: We could generate something better than plain 0x90.
   if (!HasNopl) {
     for (uint64_t i = 0; i < Count; ++i)
       OW->write8(0x90);
@@ -301,8 +304,6 @@ void OutputSection<ELFT>::writeNopData(llvm::raw_ostream &OS,
 
 // writePadding
 // ~~~~~~~~~~~~
-// FIXME: the padding data depends on the output section. In particular, the
-// text section should receive NOP instructions. This is modelled in
 template <typename ELFT>
 void OutputSection<ELFT>::writePadding(llvm::raw_ostream &OS,
                                        std::uint64_t Bytes) const {
@@ -320,6 +321,7 @@ template <typename ELFT>
 void OutputSection<ELFT>::append(pstore::repo::ticket_member const &TM,
                                  SectionPtr SectionData,
                                  SymbolTable<ELFT> &Symbols,
+                                 GeneratedNames &Generated,
                                  std::vector<SectionInfo> &OutputSections) {
   using namespace llvm;
 
@@ -381,8 +383,8 @@ void OutputSection<ELFT>::append(pstore::repo::ticket_member const &TM,
                        << std::get<0>(TargetSection.section()->sectionId())
                        << '\n');
 
-    Relocations_.emplace_back(TargetSection.symbol(Symbols), IFixup.type,
-                              PatchOffset, IFixup.addend);
+    Relocations_.emplace_back(TargetSection.symbol(Symbols, Generated),
+                              IFixup.type, PatchOffset, IFixup.addend);
   }
 
   SectionSize_ += ObjectSize;
@@ -398,9 +400,9 @@ template <typename ELFT> std::size_t OutputSection<ELFT>::numSections() const {
 // ~~~~~
 template <typename ELFT>
 template <typename OutputIt>
-OutputIt OutputSection<ELFT>::write(llvm::raw_ostream &OS,
-                                    StringTable &SectionNames,
-                                    OutputIt OutShdr) const {
+OutputIt
+OutputSection<ELFT>::write(llvm::raw_ostream &OS, StringTable &SectionNames,
+                           GeneratedNames &Generated, OutputIt OutShdr) const {
   assert(Index_ != UnknownIndex);
   auto const GroupFlag =
       Group_ != nullptr ? Elf_Word{llvm::ELF::SHF_GROUP} : Elf_Word{0};
@@ -437,7 +439,7 @@ OutputIt OutputSection<ELFT>::write(llvm::raw_ostream &OS,
 
     Elf_Shdr SH;
     zero(SH);
-    SH.sh_name = SectionNames.insert(stringToSStringView(SectionName));
+    SH.sh_name = SectionNames.insert(Generated.add(SectionName));
     SH.sh_type = Attrs->second.Type;
     SH.sh_flags = Attrs->second.Flags | GroupFlag;
     SH.sh_offset = StartPos;
@@ -462,7 +464,7 @@ OutputIt OutputSection<ELFT>::write(llvm::raw_ostream &OS,
     Elf_Shdr RelaSH;
     zero(RelaSH);
     RelaSH.sh_name = SectionNames.insert(
-        stringToSStringView(this->relocationSectionName(SectionName)));
+        Generated.add(this->relocationSectionName(SectionName)));
     RelaSH.sh_type = llvm::ELF::SHT_RELA;
     RelaSH.sh_flags = llvm::ELF::SHF_INFO_LINK |
                       GroupFlag; // sh_info holds index of the target section.

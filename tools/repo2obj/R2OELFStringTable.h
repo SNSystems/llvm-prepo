@@ -10,8 +10,9 @@
 #ifndef LLVM_TOOLS_REPO2OBJ_ELFSTRINGTABLE_H
 #define LLVM_TOOLS_REPO2OBJ_ELFSTRINGTABLE_H
 
-#include "llvm/Support/raw_ostream.h"
+#include "pstore/core/indirect_string.hpp"
 #include "pstore/support/sstring_view.hpp"
+#include "llvm/Support/raw_ostream.h"
 
 #include <list>
 #include <string>
@@ -23,42 +24,57 @@ class database;
 struct address;
 } // namespace pstore
 
-/// A string-view type using std::shared_ptr<char const> to store the string's
-/// data. This type is used to enable the StringTable class to freely mix
-/// strings from the database with strings synthesized specially for the ELF
-/// file.
-using SString = ::pstore::sstring_view<std::shared_ptr<char const>>;
-
-/// Constructs a string-view object from a StringRef. This new object contains a
-/// copy of the string contents.
-SString stringToSStringView(llvm::StringRef Ref);
-
 /// Reads a string from a pstore database given its address.
-SString getString(pstore::database const &Db, pstore::address Addr);
+pstore::indirect_string getString(pstore::database const &Db,
+                                  pstore::address Addr);
 
 namespace llvm {
-inline raw_ostream &operator<<(raw_ostream &OS, SString const &S) {
-  return OS << StringRef{S.data(), S.length()};
+
+inline raw_ostream &operator<<(raw_ostream &OS,
+                               pstore::indirect_string const &ind_str) {
+  pstore::shared_sstring_view owner;
+  auto View = ind_str.as_string_view(&owner);
+  return OS << StringRef{View.data(), View.length()};
 }
-} // namespace llvm
+
+} // end namespace llvm
+
+/// Used to track names created during the object-file generation.
+class GeneratedNames {
+public:
+  explicit GeneratedNames(pstore::database const &Db) : Db_{Db} {}
+
+  pstore::indirect_string add(pstore::shared_sstring_view const &Name);
+  pstore::indirect_string add(std::string const &S) {
+    return this->add(pstore::make_shared_sstring_view(S));
+  }
+  pstore::indirect_string add(char const *S) {
+    return this->add(pstore::make_shared_sstring_view(S));
+  }
+
+private:
+  pstore::database const &Db_;
+  std::map<pstore::shared_sstring_view, pstore::raw_sstring_view> Storage_;
+};
 
 class StringTable {
 private:
-  using container = std::unordered_map<SString, std::uint64_t>;
+  using container = std::unordered_map<pstore::indirect_string, std::uint64_t>;
 
 public:
   using value_type = typename container::value_type;
   using iterator = typename container::const_iterator;
   using const_iterator = iterator;
 
+  explicit StringTable(GeneratedNames &Generated) : Generated_{Generated} {}
   static constexpr auto npos = std::numeric_limits<std::uint64_t>::max();
 
   const_iterator begin() const { return std::begin(Strings_); }
   const_iterator end() const { return std::end(Strings_); }
 
-  /// Inserts a name into the string table if not already present and returns
-  /// the string table offset for the string.
-  std::uint64_t insert(SString const &Name);
+  /// Inserts a name if not already present and returns its ELF string table
+  /// offset.
+  std::uint64_t insert(pstore::indirect_string const &Name);
 
   /// Writes the string data to the output stream \p OS a returns the extent
   /// (position and size) of the data written.
@@ -67,10 +83,11 @@ public:
   std::uint64_t dataSize() const { return DataSize_; }
 
 private:
-  std::uint64_t position(SString const &Name) const;
+  std::uint64_t position(pstore::indirect_string const &Name) const;
 
+  GeneratedNames &Generated_;
   container Strings_;
-  std::list<SString> Data_;
+  std::list<pstore::indirect_string> Data_;
   std::uint64_t DataSize_ = 1U;
 };
 
