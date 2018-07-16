@@ -43,7 +43,7 @@ Furthermore, the path to the program-repository database itself is set using an 
 The command-line above will write the object code for `test.c` to the program-repository and emit a “ticket file” `test.o`. This tiny file contains a key to the real data in the database.
 
 ### Linking
-A program-repository aware linker is very much on the project’s “TODO” list. Until that happens, there's a `repo2obj` tool in the project tree. This generates a traditional ELF file from a repository ticket file. Using it is simple:
+A program-repository aware linker is very much on the project’s [“TODO” list](wiki/Limitations#missing-features). Until that happens, there's a `repo2obj` tool in the project tree. This generates a traditional ELF file from a repository ticket file. Using it is simple:
 
     $ clang -target x86_64-pc-linux-gnu-repo -c -o test.o test.c
     $ repo2obj test.o -o test.o.elf
