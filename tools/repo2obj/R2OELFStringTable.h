@@ -24,10 +24,6 @@ class database;
 struct address;
 } // namespace pstore
 
-/// Reads a string from a pstore database given its address.
-pstore::indirect_string getString(pstore::database const &Db,
-                                  pstore::address Addr);
-
 namespace llvm {
 
 inline raw_ostream &operator<<(raw_ostream &OS,

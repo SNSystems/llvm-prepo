@@ -78,7 +78,8 @@ private:
   // should use the std::unordered_map and store the ordered module string set
   // into the database later.
   using ModuleNamesContainer =
-      std::map<pstore::raw_sstring_view, pstore::address>;
+      std::map<pstore::raw_sstring_view,
+               pstore::typed_address<pstore::indirect_string>>;
 
   using NamesWithPrefixContainer =
       SmallVector<std::unique_ptr<std::string>, 16>;
@@ -453,11 +454,11 @@ void RepoObjectWriter::writeSectionData(ContentsType &Fragments,
                                   pstore::repo::external_fixup::type)>::max());
 
     // Attach a suitable external fixup to this section.
-    Content->xfixups.push_back(
-        pstore::repo::external_fixup{{NamePtr},
-                                     static_cast<repo_relocation_type>(Relocation.Type),
-                                     Relocation.Offset,
-                                     Relocation.Addend});
+    Content->xfixups.push_back(pstore::repo::external_fixup{
+        pstore::typed_address<pstore::indirect_string>(
+            pstore::address{NamePtr}),
+        static_cast<repo_relocation_type>(Relocation.Type), Relocation.Offset,
+        Relocation.Addend});
   }
 
   DEBUG(dbgs() << "section type '" << Content->type << "' and alignment "
@@ -599,7 +600,11 @@ pstore::index::digest RepoObjectWriter::buildTicketRecord(
     // member is not emitted and doesn't insert to the database, but it does
     // contribute to the hash.
     if (Ticket->getPruned() || Fragments.find(D) != Fragments.end())
-      TicketContents.emplace_back(DigestVal, pstore::address{NamePtr}, Linkage);
+      TicketContents.emplace_back(
+          DigestVal,
+          pstore::typed_address<pstore::indirect_string>(
+              pstore::address{NamePtr}),
+          Linkage);
   }
 
   MD5::MD5Result digest;
@@ -664,7 +669,8 @@ void RepoObjectWriter::writeObject(MCAssembler &Asm,
                    << '\n');
       pstore::index::name_index::iterator const Pos =
           NameAdder.add(Transaction, NamesIndex, &NameAddress.first).first;
-      NameAddress.second = Pos.get_address();
+      NameAddress.second =
+          pstore::typed_address<pstore::indirect_string>(Pos.get_address());
     }
     // Flush the name bodies.
     NameAdder.flush(Transaction);

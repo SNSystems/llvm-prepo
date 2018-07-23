@@ -66,12 +66,15 @@ class SpecialNames {
 public:
   void initialize(pstore::database &Db, GeneratedNames &Names);
 
-  pstore::address CtorName = pstore::address::null();
-  pstore::address DtorName = pstore::address::null();
+  pstore::typed_address<pstore::indirect_string> CtorName =
+      pstore::typed_address<pstore::indirect_string>::null();
+  pstore::typed_address<pstore::indirect_string> DtorName =
+      pstore::typed_address<pstore::indirect_string>::null();
 
 private:
-  static pstore::address findString(pstore::index::name_index const &NameIndex,
-                                    pstore::indirect_string const &Str);
+  static pstore::typed_address<pstore::indirect_string>
+  findString(pstore::index::name_index const &NameIndex,
+             pstore::indirect_string const &Str);
 };
 
 // initialize
@@ -92,12 +95,14 @@ void SpecialNames::initialize(pstore::database &Db, GeneratedNames &Names) {
 
 // findString
 // ~~~~~~~~~~
-pstore::address
+pstore::typed_address<pstore::indirect_string>
 SpecialNames::findString(pstore::index::name_index const &NameIndex,
                          pstore::indirect_string const &Str) {
 
   auto Pos = NameIndex.find(Str);
-  return (Pos != NameIndex.end()) ? Pos.get_address() : pstore::address::null();
+  return (Pos != NameIndex.end())
+             ? pstore::typed_address<pstore::indirect_string>(Pos.get_address())
+             : pstore::typed_address<pstore::indirect_string>::null();
 }
 
 } // end anonymous namespace
@@ -114,7 +119,8 @@ template <class ELFT> struct ELFState {
   using SectionHeaderTable = std::vector<Elf_Shdr>;
   SectionHeaderTable SectionHeaders;
   std::map<SectionId, OutputSection<ELFT>> Sections;
-  std::map<pstore::address, GroupInfo<ELFT>> Groups;
+  std::map<pstore::typed_address<pstore::indirect_string>, GroupInfo<ELFT>>
+      Groups;
 
   GeneratedNames Generated;
   StringTable Strings;
@@ -214,8 +220,8 @@ void ELFState<ELFT>::buildGroupSection(pstore::database const &Db,
   // If we haven't yet recorded a section index for this group, then build one
   // now.
   if (GI.SectionIndex == 0U) {
-    auto SignatureSymbol =
-        Symbols.findSymbol(getString(Db, GI.IdentifyingSymbol));
+    auto SignatureSymbol = Symbols.findSymbol(
+        pstore::indirect_string::read(Db, GI.IdentifyingSymbol));
     assert(SignatureSymbol != nullptr &&
            SignatureSymbol->Index != llvm::ELF::STN_UNDEF);
     static auto const GroupString = Generated.add(".group");
@@ -263,9 +269,10 @@ void ELFState<ELFT>::writeGroupSections(raw_ostream &OS) {
   }
 }
 
-static ELFSectionType getELFSectionType(pstore::repo::section_type T,
-                                        pstore::address Name,
-                                        SpecialNames const &Magics) {
+static ELFSectionType
+getELFSectionType(pstore::repo::section_type T,
+                  pstore::typed_address<pstore::indirect_string> Name,
+                  SpecialNames const &Magics) {
   if (Name == Magics.CtorName) {
     return ELFSectionType::init_array;
   } else if (Name == Magics.DtorName) {
@@ -347,8 +354,9 @@ int main(int argc, char *argv[]) {
 
     auto Ticket = pstore::repo::ticket::load(Db, TicketPos->second);
     for (auto const &TM : *Ticket) {
-      assert(TM.name != pstore::address::null());
-      DEBUG(dbgs() << "Processing: " << getString(Db, TM.name) << '\n');
+      assert(TM.name != pstore::typed_address<pstore::indirect_string>::null());
+      DEBUG(dbgs() << "Processing: "
+                   << pstore::indirect_string::read(Db, TM.name) << '\n');
 
       auto const FragmentPos = FragmentIndex->find(TM.digest);
       if (FragmentPos == FragmentIndex->end()) {
@@ -363,12 +371,14 @@ int main(int argc, char *argv[]) {
           TM.linkage == pstore::repo::linkage_type::linkonce;
       // TODO: enable the name discriminator if "function/data sections mode" is
       // enabled.
-      auto const Discriminator = IsLinkOnce ? TM.name : pstore::address::null();
+      auto const Discriminator =
+          IsLinkOnce ? TM.name
+                     : pstore::typed_address<pstore::indirect_string>::null();
       auto const Fragment =
           pstore::repo::fragment::load(Db, FragmentPos->second);
 
       if (TM.linkage == pstore::repo::linkage_type::common) {
-        pstore::indirect_string const Name = getString(Db, TM.name);
+        auto const Name = pstore::indirect_string::read(Db, TM.name);
         assert(Name.is_in_store());
 
         if (Fragment->num_sections() != 1U ||

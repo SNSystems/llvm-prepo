@@ -55,18 +55,20 @@ extern SectionMap const SectionAttributes;
 /// Defines the set of standard (fixed) sections that we put in the ELF file.
 enum SectionIndices { Null, StringTab, SymTab };
 
-using SectionId = std::tuple<ELFSectionType, pstore::address>;
+using SectionId =
+    std::tuple<ELFSectionType, pstore::typed_address<pstore::indirect_string>>;
 
 template <typename ELFT> class OutputSection;
 
 /// Map from the key-symbol address to the collection of sections belonging to
 /// the group.
 template <typename ELFT> struct GroupInfo {
-  explicit GroupInfo(pstore::address IdentifyingSymbol_)
+  explicit GroupInfo(
+      pstore::typed_address<pstore::indirect_string> IdentifyingSymbol_)
       : IdentifyingSymbol{IdentifyingSymbol_} {
     Members.reserve(2U); // the majority of groups have one or two members.
   }
-  pstore::address
+  pstore::typed_address<pstore::indirect_string>
       IdentifyingSymbol; ///< The name that uniquely identifies this group.
   std::vector<OutputSection<ELFT> *> Members;
   std::size_t SectionIndex = 0; ///< The section-index of this group.
@@ -209,8 +211,9 @@ private:
   void writePadding(llvm::raw_ostream &OS, std::uint64_t Bytes) const;
   void writeNopData(llvm::raw_ostream &OS, std::uint64_t Count) const;
 
-  std::string dataSectionName(std::string SectionName,
-                              pstore::address DiscriminatorName) const;
+  std::string dataSectionName(
+      std::string SectionName,
+      pstore::typed_address<pstore::indirect_string> DiscriminatorName) const;
   std::string relocationSectionName(std::string const &BaseName) const;
 };
 
@@ -328,8 +331,8 @@ void OutputSection<ELFT>::append(pstore::repo::ticket_member const &TM,
   Contributions_.emplace_back(SectionData);
 
   auto const ObjectSize = SectionData->data().size();
-  DEBUG(dbgs() << "  generating relocations FROM '" << ::getString(Db_, TM.name)
-               << "'\n");
+  DEBUG(dbgs() << "  generating relocations FROM '"
+               << pstore::indirect_string::read(Db_, TM.name) << "'\n");
 
   std::uint8_t const DataAlign = SectionData->align();
   // ELF section alignment is the maximum of the alignment of all its
@@ -349,12 +352,12 @@ void OutputSection<ELFT>::append(pstore::repo::ticket_member const &TM,
   // actually need a symbol which references the data.
 
   if (TM.linkage != pstore::repo::linkage_type::append) {
-    Symbols.insertSymbol(getString(Db_, TM.name), this, SectionSize_,
-                         ObjectSize, TM.linkage);
+    Symbols.insertSymbol(pstore::indirect_string::read(Db_, TM.name), this,
+                         SectionSize_, ObjectSize, TM.linkage);
   }
 
   for (pstore::repo::external_fixup const &XFixup : SectionData->xfixups()) {
-    auto const TargetName = getString(Db_, XFixup.name);
+    auto const TargetName = pstore::indirect_string::read(Db_, XFixup.name);
     DEBUG(dbgs() << "  generating relocation TO '" << TargetName << '\n');
     Relocations_.emplace_back(Symbols.insertSymbol(TargetName, XFixup.type),
                               XFixup.type, XFixup.offset + SectionSize_,
@@ -482,12 +485,14 @@ OutputSection<ELFT>::write(llvm::raw_ostream &OS, StringTable &SectionNames,
 // dataSectionName
 // ~~~~~~~~~~~~~~~
 template <typename ELFT>
-std::string
-OutputSection<ELFT>::dataSectionName(std::string SectionName,
-                                     pstore::address DiscriminatorName) const {
-  if (DiscriminatorName != pstore::address::null()) {
+std::string OutputSection<ELFT>::dataSectionName(
+    std::string SectionName,
+    pstore::typed_address<pstore::indirect_string> DiscriminatorName) const {
+  if (DiscriminatorName !=
+      pstore::typed_address<pstore::indirect_string>::null()) {
     SectionName += '.';
-    SectionName += getString(Db_, DiscriminatorName).to_string();
+    SectionName +=
+        pstore::indirect_string::read(Db_, DiscriminatorName).to_string();
   }
   return SectionName;
 }

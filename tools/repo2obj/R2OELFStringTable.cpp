@@ -16,14 +16,6 @@
 #include "pstore/core/sstring_view_archive.hpp"
 #include "pstore/serialize/standard_types.hpp"
 
-// getString
-// ~~~~~~~~~
-pstore::indirect_string getString(pstore::database const &Db,
-                                  pstore::address Addr) {
-  using namespace pstore::serialize;
-  return read<pstore::indirect_string>(archive::make_reader(Db, Addr));
-}
-
 //*   ___                       _          _ _  _                    *
 //*  / __|___ _ _  ___ _ _ __ _| |_ ___ __| | \| |__ _ _ __  ___ ___ *
 //* | (_ / -_) ' \/ -_) '_/ _` |  _/ -_) _` | .` / _` | '  \/ -_|_-< *
