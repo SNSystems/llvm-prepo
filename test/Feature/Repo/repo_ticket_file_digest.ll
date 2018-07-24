@@ -2,8 +2,8 @@
 ; builds if the input file does not change.
 ;
 ; RUN: rm -f %t.db
-; RUN: env REPOFILE=%t.db llc -filetype=obj -debug-only repo-object %s -o %t 2>&1
-; RUN: llc -filetype=obj -debug-only repo-object %s -o %t 2>&1 | FileCheck %s
+; RUN: env REPOFILE=%t.db llc -filetype=obj %s -o %t 2>&1
+; RUN: llc -filetype=obj -debug-only repo-object %s -o %t1 2>&1 | FileCheck %s
 
 ; REQUIRES: asserts
 

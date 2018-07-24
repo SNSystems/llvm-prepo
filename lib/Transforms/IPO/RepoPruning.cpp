@@ -10,6 +10,7 @@
 #include "pstore/core/database.hpp"
 #include "pstore/core/hamt_map.hpp"
 #include "pstore/core/index_types.hpp"
+#include "pstore/mcrepo/fragment.hpp"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/ADT/Triple.h"
 #include "llvm/IR/CallSite.h"
@@ -65,16 +66,42 @@ ModulePass *llvm::createRepoPruningPass() { return new RepoPruning(); }
 using GlobalObjectMap =
     std::map<const GlobalObject *, const ticketmd::DigestType>;
 
+GlobalValue::LinkageTypes toGVLinkage(pstore::repo::linkage_type L) {
+  switch (L) {
+  case pstore::repo::linkage_type::external:
+    return GlobalValue::ExternalLinkage;
+  case pstore::repo::linkage_type::linkonce:
+    return GlobalValue::LinkOnceAnyLinkage;
+  case pstore::repo::linkage_type::internal:
+    return GlobalValue::InternalLinkage;
+  case pstore::repo::linkage_type::common:
+    return GlobalValue::CommonLinkage;
+  case pstore::repo::linkage_type::append:
+    return GlobalValue::AppendingLinkage;
+  default:
+    report_fatal_error("Unsupported linkage type");
+  }
+}
+
+StringRef toStringRef(pstore::raw_sstring_view S) {
+  return {S.data(), S.size()};
+}
+
+ticketmd::DigestType toDigestType(pstore::index::digest D) {
+  ticketmd::DigestType Digest;
+  support::endian::write64le(&Digest, D.low());
+  support::endian::write64le(&(Digest.Bytes[8]), D.high());
+  return Digest;
+}
+
 bool RepoPruning::runOnModule(Module &M) {
   if (skipModule(M) || !isObjFormatRepo(M))
     return false;
 
-  bool Changed = false;
   MDBuilder MDB(M.getContext());
 
   pstore::database &Repository = getRepoDatabase();
 
-  MDNode *MD = nullptr;
   std::shared_ptr<pstore::index::digest_index const> const Digests =
       pstore::index::get_digest_index(Repository, false);
   if (!Digests) {
@@ -82,30 +109,50 @@ bool RepoPruning::runOnModule(Module &M) {
   }
 
   // Erase the unchanged global objects.
-  auto EraseUnchangedGlobalObect = [&](GlobalObject &GO,
-                                       llvm::Statistic &NumGO) -> bool {
+  auto EraseUnchangedGlobalObect = [&Digests, &Repository,
+                                    &M](GlobalObject &GO,
+                                        llvm::Statistic &NumGO) -> bool {
     if (GO.isDeclaration() || GO.hasAvailableExternallyLinkage())
       return false;
     auto const Result = ticketmd::get(&GO);
     assert(!Result.second && "The repo_ticket metadata should be created by "
                              "the RepoTicketGeneration pass!");
 
-    auto const Key = pstore::index::digest{Result.first.high(), Result.first.low()};
-    if (Digests->find(Key) != Digests->end()) {
-      Changed = true;
-      ++NumGO;
-      GO.setComdat(nullptr);
-      // Remove all metadata except fragment.
-      MD = GO.getMetadata(LLVMContext::MD_repo_ticket);
-      dyn_cast<TicketNode>(MD)->setPruned(true);
-      GO.clearMetadata();
-      GO.setMetadata(LLVMContext::MD_repo_ticket, MD);
-      GO.setLinkage(GlobalValue::ExternalLinkage);
-      return true;
+    auto const Key =
+        pstore::index::digest{Result.first.high(), Result.first.low()};
+    auto it = Digests->find(Key);
+    if (it == Digests->end())
+      return false;
+
+    ++NumGO;
+    GO.setComdat(nullptr);
+    // Remove all metadata except fragment.
+    TicketNode *MD =
+        dyn_cast<TicketNode>(GO.getMetadata(LLVMContext::MD_repo_ticket));
+    MD->setPruned(true);
+    GO.clearMetadata();
+    GO.setMetadata(LLVMContext::MD_repo_ticket, MD);
+    GO.setLinkage(GlobalValue::ExternalLinkage);
+    // Create  the dependent fragments if existing.
+    auto Fragment = pstore::repo::fragment::load(Repository, it->second);
+    if (auto Dependents = Fragment->dependents()) {
+      for (pstore::typed_address<pstore::repo::ticket_member> Dependent :
+           *Dependents) {
+        auto TM = pstore::repo::ticket_member::load(Repository, Dependent);
+        StringRef MDName =
+            toStringRef(pstore::get_sstring_view(Repository, TM->name).second);
+        auto DMD =
+            TicketNode::get(M.getContext(), MDName, toDigestType(TM->digest),
+                            toGVLinkage(TM->linkage), true);
+        NamedMDNode *const NMD = M.getOrInsertNamedMetadata("repo.tickets");
+        assert(NMD && "NamedMDNode cannot be NULL!");
+        NMD->addOperand(DMD);
+      }
     }
-    return false;
+    return true;
   };
 
+  bool Changed = false;
   for (GlobalVariable &GV : M.globals()) {
     if (EraseUnchangedGlobalObect(GV, NumVariables)) {
       // Removes the Global variable initializer.
@@ -113,13 +160,16 @@ bool RepoPruning::runOnModule(Module &M) {
       if (isSafeToDestroyConstant(Init))
         Init->destroyConstant();
       GV.setInitializer(nullptr);
+      Changed = true;
     }
   }
 
   for (Function &Func : M) {
     if (EraseUnchangedGlobalObect(Func, NumFunctions)) {
+      auto MD = Func.getMetadata(LLVMContext::MD_repo_ticket);
       Func.deleteBody();
       Func.setMetadata(LLVMContext::MD_repo_ticket, MD);
+      Changed = true;
     }
   }
 

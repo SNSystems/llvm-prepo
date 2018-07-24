@@ -31,7 +31,7 @@
 
 #define DEBUG_TYPE "repo2obj"
 
-using SectionPtr = std::shared_ptr<pstore::repo::section const>;
+using FragmentPtr = std::shared_ptr<pstore::repo::fragment const>;
 
 // The same as the repo types, but with a few extras
 
@@ -119,7 +119,8 @@ public:
     typename SymbolTable<ELFT>::Value *Symbol_ = nullptr;
   };
 
-  void append(pstore::repo::ticket_member const &TM, SectionPtr SectionData,
+  void append(pstore::repo::ticket_member const &TM, FragmentPtr FragmentData,
+              pstore::repo::section_type SectionType,
               SymbolTable<ELFT> &Symbols, GeneratedNames &Generated,
               std::vector<SectionInfo> &OutputSections);
 
@@ -165,7 +166,8 @@ private:
   // TODO: We have no a priori knowledge of the number of text contributions to
   // this output section. Using some sort of "chunked vector" might be
   // considerably more efficient.
-  std::vector<SectionPtr> Contributions_;
+  std::vector<std::pair<FragmentPtr, pstore::repo::section_type>>
+      Contributions_;
   /// The number of data bytes contained in this section.
   std::uint64_t SectionSize_ = 0;
 
@@ -322,19 +324,22 @@ void OutputSection<ELFT>::writePadding(llvm::raw_ostream &OS,
 // ~~~~~~
 template <typename ELFT>
 void OutputSection<ELFT>::append(pstore::repo::ticket_member const &TM,
-                                 SectionPtr SectionData,
+                                 FragmentPtr FragmentData,
+                                 pstore::repo::section_type SectionType,
                                  SymbolTable<ELFT> &Symbols,
                                  GeneratedNames &Generated,
                                  std::vector<SectionInfo> &OutputSections) {
   using namespace llvm;
 
-  Contributions_.emplace_back(SectionData);
+  Contributions_.emplace_back(FragmentData, SectionType);
 
-  auto const ObjectSize = SectionData->data().size();
+  auto const ObjectSize =
+      pstore::repo::section_size(*FragmentData, SectionType);
   DEBUG(dbgs() << "  generating relocations FROM '"
                << pstore::indirect_string::read(Db_, TM.name) << "'\n");
 
-  std::uint8_t const DataAlign = SectionData->align();
+  std::uint8_t const DataAlign =
+      pstore::repo::section_align(*FragmentData, SectionType);
   // ELF section alignment is the maximum of the alignment of all its
   // contributions.
   Align_ = std::max(Align_, DataAlign);
@@ -356,7 +361,8 @@ void OutputSection<ELFT>::append(pstore::repo::ticket_member const &TM,
                          SectionSize_, ObjectSize, TM.linkage);
   }
 
-  for (pstore::repo::external_fixup const &XFixup : SectionData->xfixups()) {
+  for (pstore::repo::external_fixup const &XFixup :
+       pstore::repo::section_xfixups(*FragmentData, SectionType)) {
     auto const TargetName = pstore::indirect_string::read(Db_, XFixup.name);
     DEBUG(dbgs() << "  generating relocation TO '" << TargetName << '\n');
     Relocations_.emplace_back(Symbols.insertSymbol(TargetName, XFixup.type),
@@ -364,7 +370,8 @@ void OutputSection<ELFT>::append(pstore::repo::ticket_member const &TM,
                               XFixup.addend);
   }
 
-  for (pstore::repo::internal_fixup const &IFixup : SectionData->ifixups()) {
+  for (pstore::repo::internal_fixup const &IFixup :
+       pstore::repo::section_ifixups(*FragmentData, SectionType)) {
     // "patch section" and "patch offset" define the address that the fixup will
     // modify.
     OutputSection const *PatchSection = this;
@@ -419,10 +426,14 @@ OutputSection<ELFT>::write(llvm::raw_ostream &OS, StringTable &SectionNames,
   Pos = StartPos;
 
   for (auto const &Contribution : Contributions_) {
-    pstore::repo::section::container<std::uint8_t> D = Contribution->data();
+    auto Fragment = Contribution.first;
+    auto Type = Contribution.second;
 
-    assert(Align_ >= Contribution->align());
-    auto const AlignedPos = aligned(Pos, Contribution->align());
+    pstore::repo::section::container<std::uint8_t> D =
+		pstore::repo::section_value(*Fragment, Type);
+
+    assert(Align_ >= pstore::repo::section_align(*Fragment, Type));
+    auto const AlignedPos = aligned(Pos, pstore::repo::section_align(*Fragment, Type));
     assert(AlignedPos >= Pos);
     this->writePadding(OS, AlignedPos - Pos);
     std::size_t const Size = D.size();

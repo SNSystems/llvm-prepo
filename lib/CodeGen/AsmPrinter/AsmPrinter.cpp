@@ -251,7 +251,7 @@ bool AsmPrinter::doInitialization(Module &M) {
   if (TT.isOSBinFormatRepo()) {
     if (NamedMDNode *Globals = M.getNamedMetadata("repo.tickets")) {
       for (auto MDN : Globals->operands()) {
-        if (const TicketNode *TN = dyn_cast<TicketNode>(MDN)) {
+        if (TicketNode *TN = dyn_cast<TicketNode>(MDN)) {
           OutContext.addTicketNode(TN);
         } else {
           report_fatal_error("Failed to get TicketNode metadata!");

@@ -71,6 +71,10 @@ private:
 
   DenseMap<const MCSectionRepo *, std::vector<RepoRelocationEntry>> Relocations;
 
+  // A mapping of a fragment digest to its dependent fragments (saved in the
+  // TicketNode metadata).
+  std::map<ticketmd::DigestType, DenseSet<const TicketNode *>> Dependents;
+
   // Note that I don't use StringMap because we take pointers into this
   // structure that must survive insertion.
   // TODO: Compare the performance between std::map and std::unordered_map. If
@@ -86,11 +90,31 @@ private:
 
   // TODO: investigate changing the Key type from ticketmd::DigestType to
   // pstore::index::digest.
-  using ContentsType =
-      std::map<ticketmd::DigestType,
-               SmallVector<std::unique_ptr<pstore::repo::section_content>, 4>>;
+  using SectionContentsType =
+      SmallVector<std::unique_ptr<pstore::repo::section_content>, 4>;
+  using DependentsContentType =
+      SmallVector<pstore::typed_address<pstore::repo::ticket_member>, 4>;
 
-  std::vector<pstore::repo::ticket_member> TicketContents;
+  /// A structure of a fragment content.
+  struct FragmentContentsType {
+    /// Sections contain all the section_contents in this fragment.
+    SectionContentsType Sections;
+    /// Dependents contain all the ticket_members which this fragment is
+    /// dependent on.
+    DependentsContentType Dependents;
+  };
+
+  // A mapping of a fragment digest to its contents (which include the
+  // section contents and dependent fragments).
+  using ContentsType = std::map<ticketmd::DigestType, FragmentContentsType>;
+
+  // A container which contains all section_data and dependents_data in a given
+  // fragment.
+  using FragmentDataType =
+      SmallVector<std::unique_ptr<pstore::repo::fragment_data>, 4>;
+
+  using TicketType = std::vector<pstore::repo::ticket_member>;
+  TicketType TicketContents;
 
   BumpPtrAllocator Alloc;
   StringSaver VersionSymSaver{Alloc};
@@ -112,6 +136,7 @@ public:
   void reset() override {
     Renames.clear();
     Relocations.clear();
+    Dependents.clear();
     MCObjectWriter::reset();
   }
 
@@ -140,12 +165,15 @@ public:
                         MCSection &Sec, const MCAsmLayout &Layout,
                         ModuleNamesContainer &Names);
 
+  void buildDependents(ContentsType &Contents, const TicketType &Tickets) const;
+
   static pstore::raw_sstring_view
   getSymbolName(const MCAssembler &Asm, const TicketNode &TicketMember,
                 const ModuleNamesContainer &Names,
                 NamesWithPrefixContainer &Symbols);
 
-  pstore::index::digest buildTicketRecord(const MCAssembler &Asm,
+  pstore::index::digest buildTicketRecord(const pstore::database &Db,
+                                          const MCAssembler &Asm,
                                           ModuleNamesContainer &Names,
                                           NamesWithPrefixContainer &Symbols,
                                           const ContentsType &Fragments,
@@ -158,6 +186,14 @@ public:
                                               const MCSymbol &SymA,
                                               const MCFragment &FB, bool InSet,
                                               bool IsPCRel) const override;
+
+  static FragmentDataType
+  buildFragmentData(const FragmentContentsType &Contents);
+
+  static void
+  updateDependents(pstore::repo::dependents &Dependent,
+                   const pstore::repo::ticket &Ticket,
+                   pstore::typed_address<pstore::repo::ticket> addr);
 
   void writeObject(MCAssembler &Asm, const MCAsmLayout &Layout) override;
 };
@@ -272,6 +308,9 @@ void RepoObjectWriter::recordRelocation(MCAssembler &Asm,
   }
   Relocations[&FixupSection].emplace_back(FixupOffset, RenamedSymA, Type,
                                           Addend, SymA, OriginalC);
+
+  if (auto const *Dependent = SymA->CorrespondingTicketNode)
+    Dependents[FixupSection.hash()].insert(Dependent);
 }
 
 namespace {
@@ -442,10 +481,11 @@ void RepoObjectWriter::writeSectionData(ContentsType &Fragments,
     // module. By gathering just a single instance of each string used in this
     // TU we reduce the number of insertions into the global name set (which are
     // performed with the transaction lock held).
-    auto It = Names
-                  .emplace(stringRefAsView(Relocation.Symbol->getName()),
-                           pstore::address::null())
-                  .first;
+    auto It =
+        Names
+            .emplace(stringRefAsView(Relocation.Symbol->getName()),
+                     pstore::typed_address<pstore::indirect_string>::null())
+            .first;
     auto NamePtr = reinterpret_cast<std::uintptr_t>(&(*It));
 
     static_assert(sizeof(NamePtr) <= sizeof(pstore::repo::external_fixup::name),
@@ -480,7 +520,24 @@ void RepoObjectWriter::writeSectionData(ContentsType &Fragments,
     return;
   }
 
-  Fragments[Section.hash()].push_back(std::move(Content));
+  Fragments[Section.hash()].Sections.push_back(std::move(Content));
+}
+
+void RepoObjectWriter::buildDependents(ContentsType &Fragments,
+                                       const TicketType &Tickets) const {
+  for (auto const &Dependent : Dependents) {
+    auto &D = Fragments[Dependent.first].Dependents;
+    for (auto const &TN : Dependent.second) {
+      // The corresponding ticket_member lies inside of Tickets.
+      assert(TN->CorrespondingTicketMember >= Tickets.data() &&
+             TN->CorrespondingTicketMember <= &Tickets.back());
+      // Record the ticket index in the fragment dependents here. Once the ticket
+      // file is stored into the repository,  the fragment dependents are updated
+      // from the ticket index to the ticket address in the repository.
+      D.push_back(pstore::typed_address<pstore::repo::ticket_member>::make(
+          TN->CorrespondingTicketMember - Tickets.data()));
+    }
+  }
 }
 
 pstore::repo::linkage_type
@@ -565,46 +622,52 @@ template <typename T> ArrayRef<std::uint8_t> makeByteArrayRef(T const &Value) {
 } // namespace
 
 pstore::index::digest RepoObjectWriter::buildTicketRecord(
-    const MCAssembler &Asm, ModuleNamesContainer &Names,
-    NamesWithPrefixContainer &Symbols, const ContentsType &Fragments,
-    StringRef OutputFile) {
+    const pstore::database &Db, const MCAssembler &Asm,
+    ModuleNamesContainer &Names, NamesWithPrefixContainer &Symbols,
+    const ContentsType &Fragments, StringRef OutputFile) {
   MD5 ticket_hash;
 
   ticket_hash.update(OutputFile.size());
   ticket_hash.update(OutputFile);
 
-  for (const auto TicketPair : Asm.getContext().getTickets()) {
-    const TicketNode *const Ticket = TicketPair.first;
+  auto Tickets = Asm.getContext().getTickets();
+  TicketContents.reserve(Tickets.size());
+  for (const auto Ticket : Tickets) {
     ticketmd::DigestType const D = Ticket->getDigest();
     // Insert this name into the module-wide string set. This set is later
     // added to the whole-program string set and the ticket name addresses
     // corrected at that time.
     const pstore::raw_sstring_view Name =
         getSymbolName(Asm, *Ticket, Names, Symbols);
-    auto It = Names.emplace(Name, pstore::address::null()).first;
+    auto It =
+        Names
+            .emplace(Name,
+                     pstore::typed_address<pstore::indirect_string>::null())
+            .first;
     // We're storing pointer to the string address into the ticket.
     auto NamePtr = reinterpret_cast<std::uintptr_t>(&(*It));
 
     auto DigestVal = pstore::index::digest{D.high(), D.low()};
     auto Linkage = toPstoreLinkage(Ticket->getLinkage());
-    // If this TicketNode was created by the backend, it might not be generated
-    // when the same input file is built again. Therefore, it doesn't contribute
-    // to the ticket hash.
-    if (!TicketPair.second) {
-      ticket_hash.update(makeByteArrayRef(DigestVal));
-      ticket_hash.update(makeByteArrayRef(Linkage));
-      ticket_hash.update(Name.size());
-      ticket_hash.update(stringViewAsRef(Name));
-    }
     // If the global object was removed during LLVM's transform passes, this
-    // member is not emitted and doesn't insert to the database, but it does
-    // contribute to the hash.
-    if (Ticket->getPruned() || Fragments.find(D) != Fragments.end())
+    // member is not emitted and doesn't insert to the database, and it does
+    // not contribute to the hash.
+    if (Ticket->getPruned() || Fragments.find(D) != Fragments.end()) {
       TicketContents.emplace_back(
           DigestVal,
           pstore::typed_address<pstore::indirect_string>(
               pstore::address{NamePtr}),
           Linkage);
+      // Update the Ticket node to remember the corrresponding ticket member.
+      Ticket->CorrespondingTicketMember = &TicketContents.back();
+      // If this TicketNode was created by the backend, it will be put into
+      // dependent list of a fragment. If this fragment is pruned, its dependent
+      // tickets will be pruned and contributed to the ticket hash.
+      ticket_hash.update(makeByteArrayRef(DigestVal));
+      ticket_hash.update(makeByteArrayRef(Linkage));
+      ticket_hash.update(Name.size());
+      ticket_hash.update(stringViewAsRef(Name));
+    }
   }
 
   MD5::MD5Result digest;
@@ -624,17 +687,50 @@ static bool isExistingTicket(pstore::database &Db,
   return false;
 }
 
+RepoObjectWriter::FragmentDataType
+RepoObjectWriter::buildFragmentData(const FragmentContentsType &Contents) {
+  FragmentDataType FData;
+  // Add the section_data to the fragment_data container.
+  for (auto const &Content : Contents.Sections) {
+    FData.emplace_back(new pstore::repo::section_data(
+        static_cast<pstore::repo::fragment_type>(Content->type),
+        Content.get()));
+  }
+  // Add the dependents_data to the fragment_data container.
+  if (!Contents.Dependents.empty()) {
+    FData.emplace_back(new pstore::repo::dependents_data(
+        Contents.Dependents.begin(), Contents.Dependents.end()));
+  }
+
+  return FData;
+}
+
+void RepoObjectWriter::updateDependents(
+    pstore::repo::dependents &Dependent, const pstore::repo::ticket &Ticket,
+    pstore::typed_address<pstore::repo::ticket> addr) {
+  for (auto &member : Dependent) {
+    // Currently, dependent member value is the index in the Ticket.
+    auto index = member.absolute();
+    assert(index < Ticket.size());
+    auto offset = reinterpret_cast<std::uintptr_t>(&Ticket[index]) -
+                  reinterpret_cast<std::uintptr_t>(&Ticket);
+	// Update the dependent member to record the ticket address.
+    member = pstore::typed_address<pstore::repo::ticket_member>::make(
+        addr.absolute() + offset);
+  }
+}
+
 void RepoObjectWriter::writeObject(MCAssembler &Asm,
                                    const MCAsmLayout &Layout) {
 
   ContentsType Fragments;
   ModuleNamesContainer Names;
-  NamesWithPrefixContainer PrefixedNames;
 
   SmallString<64> ResultPath;
   StringRef OutputFile =
       streamPath(static_cast<raw_fd_ostream &>(this->getStream()), ResultPath);
-  Names.emplace(stringRefAsView(OutputFile), pstore::address::null());
+  Names.emplace(stringRefAsView(OutputFile),
+                pstore::typed_address<pstore::indirect_string>::null());
 
   // Convert the Asm sections to repository fragment sections.
   for (MCSection &Sec : Asm) {
@@ -642,107 +738,132 @@ void RepoObjectWriter::writeObject(MCAssembler &Asm,
     writeSectionData(Fragments, Asm, Section, Layout, Names);
   }
 
-  pstore::index::digest const TicketDigest =
-      buildTicketRecord(Asm, Names, PrefixedNames, Fragments, OutputFile);
-
   pstore::database &Db = llvm::getRepoDatabase();
+  NamesWithPrefixContainer PrefixedNames;
+  pstore::index::digest TicketDigest =
+      buildTicketRecord(Db, Asm, Names, PrefixedNames, Fragments, OutputFile);
+
+  buildDependents(Fragments, TicketContents);
+
   pstore::indirect_string_adder NameAdder(Names.size());
 
   if (!isExistingTicket(Db, TicketDigest)) {
     TransactionType &Transaction = getRepoTransaction();
+    {
+      std::shared_ptr<pstore::index::ticket_index> const TicketIndex =
+          pstore::index::get_ticket_index(Db);
+      assert(TicketIndex);
 
-    std::shared_ptr<pstore::index::ticket_index> const TicketIndex =
-        pstore::index::get_ticket_index(Db);
-    assert(TicketIndex);
+      std::shared_ptr<pstore::index::name_index> const NamesIndex =
+          pstore::index::get_name_index(Db);
+      assert(NamesIndex);
 
-    std::shared_ptr<pstore::index::name_index> const NamesIndex =
-        pstore::index::get_name_index(Db);
-    assert(NamesIndex);
+      // Insert the names from this module into the global name set. This loop
+      // writes the "indirect_string" records which will become pointers to the
+      // real string body. This clusters the pointers together nicely which
+      // should help to limit the virtual memory consumption of the
+      // repo-linker's store-shadow memory.
+      for (ModuleNamesContainer::value_type &NameAddress : Names) {
+        DEBUG(dbgs() << "insert name: " << stringViewAsRef(NameAddress.first)
+                     << '\n');
+        pstore::index::name_index::iterator const Pos =
+            NameAdder.add(Transaction, NamesIndex, &NameAddress.first).first;
+        NameAddress.second =
+            pstore::typed_address<pstore::indirect_string>(Pos.get_address());
+      }
+      // Flush the name bodies.
+      NameAdder.flush(Transaction);
 
-    // Insert the names from this module into the global name set. This loop
-    // writes the "indirect_string" records which will become pointers to the
-    // real string body. This clusters the pointers together nicely which should
-    // help to limit the virtual memory consumption of the repo-linker's
-    // store-shadow memory.
-    for (ModuleNamesContainer::value_type &NameAddress : Names) {
-      DEBUG(dbgs() << "insert name: " << stringViewAsRef(NameAddress.first)
-                   << '\n');
-      pstore::index::name_index::iterator const Pos =
-          NameAdder.add(Transaction, NamesIndex, &NameAddress.first).first;
-      NameAddress.second =
-          pstore::typed_address<pstore::indirect_string>(Pos.get_address());
-    }
-    // Flush the name bodies.
-    NameAdder.flush(Transaction);
+      std::shared_ptr<pstore::index::digest_index> const DigestsIndex =
+          pstore::index::get_digest_index(Db);
+      assert(DigestsIndex);
 
-    std::shared_ptr<pstore::index::digest_index> const DigestsIndex =
-        pstore::index::get_digest_index(Db);
-    assert(DigestsIndex);
+      SmallVector<std::shared_ptr<pstore::repo::fragment>, 4> RepoFragments;
 
-    for (auto &Fragment : Fragments) {
-      auto const Key =
-          pstore::index::digest{Fragment.first.high(), Fragment.first.low()};
+      for (auto &Fragment : Fragments) {
+        auto const Key =
+            pstore::index::digest{Fragment.first.high(), Fragment.first.low()};
 
-      // The fragment creation APIs require that the input sections are sorted
-      // by section_content::type. This guarantees that for them.
-      std::sort(Fragment.second.begin(), Fragment.second.end(),
-                [](std::unique_ptr<pstore::repo::section_content> const &a,
-                   std::unique_ptr<pstore::repo::section_content> const &b) {
-                  return a->type < b->type;
-                });
-      auto Begin = pstore::repo::details::make_section_content_iterator(
-          Fragment.second.begin());
-      auto End = pstore::repo::details::make_section_content_iterator(
-          Fragment.second.end());
+        // The fragment creation APIs require that the input sections are sorted
+        // by section_content::type. This guarantees that for them.
+        std::sort(Fragment.second.Sections.begin(),
+                  Fragment.second.Sections.end(),
+                  [](std::unique_ptr<pstore::repo::section_content> const &a,
+                     std::unique_ptr<pstore::repo::section_content> const &b) {
+                    return a->type < b->type;
+                  });
+        auto SBegin = pstore::repo::details::make_fragment_content_iterator(
+            Fragment.second.Sections.begin());
+        auto SEnd = pstore::repo::details::make_fragment_content_iterator(
+            Fragment.second.Sections.end());
 
-      // The name field of each of the external fixups is pointing into the
-      // 'Names' map. Here we turn that into the pstore address of the string.
-      std::for_each(Begin, End, [](pstore::repo::section_content &Section) {
-        for (auto &XFixup : Section.xfixups) {
-          auto MNC = reinterpret_cast<ModuleNamesContainer::value_type const *>(
-              XFixup.name.absolute());
-          XFixup.name = MNC->second;
-        }
-      });
+        // The name field of each of the external fixups is pointing into the
+        // 'Names' map. Here we turn that into the pstore address of the string.
+        std::for_each(SBegin, SEnd, [](pstore::repo::section_content &Section) {
+          for (auto &XFixup : Section.xfixups) {
+            auto MNC =
+                reinterpret_cast<ModuleNamesContainer::value_type const *>(
+                    XFixup.name.absolute());
+            XFixup.name = MNC->second;
+          }
+        });
 
-      DEBUG(dbgs() << "fragment " << Key << " adding. size="
-                   << pstore::repo::fragment::size_bytes(Begin, End) << '\n');
+        auto FData = buildFragmentData(Fragment.second);
+        auto Begin = pstore::repo::details::make_fragment_content_iterator(
+            FData.begin());
+        auto End =
+            pstore::repo::details::make_fragment_content_iterator(FData.end());
+        DEBUG(dbgs() << "fragment " << Key << " adding. size="
+                     << pstore::repo::fragment::size_bytes(Begin, End) << '\n');
 
-      auto const Kvp = std::make_pair(Key, pstore::repo::fragment::alloc(Transaction, Begin, End));
-      DigestsIndex->insert(Transaction, Kvp);
-    }
-
-    // Find the store address of the output file path.
-    auto const OutputFilePos = Names.find(stringRefAsView(OutputFile));
-    assert(OutputFilePos != Names.end() && "Output file can't be found!");
-    auto OutputPathAddr = OutputFilePos->second;
-
-    // The name field of each of ticket_member is pointing into the 'Names' map.
-    // Here we turn that into the pstore address of the string.
-    for (pstore::repo::ticket_member &TicketMember : TicketContents) {
-      // Check that we have a fragment for this ticket member's digest value.
-      // TODO: remove this check once we're completely confident in the back-end
-      // implementation.
-      if (DigestsIndex->find(TicketMember.digest) == DigestsIndex->end()) {
-        report_fatal_error("The digest of missing repository fragment " +
-                           TicketMember.digest.to_hex_string() +
-                           " was found in a ticket member.");
+        auto extent = pstore::repo::fragment::alloc(Transaction, Begin, End);
+        RepoFragments.emplace_back(pstore::repo::fragment::load(Transaction, extent));
+        DigestsIndex->insert(Transaction, std::make_pair(Key, extent));
       }
 
-      auto MNC = reinterpret_cast<ModuleNamesContainer::value_type const *>(
-          TicketMember.name.absolute());
-      TicketMember.name = MNC->second;
-      DEBUG(dbgs() << "ticket name '" << stringViewAsRef(MNC->first)
-                   << "' digest '" << TicketMember.digest << "' adding."
-                   << '\n');
+      // Find the store address of the output file path.
+      auto const OutputFilePos = Names.find(stringRefAsView(OutputFile));
+      assert(OutputFilePos != Names.end() && "Output file can't be found!");
+      auto OutputPathAddr = OutputFilePos->second;
+
+      // The name field of each of ticket_member is pointing into the 'Names'
+      // map. Here we turn that into the pstore address of the string.
+      for (pstore::repo::ticket_member &TicketMember : TicketContents) {
+        // Check that we have a fragment for this ticket member's digest value.
+        // TODO: remove this check once we're completely confident in the
+        // back-end implementation.
+        if (DigestsIndex->find(TicketMember.digest) == DigestsIndex->end()) {
+          report_fatal_error("The digest of missing repository fragment " +
+                             TicketMember.digest.to_hex_string() +
+                             " was found in a ticket member.");
+        }
+
+        auto MNC = reinterpret_cast<ModuleNamesContainer::value_type const *>(
+            TicketMember.name.absolute());
+        TicketMember.name = MNC->second;
+        DEBUG(dbgs() << "ticket name '" << stringViewAsRef(MNC->first)
+                     << "' digest '" << TicketMember.digest << "' adding."
+                     << '\n');
+      }
+
+      // Store the Ticket.
+      auto TExtent = pstore::repo::ticket::alloc(Transaction, OutputPathAddr,
+                                                 TicketContents);
+      TicketIndex->insert(Transaction,
+                          std::make_pair(TicketDigest, TExtent));
+
+      // Update the dependents for each fragment index->address
+      if (!RepoFragments.empty()) {
+        for (auto &RepoFragment : RepoFragments) {
+
+          if (auto Dependent = RepoFragment->dependents ()) {
+            updateDependents(*Dependent,
+                             *pstore::repo::ticket::load(Db, TExtent),
+                             TExtent.addr);
+          }
+        }
+      }
     }
-
-    // Store the Ticket.
-    auto const Kvp = std::make_pair(
-        TicketDigest, pstore::repo::ticket::alloc(Transaction, OutputPathAddr,
-                                                  TicketContents));
-    TicketIndex->insert(Transaction, Kvp);
-
     Transaction.commit();
   }
 

@@ -20,6 +20,9 @@ public:
       : MCSymbol(SymbolKindRepo, Name, isTemporary) {}
 
   static bool classof(const MCSymbol *S) { return S->isRepo(); }
+
+  // A pointer to the TiketNode metadata of the corresponding GlobalObject.
+  const TicketNode *CorrespondingTicketNode = nullptr;
 };
 
 } // end namespace llvm

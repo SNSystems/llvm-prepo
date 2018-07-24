@@ -33,6 +33,7 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <deque>
 #include <map>
 #include <memory>
 #include <string>
@@ -65,10 +66,9 @@ namespace llvm {
   class MCContext {
   public:
     using SymbolTable = StringMap<MCSymbol *, BumpPtrAllocator &>;
-    /// Pair of TicketNode and a flag which shows whether the TicketNode was
-    /// created by the backend.
-    using RepoTicketContainer =
-        std::vector<std::pair<const TicketNode *, bool>>;
+    /// A container which contains all TicketNodes created by the
+    /// RepoTicketGeneration Pass or by the backend.
+    using RepoTicketContainer = SmallVector<TicketNode *, 4>;
 
   private:
     /// The SourceMgr for this object, if any.
@@ -401,8 +401,8 @@ namespace llvm {
     /// @{
 
     /// Add a Ticket node to the ticket table.
-    void addTicketNode(const TicketNode *Ticket, bool Backend = false) {
-      TicketNodes.emplace_back(Ticket, Backend);
+    void addTicketNode(TicketNode *Ticket) {
+      TicketNodes.emplace_back(Ticket);
     }
 
     /// getTickets - Get a reference for the ticket table.
