@@ -108,11 +108,6 @@ private:
   // section contents and dependent fragments).
   using ContentsType = std::map<ticketmd::DigestType, FragmentContentsType>;
 
-  // A container which contains all section_data and dependents_data in a given
-  // fragment.
-  using FragmentDataType =
-      SmallVector<std::unique_ptr<pstore::repo::fragment_data>, 4>;
-
   using TicketType = std::vector<pstore::repo::ticket_member>;
   TicketType TicketContents;
 
@@ -187,7 +182,8 @@ public:
                                               const MCFragment &FB, bool InSet,
                                               bool IsPCRel) const override;
 
-  static FragmentDataType
+  template <typename DispatcherCollectionType>
+  static DispatcherCollectionType
   buildFragmentData(const FragmentContentsType &Contents);
 
   static void
@@ -486,6 +482,7 @@ void RepoObjectWriter::writeSectionData(ContentsType &Fragments,
             .emplace(stringRefAsView(Relocation.Symbol->getName()),
                      pstore::typed_address<pstore::indirect_string>::null())
             .first;
+
     auto NamePtr = reinterpret_cast<std::uintptr_t>(&(*It));
 
     static_assert(sizeof(NamePtr) <= sizeof(pstore::repo::external_fixup::name),
@@ -687,22 +684,24 @@ static bool isExistingTicket(pstore::database &Db,
   return false;
 }
 
-RepoObjectWriter::FragmentDataType
+template <typename DispatcherCollectionType>
+DispatcherCollectionType
 RepoObjectWriter::buildFragmentData(const FragmentContentsType &Contents) {
-  FragmentDataType FData;
+  DispatcherCollectionType Dispatchers;
   // Add the section_data to the fragment_data container.
   for (auto const &Content : Contents.Sections) {
-    FData.emplace_back(new pstore::repo::section_data(
-        static_cast<pstore::repo::fragment_type>(Content->type),
-        Content.get()));
+    Dispatchers.emplace_back(
+        new pstore::repo::generic_section_creation_dispatcher(
+            static_cast<pstore::repo::fragment_type>(Content->type),
+            Content.get()));
   }
   // Add the dependents_data to the fragment_data container.
   if (!Contents.Dependents.empty()) {
-    FData.emplace_back(new pstore::repo::dependents_data(
+    Dispatchers.emplace_back(new pstore::repo::dependents_creation_dispatcher(
         Contents.Dependents.begin(), Contents.Dependents.end()));
   }
 
-  return FData;
+  return Dispatchers;
 }
 
 void RepoObjectWriter::updateDependents(
@@ -808,11 +807,18 @@ void RepoObjectWriter::writeObject(MCAssembler &Asm,
           }
         });
 
-        auto FData = buildFragmentData(Fragment.second);
+        // Build a collection of dispatchers: one per section in the final
+        // fragment. The dispatcher's job is to understand how to construct an
+        // individual section instance and write it to the pstore.
+        using DispatcherCollection = SmallVector<
+            std::unique_ptr<pstore::repo::section_creation_dispatcher>, 4>;
+        auto Dispatchers =
+            buildFragmentData<DispatcherCollection>(Fragment.second);
         auto Begin = pstore::repo::details::make_fragment_content_iterator(
-            FData.begin());
-        auto End =
-            pstore::repo::details::make_fragment_content_iterator(FData.end());
+            Dispatchers.begin());
+        auto End = pstore::repo::details::make_fragment_content_iterator(
+            Dispatchers.end());
+
         DEBUG(dbgs() << "fragment " << Key << " adding. size="
                      << pstore::repo::fragment::size_bytes(Begin, End) << '\n');
 
