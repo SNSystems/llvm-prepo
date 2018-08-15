@@ -120,7 +120,7 @@ public:
   };
 
   void append(pstore::repo::ticket_member const &TM, FragmentPtr FragmentData,
-              pstore::repo::section_type SectionType,
+              pstore::repo::section_kind SectionKind,
               SymbolTable<ELFT> &Symbols, GeneratedNames &Generated,
               std::vector<SectionInfo> &OutputSections);
 
@@ -166,7 +166,7 @@ private:
   // TODO: We have no a priori knowledge of the number of text contributions to
   // this output section. Using some sort of "chunked vector" might be
   // considerably more efficient.
-  std::vector<std::pair<FragmentPtr, pstore::repo::section_type>>
+  std::vector<std::pair<FragmentPtr, pstore::repo::section_kind>>
       Contributions_;
   /// The number of data bytes contained in this section.
   std::uint64_t SectionSize_ = 0;
@@ -324,22 +324,22 @@ void OutputSection<ELFT>::writePadding(llvm::raw_ostream &OS,
 // ~~~~~~
 template <typename ELFT>
 void OutputSection<ELFT>::append(pstore::repo::ticket_member const &TM,
-                                 FragmentPtr FragmentData,
-                                 pstore::repo::section_type SectionType,
+                                 FragmentPtr Fragment,
+                                 pstore::repo::section_kind SectionKind,
                                  SymbolTable<ELFT> &Symbols,
                                  GeneratedNames &Generated,
                                  std::vector<SectionInfo> &OutputSections) {
   using namespace llvm;
 
-  Contributions_.emplace_back(FragmentData, SectionType);
+  Contributions_.emplace_back(Fragment, SectionKind);
 
   auto const ObjectSize =
-      pstore::repo::section_size(*FragmentData, SectionType);
+      pstore::repo::section_size(*Fragment, SectionKind);
   DEBUG(dbgs() << "  generating relocations FROM '"
                << pstore::indirect_string::read(Db_, TM.name) << "'\n");
 
   std::uint8_t const DataAlign =
-      pstore::repo::section_align(*FragmentData, SectionType);
+      pstore::repo::section_align(*Fragment, SectionKind);
   // ELF section alignment is the maximum of the alignment of all its
   // contributions.
   Align_ = std::max(Align_, DataAlign);
@@ -362,7 +362,7 @@ void OutputSection<ELFT>::append(pstore::repo::ticket_member const &TM,
   }
 
   for (pstore::repo::external_fixup const &XFixup :
-       pstore::repo::section_xfixups(*FragmentData, SectionType)) {
+       pstore::repo::section_xfixups(*Fragment, SectionKind)) {
     auto const TargetName = pstore::indirect_string::read(Db_, XFixup.name);
     DEBUG(dbgs() << "  generating relocation TO '" << TargetName << '\n');
     Relocations_.emplace_back(Symbols.insertSymbol(TargetName, XFixup.type),
@@ -371,7 +371,7 @@ void OutputSection<ELFT>::append(pstore::repo::ticket_member const &TM,
   }
 
   for (pstore::repo::internal_fixup const &IFixup :
-       pstore::repo::section_ifixups(*FragmentData, SectionType)) {
+       pstore::repo::section_ifixups(*Fragment, SectionKind)) {
     // "patch section" and "patch offset" define the address that the fixup will
     // modify.
     OutputSection const *PatchSection = this;

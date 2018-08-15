@@ -271,7 +271,7 @@ void ELFState<ELFT>::writeGroupSections(raw_ostream &OS) {
 }
 
 static ELFSectionType
-getELFSectionType(pstore::repo::section_type T,
+getELFSectionType(pstore::repo::section_kind Kind,
                   pstore::typed_address<pstore::indirect_string> Name,
                   SpecialNames const &Magics) {
   if (Name == Magics.CtorName) {
@@ -280,15 +280,28 @@ getELFSectionType(pstore::repo::section_type T,
     return ELFSectionType::fini_array;
   }
 
-#define X(a)                                                                   \
-  case (pstore::repo::section_type::a):                                        \
-    return (ELFSectionType::a);
-  switch (T) {
-    PSTORE_REPO_SECTION_TYPES
-  case pstore::repo::section_type::last:
+#define REPO_TO_ELF_SECTION(a)  case (pstore::repo::section_kind::a): return (ELFSectionType::a);
+
+  switch (Kind) {
+    REPO_TO_ELF_SECTION(text)
+    REPO_TO_ELF_SECTION(bss)
+    REPO_TO_ELF_SECTION(data)
+    REPO_TO_ELF_SECTION(rel_ro)
+    REPO_TO_ELF_SECTION(mergeable_1_byte_c_string)
+    REPO_TO_ELF_SECTION(mergeable_2_byte_c_string)
+    REPO_TO_ELF_SECTION(mergeable_4_byte_c_string)
+    REPO_TO_ELF_SECTION(mergeable_const_4)
+    REPO_TO_ELF_SECTION(mergeable_const_8)
+    REPO_TO_ELF_SECTION(mergeable_const_16)
+    REPO_TO_ELF_SECTION(mergeable_const_32)
+    REPO_TO_ELF_SECTION(read_only)
+    REPO_TO_ELF_SECTION(thread_bss)
+    REPO_TO_ELF_SECTION(thread_data)
+  case pstore::repo::section_kind::dependent:
+  case pstore::repo::section_kind::last:
     break;
   }
-#undef X
+#undef REPO_TO_ELF_SECTION
   llvm_unreachable("getELFSectionType: unknown repository section kind.");
 }
 
@@ -386,8 +399,8 @@ int main(int argc, char *argv[]) {
         auto const Name = pstore::indirect_string::read(Db, TM.name);
         assert(Name.is_in_store());
 
-        if (Fragment->num_sections() != 1U ||
-            !Fragment->has_fragment(pstore::repo::fragment_type::bss)) {
+        if (!Fragment->has_section(pstore::repo::section_kind::bss)
+            || std::count_if (Fragment->begin (), Fragment->end (), pstore::repo::is_target_section) != 1) {
 
           pstore::shared_sstring_view Owner;
           error("Fragment for common symbol \"" +
@@ -395,7 +408,7 @@ int main(int argc, char *argv[]) {
                 "\" did not contain a sole BSS section");
         }
         pstore::repo::section const &S =
-            Fragment->at<pstore::repo::fragment_type::bss>();
+            Fragment->at<pstore::repo::section_kind::bss>();
 
         State.Symbols.insertSymbol(Name, nullptr /*no output section*/,
                                    0 /*offset*/, S.data().size(), TM.linkage);
@@ -403,18 +416,17 @@ int main(int argc, char *argv[]) {
       }
       // Go through the sections that this fragment contains creating the
       // corresponding ELF section(s) as necessary.
-      auto SectionRange = make_filter_range(
-          make_range(
-              pstore::repo::fragment::const_iterator(std::begin(*Fragment)),
-              pstore::repo::fragment::const_iterator(std::end(*Fragment))),
-          pstore::repo::is_section_type);
-      for (pstore::repo::fragment_type Section : SectionRange) {
-        auto SectionType = static_cast<pstore::repo::section_type>(Section);
+      auto const SectionRange = make_filter_range(
+          make_range(pstore::repo::fragment::const_iterator(std::begin(*Fragment)), pstore::repo::fragment::const_iterator(std::end(*Fragment))),
+          pstore::repo::is_target_section);
+
+      for (pstore::repo::section_kind Section : SectionRange) {
+        assert (pstore::repo::is_target_section (Section));
 
         // The section type and "discriminator" together identify the ELF output
         // section to which this fragment's section data will be appended.
         auto const Id = std::make_tuple(
-            getELFSectionType(SectionType, TM.name, State.Magics),
+            getELFSectionType(Section, TM.name, State.Magics),
             Discriminator);
 
         decltype(State.Sections)::iterator Pos;
@@ -447,19 +459,18 @@ int main(int argc, char *argv[]) {
         // assign to this data. We need to account for any alignment padding
         // that that function may place before the data itself (hence the call
         // to alignedContributionSize()).
-        OutputSections[static_cast<unsigned>(SectionType)] =
+        OutputSections[static_cast<unsigned>(Section)] =
             OutputSection<ELFT>::SectionInfo(
                 OSection,
                 OSection->alignedContributionSize(
-                    pstore::repo::section_align(*Fragment, SectionType)));
+                    pstore::repo::section_align(*Fragment, Section)));
       }
 
-      // This can't currently be folded into the first loop because the need the
-      // OutputSections array to be built.
-      for (pstore::repo::fragment_type Section : SectionRange) {
-        auto SectionType = static_cast<pstore::repo::section_type>(Section);
-        OutputSections[static_cast<unsigned>(SectionType)].section()->append(
-            TM, Fragment, SectionType, State.Symbols, State.Generated,
+      // This can't currently be folded into the first loop because it needs the
+      // OutputSections array to be built first.
+      for (pstore::repo::section_kind Section : SectionRange) {
+        OutputSections[static_cast<unsigned>(Section)].section()->append(
+            TM, Fragment, Section, State.Symbols, State.Generated,
             OutputSections);
       }
     }

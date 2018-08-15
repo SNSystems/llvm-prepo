@@ -135,7 +135,7 @@ bool RepoPruning::runOnModule(Module &M) {
     GO.setLinkage(GlobalValue::ExternalLinkage);
     // Create  the dependent fragments if existing.
     auto Fragment = pstore::repo::fragment::load(Repository, it->second);
-    if (auto Dependents = Fragment->dependents()) {
+    if (auto Dependents = Fragment->atp<pstore::repo::section_kind::dependent>()) {
       for (pstore::typed_address<pstore::repo::ticket_member> Dependent :
            *Dependents) {
         auto TM = pstore::repo::ticket_member::load(Repository, Dependent);

@@ -88,20 +88,13 @@ private:
   using NamesWithPrefixContainer =
       SmallVector<std::unique_ptr<std::string>, 16>;
 
-  // TODO: investigate changing the Key type from ticketmd::DigestType to
-  // pstore::index::digest.
-  using SectionContentsType =
-      SmallVector<std::unique_ptr<pstore::repo::section_content>, 4>;
-  using DependentsContentType =
-      SmallVector<pstore::typed_address<pstore::repo::ticket_member>, 4>;
-
   /// A structure of a fragment content.
   struct FragmentContentsType {
     /// Sections contain all the section_contents in this fragment.
-    SectionContentsType Sections;
-    /// Dependents contain all the ticket_members which this fragment is
-    /// dependent on.
-    DependentsContentType Dependents;
+    SmallVector<std::unique_ptr<pstore::repo::section_content>, 4> Sections;
+    /// Dependents contain all the ticket_members on which this fragment is
+    /// dependent.
+    SmallVector<pstore::typed_address<pstore::repo::ticket_member>, 4> Dependents;
   };
 
   // A mapping of a fragment digest to its contents (which include the
@@ -113,8 +106,6 @@ private:
 
   BumpPtrAllocator Alloc;
   StringSaver VersionSymSaver{Alloc};
-
-  /// @}
 
   // TargetObjectWriter wrappers.
   unsigned getRelocType(MCContext &Ctx, const MCValue &Target,
@@ -369,56 +360,56 @@ void svector_ostream<Container>::pwrite_impl(const char *Ptr, size_t Size,
 
 } // namespace
 
-static pstore::repo::section_type SectionKindToRepoType(SectionKind K) {
+static pstore::repo::section_kind SectionKindToRepoType(SectionKind K) {
   if (K.isText()) {
-    return pstore::repo::section_type::text;
+    return pstore::repo::section_kind::text;
   }
 
   // TODO: add sections types for BSSLocal and BSSExtern?
   if (K.isBSS() || K.isCommon()) {
-    return pstore::repo::section_type::bss;
+    return pstore::repo::section_kind::bss;
   }
   if (K.isData()) {
-    return pstore::repo::section_type::data;
+    return pstore::repo::section_kind::data;
   }
   if (K.isMergeableConst4()) {
-    return pstore::repo::section_type::mergeable_const_4;
+    return pstore::repo::section_kind::mergeable_const_4;
   }
   if (K.isMergeableConst8()) {
-    return pstore::repo::section_type::mergeable_const_8;
+    return pstore::repo::section_kind::mergeable_const_8;
   }
   if (K.isMergeableConst16()) {
-    return pstore::repo::section_type::mergeable_const_16;
+    return pstore::repo::section_kind::mergeable_const_16;
   }
   if (K.isMergeableConst32()) {
-    return pstore::repo::section_type::mergeable_const_32;
+    return pstore::repo::section_kind::mergeable_const_32;
   }
   assert(!K.isMergeableConst() &&
          "isMergeableConst should be covered by the four previous checks");
 
   if (K.isMergeable1ByteCString()) {
-    return pstore::repo::section_type::mergeable_1_byte_c_string;
+    return pstore::repo::section_kind::mergeable_1_byte_c_string;
   }
   if (K.isMergeable2ByteCString()) {
-    return pstore::repo::section_type::mergeable_2_byte_c_string;
+    return pstore::repo::section_kind::mergeable_2_byte_c_string;
   }
   if (K.isMergeable4ByteCString()) {
-    return pstore::repo::section_type::mergeable_4_byte_c_string;
+    return pstore::repo::section_kind::mergeable_4_byte_c_string;
   }
   assert(!K.isMergeableCString() &&
          "isMergeableCString should be covered by the three previous checks");
 
   if (K.isReadOnly()) {
-    return pstore::repo::section_type::read_only;
+    return pstore::repo::section_kind::read_only;
   }
   if (K.isReadOnlyWithRel()) {
-    return pstore::repo::section_type::rel_ro;
+    return pstore::repo::section_kind::rel_ro;
   }
   if (K.isThreadBSS()) {
-    return pstore::repo::section_type::thread_bss;
+    return pstore::repo::section_kind::thread_bss;
   }
   if (K.isThreadData()) {
-    return pstore::repo::section_type::thread_data;
+    return pstore::repo::section_kind::thread_data;
   }
   assert(!K.isThreadLocal() &&
          "isThreadLocation should be covered by the two previous checks");
@@ -432,7 +423,7 @@ void RepoObjectWriter::writeSectionData(ContentsType &Fragments,
                                         ModuleNamesContainer &Names) {
   auto &Section = static_cast<MCSectionRepo &>(Sec);
 
-  pstore::repo::section_type const St =
+  pstore::repo::section_kind const St =
       SectionKindToRepoType(Section.getKind());
   assert(Sec.getAlignment() > 0);
   unsigned const Alignment = Sec.getAlignment();
@@ -498,7 +489,7 @@ void RepoObjectWriter::writeSectionData(ContentsType &Fragments,
         Relocation.Addend});
   }
 
-  DEBUG(dbgs() << "section type '" << Content->type << "' and alignment "
+  DEBUG(dbgs() << "section type '" << Content->kind << "' and alignment "
                << unsigned(Content->align) << '\n');
 
   // A "dummy" section is created to provide a default for the assembler but we
@@ -688,14 +679,14 @@ template <typename DispatcherCollectionType>
 DispatcherCollectionType
 RepoObjectWriter::buildFragmentData(const FragmentContentsType &Contents) {
   DispatcherCollectionType Dispatchers;
-  // Add the section_data to the fragment_data container.
+
   for (auto const &Content : Contents.Sections) {
     Dispatchers.emplace_back(
         new pstore::repo::generic_section_creation_dispatcher(
-            static_cast<pstore::repo::fragment_type>(Content->type),
+            Content->kind,
             Content.get()));
   }
-  // Add the dependents_data to the fragment_data container.
+
   if (!Contents.Dependents.empty()) {
     Dispatchers.emplace_back(new pstore::repo::dependents_creation_dispatcher(
         Contents.Dependents.begin(), Contents.Dependents.end()));
@@ -789,7 +780,7 @@ void RepoObjectWriter::writeObject(MCAssembler &Asm,
                   Fragment.second.Sections.end(),
                   [](std::unique_ptr<pstore::repo::section_content> const &a,
                      std::unique_ptr<pstore::repo::section_content> const &b) {
-                    return a->type < b->type;
+                    return a->kind < b->kind;
                   });
         auto SBegin = pstore::repo::details::make_fragment_content_iterator(
             Fragment.second.Sections.begin());
@@ -859,14 +850,12 @@ void RepoObjectWriter::writeObject(MCAssembler &Asm,
                           std::make_pair(TicketDigest, TExtent));
 
       // Update the dependents for each fragment index->address
-      if (!RepoFragments.empty()) {
-        for (auto &RepoFragment : RepoFragments) {
+      for (auto &Fragment : RepoFragments) {
 
-          if (auto Dependent = RepoFragment->dependents ()) {
-            updateDependents(*Dependent,
-                             *pstore::repo::ticket::load(Db, TExtent),
-                             TExtent.addr);
-          }
+        if (auto Dependent = Fragment->atp<pstore::repo::section_kind::dependent> ()) {
+          updateDependents(*Dependent,
+                           *pstore::repo::ticket::load(Db, TExtent),
+                           TExtent.addr);
         }
       }
     }

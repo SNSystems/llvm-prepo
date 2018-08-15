@@ -11,15 +11,25 @@
 
 #include "pstore/mcrepo/fragment.hpp"
 
-// clang-format off
-#define X(a) a,
 enum class ELFSectionType {
-  PSTORE_REPO_SECTION_TYPES
+  text,
+  bss,
+  data,
+  rel_ro,
+  mergeable_1_byte_c_string,
+  mergeable_2_byte_c_string,
+  mergeable_4_byte_c_string,
+  mergeable_const_4,
+  mergeable_const_8,
+  mergeable_const_16,
+  mergeable_const_32,
+  read_only,
+  thread_bss,
+  thread_data,
+
   init_array,
   fini_array,
 };
-#undef X
-// clang-format on
 
 namespace llvm {
 class raw_ostream;
