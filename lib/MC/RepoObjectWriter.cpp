@@ -52,6 +52,7 @@
 #include "pstore/core/transaction.hpp"
 #include "pstore/mcrepo/fragment.hpp"
 #include "pstore/mcrepo/ticket.hpp"
+#include "pstore/support/pointee_adaptor.hpp"
 #include "pstore/support/sstring_view.hpp"
 
 using namespace llvm;
@@ -782,10 +783,10 @@ void RepoObjectWriter::writeObject(MCAssembler &Asm,
                      std::unique_ptr<pstore::repo::section_content> const &b) {
                     return a->kind < b->kind;
                   });
-        auto SBegin = pstore::repo::details::make_fragment_content_iterator(
-            Fragment.second.Sections.begin());
-        auto SEnd = pstore::repo::details::make_fragment_content_iterator(
-            Fragment.second.Sections.end());
+        auto SBegin =
+            pstore::make_pointee_adaptor(Fragment.second.Sections.begin());
+        auto SEnd =
+            pstore::make_pointee_adaptor(Fragment.second.Sections.end());
 
         // The name field of each of the external fixups is pointing into the
         // 'Names' map. Here we turn that into the pstore address of the string.
@@ -805,10 +806,8 @@ void RepoObjectWriter::writeObject(MCAssembler &Asm,
             std::unique_ptr<pstore::repo::section_creation_dispatcher>, 4>;
         auto Dispatchers =
             buildFragmentData<DispatcherCollection>(Fragment.second);
-        auto Begin = pstore::repo::details::make_fragment_content_iterator(
-            Dispatchers.begin());
-        auto End = pstore::repo::details::make_fragment_content_iterator(
-            Dispatchers.end());
+        auto Begin = pstore::make_pointee_adaptor(Dispatchers.begin());
+        auto End = pstore::make_pointee_adaptor(Dispatchers.end());
 
         DEBUG(dbgs() << "fragment " << Key << " adding. size="
                      << pstore::repo::fragment::size_bytes(Begin, End) << '\n');
