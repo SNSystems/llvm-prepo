@@ -407,9 +407,9 @@ int main(int argc, char *argv[]) {
                 Name.as_string_view(&Owner).to_string() +
                 "\" did not contain a sole BSS section");
         }
-        pstore::repo::section const &S =
-            Fragment->at<pstore::repo::section_kind::bss>();
 
+        pstore::repo::generic_section const &S =
+            Fragment->at<pstore::repo::section_kind::bss>();
         State.Symbols.insertSymbol(Name, nullptr /*no output section*/,
                                    0 /*offset*/, S.data().size(), TM.linkage);
         continue;
@@ -417,7 +417,7 @@ int main(int argc, char *argv[]) {
       // Go through the sections that this fragment contains creating the
       // corresponding ELF section(s) as necessary.
       auto const SectionRange = make_filter_range(
-          make_range(pstore::repo::fragment::const_iterator(std::begin(*Fragment)), pstore::repo::fragment::const_iterator(std::end(*Fragment))),
+          make_range(std::begin(*Fragment), std::end(*Fragment)),
           pstore::repo::is_target_section);
 
       for (pstore::repo::section_kind Section : SectionRange) {
