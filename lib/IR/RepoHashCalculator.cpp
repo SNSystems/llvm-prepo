@@ -127,12 +127,9 @@ void HashCalculator::hashType(Type *Ty) {
   Hash.update(Ty->getTypeID());
 
   switch (Ty->getTypeID()) {
-  default:
-    llvm_unreachable("Unknown type!");
-    // Fall through in Release mode.
-    LLVM_FALLTHROUGH;
   // PrimitiveTypes
   case Type::VoidTyID:
+  case Type::HalfTyID:
   case Type::FloatTyID:
   case Type::DoubleTyID:
   case Type::X86_FP80TyID:
@@ -140,6 +137,7 @@ void HashCalculator::hashType(Type *Ty) {
   case Type::PPC_FP128TyID:
   case Type::LabelTyID:
   case Type::MetadataTyID:
+  case Type::X86_MMXTyID:
   case Type::TokenTyID:
     break;
 
