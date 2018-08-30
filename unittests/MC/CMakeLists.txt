@@ -12,4 +12,4 @@ add_llvm_unittest(MCTests
   TargetRegistry.cpp
   )
 
-target_link_libraries (MCTests pstore-core)
+target_link_libraries (MCTests PRIVATE pstore-core)
