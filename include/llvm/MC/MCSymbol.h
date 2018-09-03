@@ -48,8 +48,8 @@ protected:
     SymbolKindCOFF,
     SymbolKindELF,
     SymbolKindMachO,
-    SymbolKindRepo,
     SymbolKindWasm,
+    SymbolKindRepo,
   };
 
   /// A symbol can contain an Offset, or Value, or be Common, but never more

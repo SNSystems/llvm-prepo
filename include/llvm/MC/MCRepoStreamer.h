@@ -27,8 +27,8 @@ class MCInst;
 class MCRepoStreamer : public MCObjectStreamer {
 public:
   MCRepoStreamer(MCContext &Context, std::unique_ptr<MCAsmBackend> TAB,
-                 raw_pwrite_stream &OS, std::unique_ptr<MCCodeEmitter> Emitter)
-      : MCObjectStreamer(Context, std::move(TAB), OS, std::move(Emitter)) {}
+                 std::unique_ptr<MCObjectWriter> OW,
+                 std::unique_ptr<MCCodeEmitter> Emitter);
 
   ~MCRepoStreamer() override;
 
@@ -44,7 +44,8 @@ public:
                         unsigned ByteAlignment) override;
 
   void EmitZerofill(MCSection *Section, MCSymbol *Symbol = nullptr,
-                    uint64_t Size = 0, unsigned ByteAlignment = 0) override;
+                    uint64_t Size = 0, unsigned ByteAlignment = 0,
+                    SMLoc L = SMLoc()) override;
 
 private:
   void EmitInstToData(const MCInst &Inst, const MCSubtargetInfo &) override;

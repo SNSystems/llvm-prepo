@@ -104,7 +104,7 @@ MCStreamer *createWasmStreamer(MCContext &Ctx,
 
 MCStreamer *createRepoStreamer(MCContext &Ctx,
                                std::unique_ptr<MCAsmBackend> &&TAB,
-                               raw_pwrite_stream &OS,
+                               std::unique_ptr<MCObjectWriter> &&OW,
                                std::unique_ptr<MCCodeEmitter> &&CE,
                                bool RelaxAll);
 
@@ -187,8 +187,9 @@ public:
   using RepoStreamerCtorTy =
       MCStreamer *(*)(const Triple &T, MCContext &Ctx,
                       std::unique_ptr<MCAsmBackend> &&TAB,
-                      raw_pwrite_stream &OS,
+                      std::unique_ptr<MCObjectWriter> &&OW,
                       std::unique_ptr<MCCodeEmitter> &&Emitter, bool RelaxAll);
+
   using NullTargetStreamerCtorTy = MCTargetStreamer *(*)(MCStreamer &S);
   using AsmTargetStreamerCtorTy = MCTargetStreamer *(*)(
       MCStreamer &S, formatted_raw_ostream &OS, MCInstPrinter *InstPrint,
@@ -519,11 +520,11 @@ public:
       break;
     case Triple::Repo:
       if (RepoStreamerCtorFn)
-        S = RepoStreamerCtorFn(T, Ctx, std::move(TAB), OS, std::move(Emitter),
-                               RelaxAll);
+        S = RepoStreamerCtorFn(T, Ctx, std::move(TAB), std::move(OW),
+                               std::move(Emitter), RelaxAll);
       else
-        S = createRepoStreamer(Ctx, std::move(TAB), OS, std::move(Emitter),
-                               RelaxAll);
+        S = createRepoStreamer(Ctx, std::move(TAB), std::move(OW),
+                               std::move(Emitter), RelaxAll);
       break;
     }
     if (ObjectTargetStreamerCtorFn)

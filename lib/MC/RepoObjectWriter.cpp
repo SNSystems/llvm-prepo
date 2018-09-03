@@ -117,8 +117,10 @@ private:
 public:
   RepoObjectWriter(std::unique_ptr<MCRepoObjectTargetWriter> MOTW,
                    raw_pwrite_stream &OS, bool IsLittleEndian)
-      : MCObjectWriter(OS, IsLittleEndian),
-        TargetObjectWriter(std::move(MOTW)) {}
+      : TargetObjectWriter(std::move(MOTW)),
+        W(OS, IsLittleEndian ? support::little : support::big) {}
+
+  support::endian::Writer W;
 
   void reset() override {
     Renames.clear();
@@ -129,14 +131,9 @@ public:
 
   ~RepoObjectWriter() override;
 
-  void WriteWord(uint64_t W) { write64(W); }
+  void WriteWord(uint64_t Word) { W.write<uint64_t>(Word); }
 
-  template <typename T> void write(T Val) {
-    if (IsLittleEndian)
-      support::endian::Writer<support::little>(getStream()).write(Val);
-    else
-      support::endian::Writer<support::big>(getStream()).write(Val);
-  }
+  template <typename T> void write(T Val) { W.write(Val); }
 
   void recordRelocation(MCAssembler &Asm, const MCAsmLayout &Layout,
                         const MCFragment *Fragment, const MCFixup &Fixup,
@@ -183,7 +180,7 @@ public:
                    const pstore::repo::ticket &Ticket,
                    pstore::typed_address<pstore::repo::ticket> addr);
 
-  void writeObject(MCAssembler &Asm, const MCAsmLayout &Layout) override;
+  uint64_t writeObject(MCAssembler &Asm, const MCAsmLayout &Layout) override;
 };
 } // end anonymous namespace
 
@@ -437,10 +434,7 @@ void RepoObjectWriter::writeSectionData(ContentsType &Fragments,
 
   // Add the section content to the fragment.
   svector_ostream<decltype(Content->data)> VecOS{Content->data};
-  raw_pwrite_stream &OldStream = getStream();
-  this->setStream(VecOS);
-  Asm.writeSectionData(&Section, Layout);
-  this->setStream(OldStream);
+  Asm.writeSectionData(VecOS, &Section, Layout);
 
   auto const &Relocs = Relocations[&Section];
   Content->xfixups.reserve(Relocs.size());
@@ -450,7 +444,7 @@ void RepoObjectWriter::writeSectionData(ContentsType &Fragments,
             && Relocation.Type <= std::numeric_limits <repo_relocation_type>::max ());
 
     MCSymbolRepo const *const Symbol = Relocation.Symbol;
-    if (Symbol->isInSection(false)) {
+    if (Symbol->isInSection()) {
       MCSection &S = Symbol->getSection();
       if (MCSectionRepo const *const TargetSection =
               dyn_cast<MCSectionRepo>(&S)) {
@@ -490,8 +484,8 @@ void RepoObjectWriter::writeSectionData(ContentsType &Fragments,
         Relocation.Addend});
   }
 
-  DEBUG(dbgs() << "section type '" << Content->kind << "' and alignment "
-               << unsigned(Content->align) << '\n');
+  LLVM_DEBUG(dbgs() << "section type '" << Content->kind << "' and alignment "
+                    << unsigned(Content->align) << '\n');
 
   // A "dummy" section is created to provide a default for the assembler but we
   // don't write it to the repository.
@@ -600,7 +594,7 @@ StringRef streamPath(raw_fd_ostream &Stream, StringStorage &ResultPath) {
   }
   llvm::sys::path::remove_filename(ResultPath);
   StringRef OutputFile = ResultPath.str();
-  DEBUG(dbgs() << "path: " << OutputFile << "\n");
+  LLVM_DEBUG(dbgs() << "path: " << OutputFile << "\n");
   return OutputFile;
 }
 
@@ -669,7 +663,7 @@ static bool isExistingTicket(pstore::database &Db,
                              const pstore::index::digest &TicketDigest) {
   if (auto TicketIndex = pstore::index::get_ticket_index(Db, false)) {
     if (TicketIndex->find(TicketDigest) != TicketIndex->end()) {
-      DEBUG(dbgs() << "ticket " << TicketDigest << " exists. skipping\n");
+      LLVM_DEBUG(dbgs() << "ticket " << TicketDigest << " exists. skipping\n");
       return true;
     }
   }
@@ -711,15 +705,16 @@ void RepoObjectWriter::updateDependents(
   }
 }
 
-void RepoObjectWriter::writeObject(MCAssembler &Asm,
-                                   const MCAsmLayout &Layout) {
+uint64_t RepoObjectWriter::writeObject(MCAssembler &Asm,
+                                       const MCAsmLayout &Layout) {
+  uint64_t StartOffset = W.OS.tell();
 
   ContentsType Fragments;
   ModuleNamesContainer Names;
 
   SmallString<64> ResultPath;
   StringRef OutputFile =
-      streamPath(static_cast<raw_fd_ostream &>(this->getStream()), ResultPath);
+      streamPath(static_cast<raw_fd_ostream &>(W.OS), ResultPath);
   Names.emplace(stringRefAsView(OutputFile),
                 pstore::typed_address<pstore::indirect_string>::null());
 
@@ -755,8 +750,8 @@ void RepoObjectWriter::writeObject(MCAssembler &Asm,
       // should help to limit the virtual memory consumption of the
       // repo-linker's store-shadow memory.
       for (ModuleNamesContainer::value_type &NameAddress : Names) {
-        DEBUG(dbgs() << "insert name: " << stringViewAsRef(NameAddress.first)
-                     << '\n');
+        LLVM_DEBUG(dbgs() << "insert name: "
+                          << stringViewAsRef(NameAddress.first) << '\n');
         pstore::index::name_index::iterator const Pos =
             NameAdder.add(Transaction, NamesIndex, &NameAddress.first).first;
         NameAddress.second =
@@ -809,8 +804,9 @@ void RepoObjectWriter::writeObject(MCAssembler &Asm,
         auto Begin = pstore::make_pointee_adaptor(Dispatchers.begin());
         auto End = pstore::make_pointee_adaptor(Dispatchers.end());
 
-        DEBUG(dbgs() << "fragment " << Key << " adding. size="
-                     << pstore::repo::fragment::size_bytes(Begin, End) << '\n');
+        LLVM_DEBUG(dbgs() << "fragment " << Key << " adding. size="
+                          << pstore::repo::fragment::size_bytes(Begin, End)
+                          << '\n');
 
         auto extent = pstore::repo::fragment::alloc(Transaction, Begin, End);
         RepoFragments.emplace_back(pstore::repo::fragment::load(Transaction, extent));
@@ -837,9 +833,9 @@ void RepoObjectWriter::writeObject(MCAssembler &Asm,
         auto MNC = reinterpret_cast<ModuleNamesContainer::value_type const *>(
             TicketMember.name.absolute());
         TicketMember.name = MNC->second;
-        DEBUG(dbgs() << "ticket name '" << stringViewAsRef(MNC->first)
-                     << "' digest '" << TicketMember.digest << "' adding."
-                     << '\n');
+        LLVM_DEBUG(dbgs() << "ticket name '" << stringViewAsRef(MNC->first)
+                          << "' digest '" << TicketMember.digest << "' adding."
+                          << '\n');
       }
 
       // Store the Ticket.
@@ -862,8 +858,9 @@ void RepoObjectWriter::writeObject(MCAssembler &Asm,
   }
 
   // write the ticket file itself
-  llvm::repo::writeTicketFile(this->getStream(), this->isLittleEndian(),
-                              TicketDigest);
+  llvm::repo::writeTicketFile(W, TicketDigest);
+
+  return W.OS.tell() - StartOffset;
 }
 
 bool RepoObjectWriter::isSymbolRefDifferenceFullyResolvedImpl(

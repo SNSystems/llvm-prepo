@@ -15,6 +15,7 @@
 #include "llvm/MC/MCFixupKindInfo.h"
 #include "llvm/MC/MCMachObjectWriter.h"
 #include "llvm/MC/MCObjectWriter.h"
+#include "llvm/MC/MCRepoObjectWriter.h"
 #include "llvm/MC/MCWasmObjectWriter.h"
 #include "llvm/MC/MCWinCOFFObjectWriter.h"
 #include <cassert>
@@ -33,8 +34,8 @@ MCAsmBackend::createObjectWriter(raw_pwrite_stream &OS) const {
   auto TW = createObjectTargetWriter();
   switch (TW->getFormat()) {
   case Triple::ELF:
-    return createELFObjectWriter(cast<MCELFObjectTargetWriter>(std::move(TW)), OS,
-                                 Endian == support::little);
+    return createELFObjectWriter(cast<MCELFObjectTargetWriter>(std::move(TW)),
+                                 OS, Endian == support::little);
   case Triple::MachO:
     return createMachObjectWriter(cast<MCMachObjectTargetWriter>(std::move(TW)),
                                   OS, Endian == support::little);
@@ -44,6 +45,9 @@ MCAsmBackend::createObjectWriter(raw_pwrite_stream &OS) const {
   case Triple::Wasm:
     return createWasmObjectWriter(cast<MCWasmObjectTargetWriter>(std::move(TW)),
                                   OS);
+  case Triple::Repo:
+    return createRepoObjectWriter(cast<MCRepoObjectTargetWriter>(std::move(TW)),
+                                  OS, Endian == support::little);
   default:
     llvm_unreachable("unexpected object format");
   }

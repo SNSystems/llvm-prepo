@@ -236,10 +236,10 @@ OutputSection<ELFT>::SectionInfo::symbol(SymbolTable<ELFT> &Symbols,
     Symbol_ = Symbols.insertSymbol(Name, Section_, Offset_, 0 /*size*/,
                                    pstore::repo::linkage_type::internal);
 
-    DEBUG(dbgs() << "  created symbol:" << Name
-                 << " for internal fixup (offset:" << Offset_
-                 << " contributionSize:" << Section_->contributionSize()
-                 << ")\n");
+    LLVM_DEBUG(dbgs() << "  created symbol:" << Name
+                      << " for internal fixup (offset:" << Offset_
+                      << " contributionSize:" << Section_->contributionSize()
+                      << ")\n");
 
     assert(Symbol_ != nullptr);
   }
@@ -335,8 +335,8 @@ void OutputSection<ELFT>::append(pstore::repo::ticket_member const &TM,
 
   auto const ObjectSize =
       pstore::repo::section_size(*Fragment, SectionKind);
-  DEBUG(dbgs() << "  generating relocations FROM '"
-               << pstore::indirect_string::read(Db_, TM.name) << "'\n");
+  LLVM_DEBUG(dbgs() << "  generating relocations FROM '"
+                    << pstore::indirect_string::read(Db_, TM.name) << "'\n");
 
   std::uint8_t const DataAlign =
       pstore::repo::section_align(*Fragment, SectionKind);
@@ -364,7 +364,7 @@ void OutputSection<ELFT>::append(pstore::repo::ticket_member const &TM,
   for (pstore::repo::external_fixup const &XFixup :
        pstore::repo::section_xfixups(*Fragment, SectionKind)) {
     auto const TargetName = pstore::indirect_string::read(Db_, XFixup.name);
-    DEBUG(dbgs() << "  generating relocation TO '" << TargetName << '\n');
+    LLVM_DEBUG(dbgs() << "  generating relocation TO '" << TargetName << '\n');
     Relocations_.emplace_back(Symbols.insertSymbol(TargetName, XFixup.type),
                               XFixup.type, XFixup.offset + SectionSize_,
                               XFixup.addend);
@@ -376,9 +376,9 @@ void OutputSection<ELFT>::append(pstore::repo::ticket_member const &TM,
     // modify.
     OutputSection const *PatchSection = this;
     auto const PatchOffset = SectionSize_ + IFixup.offset;
-    DEBUG(llvm::dbgs() << "patch section is "
-                       << std::get<0>(PatchSection->sectionId()) << " + "
-                       << PatchOffset << '\n');
+    LLVM_DEBUG(llvm::dbgs()
+               << "patch section is " << std::get<0>(PatchSection->sectionId())
+               << " + " << PatchOffset << '\n');
 
     // "target section" and friends define the value that the fixup will write
     // to the "patch address".
@@ -389,9 +389,9 @@ void OutputSection<ELFT>::append(pstore::repo::ticket_member const &TM,
            TargetSectionIndex < OutputSections.size());
     SectionInfo &TargetSection = OutputSections[TargetSectionIndex];
 
-    DEBUG(llvm::dbgs() << "reloc target section is "
-                       << std::get<0>(TargetSection.section()->sectionId())
-                       << '\n');
+    LLVM_DEBUG(llvm::dbgs()
+               << "reloc target section is "
+               << std::get<0>(TargetSection.section()->sectionId()) << '\n');
 
     Relocations_.emplace_back(TargetSection.symbol(Symbols, Generated),
                               IFixup.type, PatchOffset, IFixup.addend);
@@ -448,8 +448,8 @@ OutputSection<ELFT>::write(llvm::raw_ostream &OS, StringTable &SectionNames,
   std::string const SectionName = this->dataSectionName(
       Attrs->second.Name, std::get<1>(Id_) /*Discriminator*/);
   {
-    DEBUG(llvm::dbgs() << "section " << SectionName << " index " << Index_
-                       << '\n');
+    LLVM_DEBUG(llvm::dbgs()
+               << "section " << SectionName << " index " << Index_ << '\n');
 
     Elf_Shdr SH;
     zero(SH);

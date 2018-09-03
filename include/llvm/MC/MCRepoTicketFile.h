@@ -11,6 +11,7 @@
 #define LLVM_MC_MCREPOTICKETFILE_H
 
 #include "llvm/ADT/StringRef.h"
+#include "llvm/Support/EndianStream.h"
 #include "llvm/Support/ErrorOr.h"
 #include <system_error>
 
@@ -32,7 +33,7 @@ inline std::error_code make_error_code(TicketError E) {
   return {static_cast<int>(E), ticketErrorCategory()};
 }
 
-void writeTicketFile(raw_ostream &OS, bool LittleEndian,
+void writeTicketFile(support::endian::Writer &W,
                      pstore::index::digest const &Digest);
 ErrorOr<pstore::index::digest> getTicketIdFromFile(StringRef TicketPath);
 

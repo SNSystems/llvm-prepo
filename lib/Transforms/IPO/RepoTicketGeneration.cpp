@@ -71,9 +71,9 @@ bool RepoTicketGeneration::runOnModule(Module &M) {
   auto Result = ticketmd::generateTicketMDs(M);
   NumVariables += std::get<1>(Result);
   NumFunctions += std::get<2>(Result);
-  DEBUG(dbgs() << "Size of module: " << M.size() << '\n');
-  DEBUG(dbgs() << "Number of hashed functions: " << NumFunctions << '\n');
-  DEBUG(dbgs() << "Number of hashed variables: " << NumVariables << '\n');
+  LLVM_DEBUG(dbgs() << "Size of module: " << M.size() << '\n');
+  LLVM_DEBUG(dbgs() << "Number of hashed functions: " << NumFunctions << '\n');
+  LLVM_DEBUG(dbgs() << "Number of hashed variables: " << NumVariables << '\n');
 
 #if 0
   // TODO: enable the code once support alias.

@@ -13,10 +13,19 @@
 
 #include "llvm/MC/MCRepoStreamer.h"
 #include "llvm/MC/MCCodeEmitter.h"
+#include "llvm/MC/MCObjectWriter.h"
 #include "llvm/Support/TargetRegistry.h"
 #include <iostream>
 
 using namespace llvm;
+
+MCRepoStreamer::MCRepoStreamer(MCContext &Context,
+                               std::unique_ptr<MCAsmBackend> TAB,
+                               std::unique_ptr<MCObjectWriter> OW,
+                               std::unique_ptr<MCCodeEmitter> Emitter)
+    : MCObjectStreamer(Context, std::move(TAB), std::move(OW),
+                       std::move(Emitter)) {}
+
 MCRepoStreamer::~MCRepoStreamer() {}
 
 void MCRepoStreamer::ChangeSection(MCSection *Section,
@@ -35,7 +44,8 @@ void MCRepoStreamer::EmitCommonSymbol(MCSymbol *Symbol, uint64_t Size,
 }
 
 void MCRepoStreamer::EmitZerofill(MCSection *Section, MCSymbol *Symbol,
-                                  uint64_t Size, unsigned ByteAlignment) {
+                                  uint64_t Size, unsigned ByteAlignment,
+                                  SMLoc Loc) {
   report_fatal_error("Emit Zero File not yet implemented");
 }
 
@@ -58,11 +68,12 @@ void MCRepoStreamer::EmitInstToData(const MCInst &Inst,
 
 MCStreamer *llvm::createRepoStreamer(MCContext &Context,
                                      std::unique_ptr<MCAsmBackend> &&MAB,
-                                     raw_pwrite_stream &OS,
+                                     std::unique_ptr<MCObjectWriter> &&OW,
                                      std::unique_ptr<MCCodeEmitter> &&CE,
                                      bool RelaxAll) {
   MCRepoStreamer *S =
-      new MCRepoStreamer(Context, std::move(MAB), OS, std::move(CE));
+      new MCRepoStreamer(Context, std::move(MAB), std::move(OW), std::move(CE));
+
   if (RelaxAll)
     S->getAssembler().setRelaxAll(true);
   return S;

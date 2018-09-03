@@ -439,17 +439,18 @@ public:
 
 class RepoX86AsmBackend : public X86AsmBackend {
 public:
-  RepoX86AsmBackend(const Target &T, StringRef CPU) : X86AsmBackend(T, CPU) {}
+  RepoX86AsmBackend(const Target &T, const MCSubtargetInfo &STI)
+      : X86AsmBackend(T, STI) {}
 };
 
 class RepoX86_64AsmBackend : public RepoX86AsmBackend {
 public:
-  RepoX86_64AsmBackend(const Target &T, StringRef CPU)
-      : RepoX86AsmBackend(T, CPU) {}
+  RepoX86_64AsmBackend(const Target &T, const MCSubtargetInfo &STI)
+      : RepoX86AsmBackend(T, STI) {}
 
-  std::unique_ptr<MCObjectWriter>
-  createObjectWriter(raw_pwrite_stream &OS) const override {
-    return createX86RepoObjectWriter(OS, ELF::EM_X86_64);
+  std::unique_ptr<MCObjectTargetWriter>
+  createObjectTargetWriter() const override {
+    return createX86RepoObjectWriter(ELF::EM_X86_64);
   }
 };
 
@@ -894,7 +895,7 @@ MCAsmBackend *llvm::createX86_64AsmBackend(const Target &T,
                                            const MCTargetOptions &Options) {
   const Triple &TheTriple = STI.getTargetTriple();
   if (TheTriple.isOSBinFormatRepo()) {
-    return new RepoX86_64AsmBackend(T, CPU);
+    return new RepoX86_64AsmBackend(T, STI);
   }
 
   if (TheTriple.isOSBinFormatMachO()) {

@@ -303,135 +303,7 @@ void MCObjectFileInfo::initRepoMCObjectFileInfo(const Triple &T) {
     DummySection->markAsDummy ();
     TextSection = DummySection;
   }
-  BSSSection = nullptr; //Ctx->getRepoSection ("null", MCContext::RepoSection::BSSSection);
-
-#if 0
-  // ELF
-  TextSection = Ctx->getELFSection(".text", ELF::SHT_PROGBITS,
-                                   ELF::SHF_EXECINSTR | ELF::SHF_ALLOC);
-
-  DataSection = Ctx->getELFSection(".data", ELF::SHT_PROGBITS,
-                                   ELF::SHF_WRITE | ELF::SHF_ALLOC);
-
-  ReadOnlySection =
-      Ctx->getELFSection(".rodata", ELF::SHT_PROGBITS, ELF::SHF_ALLOC);
-
-  TLSDataSection =
-      Ctx->getELFSection(".tdata", ELF::SHT_PROGBITS,
-                         ELF::SHF_ALLOC | ELF::SHF_TLS | ELF::SHF_WRITE);
-
-  TLSBSSSection = Ctx->getELFSection(
-      ".tbss", ELF::SHT_NOBITS, ELF::SHF_ALLOC | ELF::SHF_TLS | ELF::SHF_WRITE);
-
-  DataRelROSection = Ctx->getELFSection(".data.rel.ro", ELF::SHT_PROGBITS,
-                                        ELF::SHF_ALLOC | ELF::SHF_WRITE);
-
-  MergeableConst4Section =
-      Ctx->getELFSection(".rodata.cst4", ELF::SHT_PROGBITS,
-                         ELF::SHF_ALLOC | ELF::SHF_MERGE, 4, "");
-
-  MergeableConst8Section =
-      Ctx->getELFSection(".rodata.cst8", ELF::SHT_PROGBITS,
-                         ELF::SHF_ALLOC | ELF::SHF_MERGE, 8, "");
-
-  MergeableConst16Section =
-      Ctx->getELFSection(".rodata.cst16", ELF::SHT_PROGBITS,
-                         ELF::SHF_ALLOC | ELF::SHF_MERGE, 16, "");
-
-  MergeableConst32Section =
-      Ctx->getELFSection(".rodata.cst32", ELF::SHT_PROGBITS,
-                         ELF::SHF_ALLOC | ELF::SHF_MERGE, 32, "");
-
-  StaticCtorSection = Ctx->getELFSection(".ctors", ELF::SHT_PROGBITS,
-                                         ELF::SHF_ALLOC | ELF::SHF_WRITE);
-
-  StaticDtorSection = Ctx->getELFSection(".dtors", ELF::SHT_PROGBITS,
-                                         ELF::SHF_ALLOC | ELF::SHF_WRITE);
-
-  // Exception Handling Sections.
-
-  // FIXME: We're emitting LSDA info into a readonly section on ELF, even though
-  // it contains relocatable pointers.  In PIC mode, this is probably a big
-  // runtime hit for C++ apps.  Either the contents of the LSDA need to be
-  // adjusted or this should be a data section.
-  LSDASection = Ctx->getELFSection(".gcc_except_table", ELF::SHT_PROGBITS,
-                                   ELF::SHF_ALLOC);
-
-  COFFDebugSymbolsSection = nullptr;
-  COFFDebugTypesSection = nullptr;
-
-  // Debug Info Sections.
-  DwarfAbbrevSection = Ctx->getELFSection(".debug_abbrev", ELF::SHT_PROGBITS, 0,
-                                          "section_abbrev");
-  DwarfInfoSection =
-      Ctx->getELFSection(".debug_info", ELF::SHT_PROGBITS, 0, "section_info");
-  DwarfLineSection = Ctx->getELFSection(".debug_line", ELF::SHT_PROGBITS, 0);
-  DwarfFrameSection = Ctx->getELFSection(".debug_frame", ELF::SHT_PROGBITS, 0);
-  DwarfPubNamesSection =
-      Ctx->getELFSection(".debug_pubnames", ELF::SHT_PROGBITS, 0);
-  DwarfPubTypesSection =
-      Ctx->getELFSection(".debug_pubtypes", ELF::SHT_PROGBITS, 0);
-  DwarfGnuPubNamesSection =
-      Ctx->getELFSection(".debug_gnu_pubnames", ELF::SHT_PROGBITS, 0);
-  DwarfGnuPubTypesSection =
-      Ctx->getELFSection(".debug_gnu_pubtypes", ELF::SHT_PROGBITS, 0);
-  DwarfStrSection =
-      Ctx->getELFSection(".debug_str", ELF::SHT_PROGBITS,
-                         ELF::SHF_MERGE | ELF::SHF_STRINGS, 1, "");
-  DwarfLocSection = Ctx->getELFSection(".debug_loc", ELF::SHT_PROGBITS, 0);
-  DwarfARangesSection =
-      Ctx->getELFSection(".debug_aranges", ELF::SHT_PROGBITS, 0);
-  DwarfRangesSection =
-      Ctx->getELFSection(".debug_ranges", ELF::SHT_PROGBITS, 0, "debug_range");
-  DwarfMacinfoSection = Ctx->getELFSection(".debug_macinfo", ELF::SHT_PROGBITS,
-                                           0, "debug_macinfo");
-
-  // DWARF5 Experimental Debug Info
-
-  // Accelerator Tables
-  DwarfAccelNamesSection =
-      Ctx->getELFSection(".apple_names", ELF::SHT_PROGBITS, 0, "names_begin");
-  DwarfAccelObjCSection =
-      Ctx->getELFSection(".apple_objc", ELF::SHT_PROGBITS, 0, "objc_begin");
-  DwarfAccelNamespaceSection = Ctx->getELFSection(
-      ".apple_namespaces", ELF::SHT_PROGBITS, 0, "namespac_begin");
-  DwarfAccelTypesSection =
-      Ctx->getELFSection(".apple_types", ELF::SHT_PROGBITS, 0, "types_begin");
-
-  // Fission Sections
-  DwarfInfoDWOSection =
-      Ctx->getELFSection(".debug_info.dwo", ELF::SHT_PROGBITS, 0);
-  DwarfTypesDWOSection =
-      Ctx->getELFSection(".debug_types.dwo", ELF::SHT_PROGBITS, 0);
-  DwarfAbbrevDWOSection =
-      Ctx->getELFSection(".debug_abbrev.dwo", ELF::SHT_PROGBITS, 0);
-  DwarfStrDWOSection =
-      Ctx->getELFSection(".debug_str.dwo", ELF::SHT_PROGBITS,
-                         ELF::SHF_MERGE | ELF::SHF_STRINGS, 1, "");
-  DwarfLineDWOSection =
-      Ctx->getELFSection(".debug_line.dwo", ELF::SHT_PROGBITS, 0);
-  DwarfLocDWOSection =
-      Ctx->getELFSection(".debug_loc.dwo", ELF::SHT_PROGBITS, 0, "skel_loc");
-  DwarfStrOffDWOSection =
-      Ctx->getELFSection(".debug_str_offsets.dwo", ELF::SHT_PROGBITS, 0);
-  DwarfAddrSection =
-      Ctx->getELFSection(".debug_addr", ELF::SHT_PROGBITS, 0, "addr_sec");
-
-  // DWP Sections
-  DwarfCUIndexSection =
-      Ctx->getELFSection(".debug_cu_index", ELF::SHT_PROGBITS, 0);
-  DwarfTUIndexSection =
-      Ctx->getELFSection(".debug_tu_index", ELF::SHT_PROGBITS, 0);
-
-  StackMapSection =
-      Ctx->getELFSection(".llvm_stackmaps", ELF::SHT_PROGBITS, ELF::SHF_ALLOC);
-
-  FaultMapSection =
-      Ctx->getELFSection(".llvm_faultmaps", ELF::SHT_PROGBITS, ELF::SHF_ALLOC);
-
-  EHFrameSection =
-      Ctx->getELFSection(".eh_frame", EHSectionType, EHSectionFlags);
-#endif
+  BSSSection = nullptr;
 }
 
 void MCObjectFileInfo::initELFMCObjectFileInfo(const Triple &T, bool Large) {
@@ -1104,6 +976,7 @@ MCSection *MCObjectFileInfo::getDwarfTypesSection(uint64_t Hash) const {
   case Triple::MachO:
   case Triple::COFF:
   case Triple::Wasm:
+  case Triple::Repo:
   case Triple::UnknownObjectFormat:
     report_fatal_error("Cannot get DWARF types section for this object file "
                        "format: not implemented.");

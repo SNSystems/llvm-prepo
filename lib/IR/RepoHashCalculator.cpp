@@ -181,7 +181,7 @@ void HashCalculator::hashType(Type *Ty) {
 
 /// Accumulate the constants hash.
 void HashCalculator::hashConstant(const Constant *V) {
-  DEBUG(dbgs() << "Constant V name:  " << V->getName() << "\n");
+  LLVM_DEBUG(dbgs() << "Constant V name:  " << V->getName() << "\n");
 
   Hash.update(HashKind::TAG_Constant);
   Type *Ty = V->getType();
@@ -257,7 +257,7 @@ void HashCalculator::hashConstant(const Constant *V) {
     break;
   }
   default: // Unknown constant, abort.
-    DEBUG(dbgs() << "Looking at valueID " << V->getValueID() << "\n");
+    LLVM_DEBUG(dbgs() << "Looking at valueID " << V->getValueID() << "\n");
     llvm_unreachable("Constant ValueID not recognized.");
   }
 }

@@ -51,9 +51,9 @@ entry:
   ret i32 %call
 }
 
-;CHECK:      !0 = !TicketNode(name: "c", digest: [16 x i8] c"\84\E5\7F\EE\D7S^\A54R\93H*[\188", linkage: external, pruned: true)
-;CHECK-NEXT: !1 = !TicketNode(name: "a", digest: [16 x i8] c"\82\8E:\15)\9F\13W\12\04l\0C+&z\11", linkage: external, pruned: true)
-;CHECK-NEXT: !2 = !TicketNode(name: "b", digest: [16 x i8] c"\82\8E:\15)\9F\13W\12\04l\0C+&z\11", linkage: internal, pruned: true)
-;CHECK-NEXT: !3 = !TicketNode(name: "me", digest: [16 x i8] c">\F2\04\C1\8F?\83ZF\1Ey\02~)\F1\A2", linkage: linkonce_odr, pruned: true)
-;CHECK-NEXT: !4 = !TicketNode(name: "foo", digest: [16 x i8] c"Ul\EA\B1\FE\16\C8\00FC:\B8\12E\06=", linkage: internal, pruned: true)
-;CHECK-NEXT: !5 = !TicketNode(name: "bar", digest: [16 x i8] c"+\92]\8D?\94\14\E9\E7\A3\B9\93\91A\C0d", linkage: external, pruned: true)
+;CHECK:      !0 = !TicketNode(name: "c", digest: [16 x i8] c"{{.*}}", linkage: external, pruned: true)
+;CHECK-NEXT: !1 = !TicketNode(name: "a", digest: [16 x i8] c"{{.*}}", linkage: external, pruned: true)
+;CHECK-NEXT: !2 = !TicketNode(name: "b", digest: [16 x i8] c"{{.*}}", linkage: internal, pruned: true)
+;CHECK-NEXT: !3 = !TicketNode(name: "me", digest: [16 x i8] c"{{.*}}", linkage: linkonce_odr, pruned: true)
+;CHECK-NEXT: !4 = !TicketNode(name: "foo", digest: [16 x i8] c"{{.*}}", linkage: internal, pruned: true)
+;CHECK-NEXT: !5 = !TicketNode(name: "bar", digest: [16 x i8] c"{{.*}}", linkage: external, pruned: true)

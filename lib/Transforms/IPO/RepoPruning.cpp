@@ -133,6 +133,7 @@ bool RepoPruning::runOnModule(Module &M) {
     GO.clearMetadata();
     GO.setMetadata(LLVMContext::MD_repo_ticket, MD);
     GO.setLinkage(GlobalValue::ExternalLinkage);
+    GO.setDSOLocal(false);
     // Create  the dependent fragments if existing.
     auto Fragment = pstore::repo::fragment::load(Repository, it->second);
     if (auto Dependents = Fragment->atp<pstore::repo::section_kind::dependent>()) {
@@ -173,10 +174,10 @@ bool RepoPruning::runOnModule(Module &M) {
     }
   }
 
-  DEBUG(dbgs() << "size of module: " << M.size() << '\n');
-  DEBUG(dbgs() << "size of removed functions: " << NumFunctions << '\n');
-  DEBUG(dbgs() << "size of removed variables: " << NumVariables << '\n');
-  DEBUG(dbgs() << "size of removed aliases: " << NumAliases << '\n');
+  LLVM_DEBUG(dbgs() << "size of module: " << M.size() << '\n');
+  LLVM_DEBUG(dbgs() << "size of removed functions: " << NumFunctions << '\n');
+  LLVM_DEBUG(dbgs() << "size of removed variables: " << NumVariables << '\n');
+  LLVM_DEBUG(dbgs() << "size of removed aliases: " << NumAliases << '\n');
 
   return Changed;
 }

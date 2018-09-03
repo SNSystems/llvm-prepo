@@ -61,7 +61,7 @@ LLVMContext::LLVMContext() : pImpl(new LLVMContextImpl(*this)) {
       {MD_associated, "associated"},
       {MD_callees, "callees"},
       {MD_irr_loop, "irr_loop"},
-      {MD_fragment, "repo_ticket"},
+      {MD_repo_ticket, "repo_ticket"},
   };
 
   for (auto &MDKind : MDKinds) {

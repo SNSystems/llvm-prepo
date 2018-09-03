@@ -1650,7 +1650,7 @@ void AsmPrinter::EmitConstantPool() {
   // Calculate sections for constant pool entries. We collect entries to go into
   // the same section together to reduce amount of section switch statements.
   SmallVector<SectionCPs, 4> CPSections;
-  const Function *F = MF->getFunction();
+  const Function &F = MF->getFunction();
   for (unsigned i = 0, e = CP.size(); i != e; ++i) {
     const MachineConstantPoolEntry &CPE = CP[i];
     unsigned Align = CPE.getAlignment();
@@ -1662,7 +1662,7 @@ void AsmPrinter::EmitConstantPool() {
       C = CPE.Val.ConstVal;
 
     MCSection *S = getObjFileLowering().getSectionForConstant(
-        getDataLayout(), Kind, C, Align, F);
+        getDataLayout(), Kind, C, Align, &F);
 
     // The number of sections are small, just do a linear search from the
     // last section to the first.
@@ -2716,8 +2716,10 @@ MCSymbol *AsmPrinter::GetCPISymbol(unsigned CPID) const {
       SectionKind Kind = CPE.getSectionKind(&DL);
       const Constant *C = CPE.Val.ConstVal;
       unsigned Align = CPE.Alignment;
+      const Function &F = MF->getFunction();
       if (const MCSectionCOFF *S = dyn_cast<MCSectionCOFF>(
-              getObjFileLowering().getSectionForConstant(DL, Kind, C, Align))) {
+              getObjFileLowering().getSectionForConstant(DL, Kind, C, Align,
+                                                         &F))) {
         if (MCSymbol *Sym = S->getCOMDATSymbol()) {
           if (Sym->isUndefined())
             OutStreamer->EmitSymbolAttribute(Sym, MCSA_Global);

@@ -1522,8 +1522,8 @@ static std::string scalarConstantToHexString(const Constant *C) {
 }
 
 MCSection *TargetLoweringObjectFileCOFF::getSectionForConstant(
-    const DataLayout &DL, SectionKind Kind, const Constant *C,
-    unsigned &Align) const {
+    const DataLayout &DL, SectionKind Kind, const Constant *C, unsigned &Align,
+    const GlobalObject *GO) const {
   if (Kind.isMergeableConst() && C &&
       getContext().getAsmInfo()->hasCOFFComdatConstants()) {
     // This creates comdat sections with the given symbol name, but unless
@@ -1563,9 +1563,9 @@ MCSection *TargetLoweringObjectFileCOFF::getSectionForConstant(
                                          COFF::IMAGE_COMDAT_SELECT_ANY);
   }
 
-  return TargetLoweringObjectFile::getSectionForConstant(DL, Kind, C, Align);
+  return TargetLoweringObjectFile::getSectionForConstant(DL, Kind, C, Align,
+                                                         GO);
 }
-
 
 //===----------------------------------------------------------------------===//
 //                                  Wasm

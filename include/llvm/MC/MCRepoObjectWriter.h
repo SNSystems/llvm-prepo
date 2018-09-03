@@ -11,6 +11,7 @@
 #define LLVM_MC_MCREPOOBJECTWRITER_H
 
 #include "llvm/ADT/Triple.h"
+#include "llvm/MC/MCObjectWriter.h"
 #include "llvm/MC/MCValue.h"
 #include "llvm/Support/DataTypes.h"
 #include "llvm/Support/raw_ostream.h"
@@ -51,7 +52,7 @@ struct RepoRelocationEntry {
   void dump() const { print(errs()); }
 };
 
-class MCRepoObjectTargetWriter {
+class MCRepoObjectTargetWriter : public MCObjectTargetWriter {
   const uint16_t EMachine;
   virtual void anchor();
 
@@ -60,6 +61,11 @@ protected:
 
 public:
   virtual ~MCRepoObjectTargetWriter() {}
+
+  virtual Triple::ObjectFormatType getFormat() const { return Triple::Repo; }
+  static bool classof(const MCObjectTargetWriter *W) {
+	  return W->getFormat() == Triple::Repo;
+  }
 
   virtual unsigned getRelocType(MCContext &Ctx, const MCValue &Target,
                                 const MCFixup &Fixup, bool IsPCRel) const = 0;

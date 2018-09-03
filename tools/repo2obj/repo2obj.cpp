@@ -340,7 +340,7 @@ int main(int argc, char *argv[]) {
   }
 
   pstore::index::digest const &Digest = DigestOrError.get();
-  DEBUG(dbgs() << "'" << TicketPath << "' : " << Digest << '\n');
+  LLVM_DEBUG(dbgs() << "'" << TicketPath << "' : " << Digest << '\n');
 
   pstore::database Db(getRepoPath(), pstore::database::access_mode::read_only);
   std::shared_ptr<pstore::index::ticket_index const> const TicketIndex =
@@ -373,8 +373,8 @@ int main(int argc, char *argv[]) {
     auto Ticket = pstore::repo::ticket::load(Db, TicketPos->second);
     for (auto const &TM : *Ticket) {
       assert(TM.name != pstore::typed_address<pstore::indirect_string>::null());
-      DEBUG(dbgs() << "Processing: "
-                   << pstore::indirect_string::read(Db, TM.name) << '\n');
+      LLVM_DEBUG(dbgs() << "Processing: "
+                        << pstore::indirect_string::read(Db, TM.name) << '\n');
 
       auto const FragmentPos = FragmentIndex->find(TM.digest);
       if (FragmentPos == FragmentIndex->end()) {
@@ -476,7 +476,7 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  DEBUG(dbgs() << "There are " << State.Groups.size() << " groups\n");
+  LLVM_DEBUG(dbgs() << "There are " << State.Groups.size() << " groups\n");
 
   std::vector<SymbolTable<ELFT>::Value *> OrderedSymbols = State.Symbols.sort();
 

@@ -11,7 +11,6 @@
 
 #include "pstore/core/index_types.hpp"
 #include "llvm/ADT/StringRef.h"
-#include "llvm/Support/Endian.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/Process.h"
@@ -48,12 +47,12 @@ const std::error_category &llvm::repo::ticketErrorCategory() {
   return Category;
 }
 
-void llvm::repo::writeTicketFile(raw_ostream &OS, bool LittleEndian,
+void llvm::repo::writeTicketFile(support::endian::Writer &W,
                                  pstore::index::digest const &Digest) {
   std::array<char, MagicSize> const *Signature;
   std::uint64_t Out[2];
 
-  if (LittleEndian) {
+  if (W.Endian == support::little) {
     Signature = &LERepoMagic;
     support::endian::write64le(&Out[0], Digest.low());
     support::endian::write64le(&Out[1], Digest.high());
@@ -63,8 +62,8 @@ void llvm::repo::writeTicketFile(raw_ostream &OS, bool LittleEndian,
     support::endian::write64be(&Out[1], Digest.low());
   }
 
-  OS.write(Signature->data(), Signature->size());
-  OS.write(reinterpret_cast<const char *>(Out), sizeof(Out));
+  W.OS.write(Signature->data(), Signature->size());
+  W.OS.write(reinterpret_cast<const char *>(Out), sizeof(Out));
 }
 
 ErrorOr<pstore::index::digest>
