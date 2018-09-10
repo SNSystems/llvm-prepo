@@ -1,6 +1,6 @@
 # LLVM with Program Repository Support
 
-This git repository contains a copy of LLVM (forked from commit: 81b03a38899a9e94b2a8cbf07dac58473b97cedc) with work-in-progress modifications to output to a Program Repository. 
+This git repository contains a copy of LLVM (forked from commit: 57bb7d2d7058512fff60f58c343aad15eae64afb) with work-in-progress modifications to output to a Program Repository.
 
 The changes are to add support for the program repository that was first shown at the [2016 US LLVM Developers’ meeting](https://llvm.org/devmtg/2016-11/) in the talk catchily titled “Demo of a repository for statically compiled programs”. You can relive the highs and lows by [watching it on YouTube](https://youtu.be/-pL94rqyQ6c). The early implementation demonstrated there has its [own Github repository](https://github.com/SNSystems/Toy-tools): in essence, this work re-implements the same thing in LLVM to give you the anticipated build-time improvements in a C++ compiler targetting Linux.
 
@@ -12,7 +12,7 @@ The process to follow is similar to that for a conventional build of Clang+LLVM,
 
         $ git clone https://github.com/SNSystems/llvm-prepo.git
 
-1. Clone [clang-prepo](https://github.com/SNSystems/clang-prepo):
+1. Clone [clang-prepo](https://github.com/SNSystems/clang-prepo -- forked from commit: d6aa2b1c1a49068f3c8d5405083fde4118d75e4f):
 
         $ cd llvm/tools
         $ git clone https://github.com/SNSystems/clang-prepo.git
