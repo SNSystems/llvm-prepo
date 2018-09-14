@@ -78,8 +78,6 @@ GlobalValue::LinkageTypes toGVLinkage(pstore::repo::linkage_type L) {
     return GlobalValue::CommonLinkage;
   case pstore::repo::linkage_type::append:
     return GlobalValue::AppendingLinkage;
-  default:
-    report_fatal_error("Unsupported linkage type");
   }
 }
 
