@@ -1,3 +1,4 @@
+#include <iostream>
 //===- lib/MC/MCDwarf.cpp - MCDwarf implementation ------------------------===//
 //
 //                     The LLVM Compiler Infrastructure
@@ -158,6 +159,11 @@ EmitDwarfLineTable(MCObjectStreamer *MCOS, MCSection *Section,
   unsigned Discriminator = 0;
   MCSymbol *LastLabel = nullptr;
 
+  MCContext &Ctx = MCOS->getContext();
+  if (MCSection *lineSection = Section->associatedDebugLineSection(Ctx)) {
+    MCOS->SwitchSection(lineSection);
+  }
+
   // Loop through each MCDwarfLineEntry and encode the dwarf line number table.
   for (const MCDwarfLineEntry &LineEntry : LineEntries) {
     int64_t LineDelta = static_cast<int64_t>(LineEntry.getLine()) - LastLine;
@@ -219,8 +225,11 @@ EmitDwarfLineTable(MCObjectStreamer *MCOS, MCSection *Section,
 
   // Switch back the dwarf line section, in case endSection had to switch the
   // section.
-  MCContext &Ctx = MCOS->getContext();
-  MCOS->SwitchSection(Ctx.getObjectFileInfo()->getDwarfLineSection());
+  if (MCSection *lineSection = Section->associatedDebugLineSection(Ctx)) {
+    MCOS->SwitchSection(lineSection);
+  } else {
+    MCOS->SwitchSection(Ctx.getObjectFileInfo()->getDwarfLineSection());
+  }
 
   const MCAsmInfo *AsmInfo = Ctx.getAsmInfo();
   MCOS->EmitDwarfAdvanceLineAddr(INT64_MAX, LastLabel, SectionEnd,

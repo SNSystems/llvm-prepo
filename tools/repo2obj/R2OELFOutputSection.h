@@ -9,6 +9,7 @@
 #ifndef LLVM_TOOLS_REPO2OBJ_ELFOUTPUTSECTION_H
 #define LLVM_TOOLS_REPO2OBJ_ELFOUTPUTSECTION_H
 
+#include "llvm/ADT/Optional.h"
 #include "llvm/Object/ELF.h"
 
 #include "pstore/core/sstring_view_archive.hpp"
@@ -76,8 +77,13 @@ template <typename ELFT> struct GroupInfo {
 
 template <typename ELFT> class OutputSection {
 public:
-  OutputSection(const pstore::database &Db, SectionId Id)
-      : Db_{Db}, Id_{std::move(Id)} {}
+  OutputSection(pstore::database &Db, SectionId Id,
+                llvm::Optional<std::vector<uint8_t>> const &Prefix)
+      : Db_{Db}, Id_{std::move(Id)}, Prefix_{Prefix} {
+    if (Prefix_) {
+      SectionSize_ += Prefix_->size();
+    }
+  }
   OutputSection(OutputSection const &) = delete;
   OutputSection(OutputSection &&) noexcept = default;
   OutputSection &operator=(OutputSection const &) = delete;
@@ -157,6 +163,7 @@ public:
 private:
   pstore::database const &Db_;
   SectionId const Id_;
+  llvm::Optional<std::vector<uint8_t>> const &Prefix_;
   GroupInfo<ELFT> *Group_ = nullptr;
 
   static constexpr auto UnknownIndex = std::numeric_limits<unsigned>::max();
@@ -424,6 +431,11 @@ OutputSection<ELFT>::write(llvm::raw_ostream &OS, StringTable &SectionNames,
   this->writePadding(OS, StartPos - Pos);
 
   Pos = StartPos;
+
+  if (Prefix_) {
+    OS.write(reinterpret_cast<char const *>(Prefix_->data()), Prefix_->size());
+    Pos += Prefix_->size();
+  }
 
   for (auto const &Contribution : Contributions_) {
     auto Fragment = Contribution.first;

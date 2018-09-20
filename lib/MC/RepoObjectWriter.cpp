@@ -64,6 +64,8 @@ using namespace llvm;
 namespace {
 typedef DenseMap<const MCSectionRepo *, uint32_t> SectionIndexMapTy;
 
+using TransactionType = pstore::transaction<pstore::transaction_lock>;
+
 class RepoObjectWriter : public MCObjectWriter {
 private:
   /// The target specific repository writer instance.
@@ -115,6 +117,10 @@ private:
                         const MCFixup &Fixup, bool IsPCRel) const {
     return TargetObjectWriter->getRelocType(Ctx, Target, Fixup, IsPCRel);
   }
+
+  pstore::extent<std::uint8_t>
+  writeDebugLineHeader(TransactionType &Transaction,
+                       ContentsType const &Fragments);
 
 public:
   RepoObjectWriter(std::unique_ptr<MCRepoObjectTargetWriter> MOTW,
@@ -173,7 +179,8 @@ public:
 
   template <typename DispatcherCollectionType>
   static DispatcherCollectionType
-  buildFragmentData(const FragmentContentsType &Contents);
+  buildFragmentData(const FragmentContentsType &Contents,
+                    pstore::extent<std::uint8_t> const &DebugLineHeaderExtent);
 
   static void
   updateDependents(pstore::repo::dependents &Dependent,
@@ -358,7 +365,10 @@ void svector_ostream<Container>::pwrite_impl(const char *Ptr, size_t Size,
 
 } // namespace
 
-static pstore::repo::section_kind SectionKindToRepoType(SectionKind K) {
+static pstore::repo::section_kind
+SectionKindToRepoType(MCSectionRepo const &Section) {
+  SectionKind K = Section.getKind();
+
   if (K.isText()) {
     return pstore::repo::section_kind::text;
   }
@@ -412,6 +422,18 @@ static pstore::repo::section_kind SectionKindToRepoType(SectionKind K) {
   assert(!K.isThreadLocal() &&
          "isThreadLocation should be covered by the two previous checks");
 
+  if (K.isMetadata()) {
+    switch (Section.getDebugKind()) {
+    case MCSectionRepo::DebugSectionKind::None:
+      assert(false);
+    case MCSectionRepo::DebugSectionKind::Line:
+      return pstore::repo::section_kind::debug_line;
+    case MCSectionRepo::DebugSectionKind::String:
+      return pstore::repo::section_kind::debug_string;
+    case MCSectionRepo::DebugSectionKind::Ranges:
+      return pstore::repo::section_kind::debug_ranges;
+    }
+  }
   llvm_unreachable("Unsupported section type in getRepoSection");
 }
 
@@ -426,7 +448,7 @@ void RepoObjectWriter::writeSectionData(ContentsType &Fragments,
   if (Section.isDummy()) {
     pstore::index::digest Digest{Section.hash().high(), Section.hash().low()};
     LLVM_DEBUG(dbgs() << "A dummy section: section type '"
-                      << SectionKindToRepoType(Section.getKind())
+                      << SectionKindToRepoType(Section)
                       << "' and digest '" << Digest.to_hex_string() << "' \n");
 
     // The default (dummy) section must have no data, no external/internal
@@ -446,8 +468,7 @@ void RepoObjectWriter::writeSectionData(ContentsType &Fragments,
     return;
   }
 
-  pstore::repo::section_kind const St =
-      SectionKindToRepoType(Section.getKind());
+  pstore::repo::section_kind const St = SectionKindToRepoType(Section);
   assert(Sec.getAlignment() > 0);
   unsigned const Alignment = Sec.getAlignment();
 
@@ -475,9 +496,9 @@ void RepoObjectWriter::writeSectionData(ContentsType &Fragments,
               dyn_cast<MCSectionRepo>(&S)) {
         if (TargetSection->hash() == Section.hash()) {
           Content->ifixups.emplace_back(
-               SectionKindToRepoType(TargetSection->getKind()),
-               static_cast<repo_relocation_type>(Relocation.Type), Relocation.Offset,
-               Relocation.Addend);
+              SectionKindToRepoType(*TargetSection),
+              static_cast<repo_relocation_type>(Relocation.Type),
+              Relocation.Offset, Relocation.Addend);
 
           continue;
         }
@@ -577,8 +598,6 @@ pstore::raw_sstring_view RepoObjectWriter::getSymbolName(
 }
 
 namespace {
-
-using TransactionType = pstore::transaction<pstore::transaction_lock>;
 
 /// Returns an active transaction on the pstore database, creating it if
 /// not already open.
@@ -685,9 +704,11 @@ static bool isExistingTicket(const pstore::database &Db,
 }
 
 template <typename DispatcherCollectionType>
-DispatcherCollectionType
-RepoObjectWriter::buildFragmentData(const FragmentContentsType &Contents) {
+DispatcherCollectionType RepoObjectWriter::buildFragmentData(
+    const FragmentContentsType &Contents,
+    pstore::extent<std::uint8_t> const &DebugLineHeaderExtent) {
   DispatcherCollectionType Dispatchers;
+  Dispatchers.reserve(Contents.Sections.size());
 
   for (auto const &Content : Contents.Sections) {
     std::unique_ptr<pstore::repo::section_creation_dispatcher> Dispatcher;
@@ -698,7 +719,12 @@ RepoObjectWriter::buildFragmentData(const FragmentContentsType &Contents) {
               Content.get());
       break;
     case pstore::repo::section_kind::debug_line:
-      llvm_unreachable("Not supported yet!");
+      // TODO: record the CU's debug line header first, then point this section
+      // to it.
+      Dispatchers.emplace_back(
+          new pstore::repo::debug_line_section_creation_dispatcher(
+              DebugLineHeaderExtent, Content.get()));
+      break;
     case pstore::repo::section_kind::dependent:
       llvm_unreachable("Invalid section content!");
       break;
@@ -731,6 +757,36 @@ void RepoObjectWriter::updateDependents(
     member = pstore::typed_address<pstore::repo::compilation_member>::make(
         addr.absolute() + offset);
   }
+}
+
+pstore::extent<std::uint8_t>
+RepoObjectWriter::writeDebugLineHeader(TransactionType &Transaction,
+                                       ContentsType const &Fragments) {
+
+  static ticketmd::DigestType const NullDigest{std::array<uint8_t, 16>{{0}}};
+  auto NullFragmentPos = Fragments.find(NullDigest);
+  if (NullFragmentPos != Fragments.end()) {
+    auto End = NullFragmentPos->second.Sections.end();
+    auto Predicate =
+        [](std::unique_ptr<pstore::repo::section_content> const &p) {
+          return p->kind == pstore::repo::section_kind::debug_line;
+        };
+    auto DebugLinePos =
+        std::find_if(NullFragmentPos->second.Sections.begin(), End, Predicate);
+    if (DebugLinePos != End) {
+      pstore::repo::section_content const &DebugLine = **DebugLinePos;
+      // assert (DebugLine.ifixups.size () == 0 && DebugLine.xfixups.size () ==
+      // 0);
+      std::size_t const DataSize = DebugLine.data.size();
+      std::pair<std::shared_ptr<void>, pstore::address> Dest =
+          Transaction.alloc_rw(DataSize, DebugLine.align);
+      std::memcpy(Dest.first.get(), DebugLine.data.data(), DataSize);
+      std::memset(Dest.first.get(), 0, 4); // FIXME: 12 in 64-bit DWARF.
+      return {pstore::typed_address<std::uint8_t>(Dest.second), DataSize};
+    }
+  }
+
+  return {};
 }
 
 uint64_t RepoObjectWriter::writeObject(MCAssembler &Asm,
@@ -794,6 +850,9 @@ uint64_t RepoObjectWriter::writeObject(MCAssembler &Asm,
       // Flush the name bodies.
       NameAdder.flush(Transaction);
 
+      pstore::extent<std::uint8_t> const DebugLineHeaderExtent =
+          this->writeDebugLineHeader(Transaction, Fragments);
+
       std::shared_ptr<pstore::index::fragment_index> const FragmentsIndex =
           pstore::index::get_index<pstore::trailer::indices::fragment>(Db);
       assert(FragmentsIndex);
@@ -836,8 +895,8 @@ uint64_t RepoObjectWriter::writeObject(MCAssembler &Asm,
         // individual section instance and write it to the pstore.
         using DispatcherCollection = SmallVector<
             std::unique_ptr<pstore::repo::section_creation_dispatcher>, 4>;
-        auto Dispatchers =
-            buildFragmentData<DispatcherCollection>(Fragment.second);
+        auto Dispatchers = buildFragmentData<DispatcherCollection>(
+            Fragment.second, DebugLineHeaderExtent);
         auto Begin = pstore::make_pointee_adaptor(Dispatchers.begin());
         auto End = pstore::make_pointee_adaptor(Dispatchers.end());
 

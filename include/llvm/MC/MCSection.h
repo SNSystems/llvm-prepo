@@ -166,6 +166,7 @@ public:
   const_reverse_iterator rend() const  { return Fragments.rend(); }
 
   MCSection::iterator getSubsectionInsertionPoint(unsigned Subsection);
+  virtual MCSection *associatedDebugLineSection(MCContext &) { return nullptr; }
 
   void dump() const;
 

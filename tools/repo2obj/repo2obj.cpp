@@ -371,9 +371,14 @@ int main(int argc, char *argv[]) {
   ELFState<ELF64LE> State(Db);
   State.initialize(Db);
 
+  std::array<llvm::Optional<std::vector<std::uint8_t>>,
+             static_cast<std::size_t>(pstore::repo::section_kind::last)>
+      Prefixes;
   {
     std::vector<OutputSection<ELFT>::SectionInfo> OutputSections;
     OutputSections.resize(::pstore::repo::fragment::member_array::max_size());
+
+    llvm::Optional<pstore::extent<std::uint8_t>> DebugLineHeaderExtent;
 
     auto Ticket = pstore::repo::ticket::load(Db, TicketPos->second);
     for (auto const &CM : *Ticket) {
@@ -392,6 +397,33 @@ int main(int argc, char *argv[]) {
           IsLinkOnce ? CM.name
                      : pstore::typed_address<pstore::indirect_string>::null();
       auto const Fragment = pstore::repo::fragment::load(Db, CM.fext);
+
+      if (pstore::repo::debug_line_section const *const DebugLine =
+              Fragment->atp<pstore::repo::section_kind::debug_line>()) {
+        assert(DebugLine->align() == 1);
+        auto &Prefix = Prefixes[static_cast<std::size_t>(
+            pstore::repo::section_kind::debug_line)];
+        auto Size = std::uint32_t{0};
+        pstore::extent<std::uint8_t> const &Ext = DebugLine->header_extent();
+        if (!Prefix) {
+          assert(!DebugLineHeaderExtent);
+          DebugLineHeaderExtent = Ext;
+          auto Data = Db.getro(Ext);
+          Prefix = std::vector<std::uint8_t>(Data.get(), Data.get() + Ext.size);
+          // The header line field value doesn't include the size of the length
+          // field itself.
+          Size = Ext.size - sizeof(std::uint32_t);
+        }
+        assert(Ext == *DebugLineHeaderExtent);
+        Size += DebugLine->size();
+        auto PrefixBytes = Prefix->data();
+        std::uint32_t &HeaderLength =
+            *reinterpret_cast<std::uint32_t *>(PrefixBytes);
+        LLVM_DEBUG(dbgs() << "debug line header field: " << &PrefixBytes
+                          << '\n');
+
+        HeaderLength += Size;
+      }
 
       if (CM.linkage == pstore::repo::linkage_type::common) {
         auto const Name = pstore::indirect_string::read(Db, CM.name);
@@ -418,7 +450,7 @@ int main(int argc, char *argv[]) {
           make_range(std::begin(*Fragment), std::end(*Fragment)),
           pstore::repo::is_target_section);
 
-      for (pstore::repo::section_kind Section : SectionRange) {
+      for (pstore::repo::section_kind const Section : SectionRange) {
         assert (pstore::repo::is_target_section (Section));
 
         // The section type and "discriminator" together identify the ELF output
@@ -428,8 +460,9 @@ int main(int argc, char *argv[]) {
 
         decltype(State.Sections)::iterator Pos;
         bool DidInsert;
-        std::tie(Pos, DidInsert) =
-            State.Sections.emplace(Id, OutputSection<ELFT>(Db, Id));
+        std::tie(Pos, DidInsert) = State.Sections.emplace(
+            Id, OutputSection<ELFT>(
+                    Db, Id, Prefixes[static_cast<std::size_t>(Section)]));
 
         OutputSection<ELFT> *const OSection = &Pos->second;
 
@@ -465,6 +498,7 @@ int main(int argc, char *argv[]) {
 
       // This can't currently be folded into the first loop because it needs the
       // OutputSections array to be built first.
+
       for (pstore::repo::section_kind Section : SectionRange) {
         OutputSections[static_cast<unsigned>(Section)].section()->append(
             CM, Fragment, Section, State.Symbols, State.Generated,

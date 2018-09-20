@@ -21,8 +21,17 @@
 namespace llvm {
 
 class MCSectionRepo : public MCSection {
+public:
+  enum class DebugSectionKind {
+    None,
+    Line,
+    Ranges,
+    String,
+  };
+
 private:
-  ::llvm::ticketmd::DigestType Digest;
+  DebugSectionKind DebugKind;
+  ticketmd::DigestType Digest;
   /// Monotonically increases for each section.
   unsigned const Index;
   /// A dummy section is created for the assembler's initial setup. Is this the
@@ -30,8 +39,9 @@ private:
   bool IsDummy = false;
 
   friend class MCContext;
-  MCSectionRepo(SectionKind K, MCSymbol *Begin);
-  MCSectionRepo(SectionKind K, MCSymbol *Begin, ticketmd::DigestType digest);
+  MCSectionRepo(SectionKind K, DebugSectionKind DK, MCSymbol *Begin);
+  MCSectionRepo(SectionKind K, DebugSectionKind DK, MCSymbol *Begin,
+                ticketmd::DigestType digest);
 
   void PrintSwitchToSection(const MCAsmInfo &MAI, const Triple &T,
                             raw_ostream &OS,
@@ -43,9 +53,14 @@ private:
 public:
   virtual ~MCSectionRepo();
 
-  void markAsDummy () { IsDummy = true; }
+  MCSectionRepo *markAsDummy() {
+    IsDummy = true;
+    return this;
+  }
   bool isDummy () const { return IsDummy; }
   ticketmd::DigestType hash() const { return Digest; }
+  DebugSectionKind getDebugKind() const { return DebugKind; }
+  MCSection *associatedDebugLineSection(MCContext &) override;
 
   static bool classof(const MCSection *S) { return S->getVariant() == SV_Repo; }
 };

@@ -293,17 +293,22 @@ void MCObjectFileInfo::initMachOMCObjectFileInfo(const Triple &T) {
 }
 
 void MCObjectFileInfo::initRepoMCObjectFileInfo(const Triple &T) {
-  // Program Repository
-  {
-    // This is a dummy section simply present to allow the assembler to have a "default" section.
-    // Nothing should be added to it. It won't be emitted to the final output.
-    std::array<uint8_t, 16> const Null{{0}};
-    MCSectionRepo *const DummySection =
-        Ctx->getRepoSection(MCContext::RepoSection::TextSection, StringRef(),
-                            ticketmd::DigestType{Null});
-    DummySection->markAsDummy ();
-    TextSection = DummySection;
-  }
+  auto const NullDigest = ticketmd::DigestType{std::array<uint8_t, 16>{{0}}};
+
+  // This dummy section enables the assembler to have a "default" section.
+  // Nothing should be added to it. It won't be emitted to the final output.
+  TextSection =
+      Ctx->getRepoSection(MCContext::RepoSection::TextSection, NullDigest)
+          ->markAsDummy();
+  DwarfStrSection =
+      Ctx->getRepoSection(MCContext::RepoSection::DebugString, NullDigest)
+          ->markAsDummy();
+  DwarfRangesSection =
+      Ctx->getRepoSection(MCContext::RepoSection::DebugRanges, NullDigest)
+          ->markAsDummy();
+  DwarfLineSection =
+      Ctx->getRepoSection(MCContext::RepoSection::DebugLine, NullDigest);
+
   BSSSection = nullptr;
 }
 

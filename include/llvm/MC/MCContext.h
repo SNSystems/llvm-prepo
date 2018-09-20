@@ -273,6 +273,9 @@ namespace llvm {
       MergeableConst32Section,
       ReadOnlySection,
       ReadOnlyWithRelSection,
+      DebugLine,
+      DebugString,
+      DebugRanges,
     };
 
   private:

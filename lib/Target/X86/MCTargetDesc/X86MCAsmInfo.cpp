@@ -99,7 +99,7 @@ X86RepoMCAsmInfo::X86RepoMCAsmInfo(const Triple &T) {
   TextAlignFillValue = 0x90;
 
   // Debug Information
-  SupportsDebugInformation = false; // Just for the time being.
+  SupportsDebugInformation = true;
 
   // Exceptions handling
   ExceptionsType = ExceptionHandling::DwarfCFI;

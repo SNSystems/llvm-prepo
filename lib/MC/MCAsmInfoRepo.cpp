@@ -24,4 +24,8 @@ MCAsmInfoRepo::MCAsmInfoRepo() {
   PrivateGlobalPrefix = "";
   PrivateLabelPrefix = ".L";
   HasDotTypeDotSizeDirective = false;
+
+  // Set up DWARF directives
+  SupportsDebugInformation = true;
+  NeedsDwarfSectionOffsetDirective = true;
 }

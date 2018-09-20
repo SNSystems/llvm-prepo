@@ -472,6 +472,7 @@ MCSectionRepo *MCContext::getRepoSection(RepoSection K, StringRef Name,
   }
 
   SectionKind Kind;
+  auto DebugKind = MCSectionRepo::DebugSectionKind::None;
   switch (K) {
   case RepoSection::TextSection:
     Kind = SectionKind::getText();
@@ -515,9 +516,21 @@ MCSectionRepo *MCContext::getRepoSection(RepoSection K, StringRef Name,
   case RepoSection::ReadOnlyWithRelSection:
     Kind = SectionKind::getReadOnlyWithRel();
     break;
+  case RepoSection::DebugLine:
+    Kind = SectionKind::getMetadata();
+    DebugKind = MCSectionRepo::DebugSectionKind::Line;
+    break;
+  case RepoSection::DebugString:
+    Kind = SectionKind::getMetadata();
+    DebugKind = MCSectionRepo::DebugSectionKind::String;
+    break;
+  case RepoSection::DebugRanges:
+    Kind = SectionKind::getMetadata();
+    DebugKind = MCSectionRepo::DebugSectionKind::Ranges;
+    break;
   }
 
-  auto Result = new MCSectionRepo(Kind, nullptr /*symbol*/, Digest);
+  auto Result = new MCSectionRepo(Kind, DebugKind, nullptr /*symbol*/, Digest);
   // If another symbol with the same digest already exists, mark this section as
   // a dummy.
   if (!IsMatchingName) {
