@@ -759,30 +759,61 @@ void RepoObjectWriter::updateDependents(
   }
 }
 
+namespace {
+
+pstore::uint128 get_hash_key(ArrayRef<uint8_t> const &arr) {
+  MD5 hash;
+  hash.update(arr);
+  MD5::MD5Result Digest;
+  hash.final(Digest);
+  return {Digest.high(), Digest.low()};
+}
+
+} // end anonymous namespace
+
 pstore::extent<std::uint8_t>
 RepoObjectWriter::writeDebugLineHeader(TransactionType &Transaction,
                                        ContentsType const &Fragments) {
 
   static ticketmd::DigestType const NullDigest{std::array<uint8_t, 16>{{0}}};
+
   auto NullFragmentPos = Fragments.find(NullDigest);
   if (NullFragmentPos != Fragments.end()) {
     auto End = NullFragmentPos->second.Sections.end();
-    auto Predicate =
+    // TODO: is there a reason why these aren't keyed on the section type?
+    auto DebugLinePos = std::find_if(
+        NullFragmentPos->second.Sections.begin(), End,
         [](std::unique_ptr<pstore::repo::section_content> const &p) {
           return p->kind == pstore::repo::section_kind::debug_line;
-        };
-    auto DebugLinePos =
-        std::find_if(NullFragmentPos->second.Sections.begin(), End, Predicate);
+        });
     if (DebugLinePos != End) {
       pstore::repo::section_content const &DebugLine = **DebugLinePos;
-      // assert (DebugLine.ifixups.size () == 0 && DebugLine.xfixups.size () ==
-      // 0);
       std::size_t const DataSize = DebugLine.data.size();
+
+      // TODO: doing this index search whilst the transaction is open is bad. Do
+      // it before the transaction is created and, if not found, add the data
+      // and update the index here.
+      pstore::uint128 const Key = get_hash_key(
+          ArrayRef<uint8_t>(DebugLine.data.begin(), DebugLine.data.end()));
+      std::shared_ptr<pstore::index::debug_line_header_index> Index =
+          pstore::index::get_debug_line_header_index(Transaction.db(),
+                                                     true /*create*/);
+      auto const Pos = Index->find(Key);
+      if (Pos != Index->end()) {
+        return Pos->second;
+      }
+
+      // This debug-header wasn't found in the index, so we need to record the
+      // data and add it.
       std::pair<std::shared_ptr<void>, pstore::address> Dest =
           Transaction.alloc_rw(DataSize, DebugLine.align);
       std::memcpy(Dest.first.get(), DebugLine.data.data(), DataSize);
       std::memset(Dest.first.get(), 0, 4); // FIXME: 12 in 64-bit DWARF.
-      return {pstore::typed_address<std::uint8_t>(Dest.second), DataSize};
+
+      auto const Extent = pstore::make_extent(
+          pstore::typed_address<std::uint8_t>(Dest.second), DataSize);
+      Index->insert(Transaction, std::make_pair(Key, Extent));
+      return Extent;
     }
   }
 
