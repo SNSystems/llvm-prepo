@@ -82,7 +82,7 @@ private:
 // ~~~~~~~~~~
 void SpecialNames::initialize(pstore::database &Db, GeneratedNames &Names) {
   std::shared_ptr<pstore::index::name_index const> const NameIndex =
-      pstore::index::get_name_index(Db);
+      pstore::index::get_index<pstore::trailer::indices::name>(Db);
   if (!NameIndex) {
     errs() << "Warning: name index was not found.\n";
   } else {
@@ -344,13 +344,13 @@ int main(int argc, char *argv[]) {
 
   pstore::database Db(getRepoPath(), pstore::database::access_mode::read_only);
   std::shared_ptr<pstore::index::ticket_index const> const TicketIndex =
-      pstore::index::get_ticket_index(Db);
+      pstore::index::get_index<pstore::trailer::indices::ticket>(Db);
   if (!TicketIndex) {
     errs() << "Error: ticket index was not found.\n";
     return EXIT_FAILURE;
   }
   std::shared_ptr<pstore::index::digest_index const> const FragmentIndex =
-      pstore::index::get_digest_index(Db);
+      pstore::index::get_index<pstore::trailer::indices::digest>(Db);
   if (!FragmentIndex) {
     errs() << "Error: fragment index was not found.\n";
     return EXIT_FAILURE;

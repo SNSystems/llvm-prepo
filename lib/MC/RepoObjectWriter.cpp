@@ -661,7 +661,9 @@ pstore::index::digest RepoObjectWriter::buildTicketRecord(
 /// Return true if this ticket is already existing in the database ticket index.
 static bool isExistingTicket(pstore::database &Db,
                              const pstore::index::digest &TicketDigest) {
-  if (auto TicketIndex = pstore::index::get_ticket_index(Db, false)) {
+  if (auto TicketIndex =
+          pstore::index::get_index<pstore::trailer::indices::ticket>(Db,
+                                                                     false)) {
     if (TicketIndex->find(TicketDigest) != TicketIndex->end()) {
       LLVM_DEBUG(dbgs() << "ticket " << TicketDigest << " exists. skipping\n");
       return true;
@@ -737,11 +739,11 @@ uint64_t RepoObjectWriter::writeObject(MCAssembler &Asm,
     TransactionType &Transaction = getRepoTransaction();
     {
       std::shared_ptr<pstore::index::ticket_index> const TicketIndex =
-          pstore::index::get_ticket_index(Db);
+          pstore::index::get_index<pstore::trailer::indices::ticket>(Db);
       assert(TicketIndex);
 
       std::shared_ptr<pstore::index::name_index> const NamesIndex =
-          pstore::index::get_name_index(Db);
+          pstore::index::get_index<pstore::trailer::indices::name>(Db);
       assert(NamesIndex);
 
       // Insert the names from this module into the global name set. This loop
@@ -761,7 +763,7 @@ uint64_t RepoObjectWriter::writeObject(MCAssembler &Asm,
       NameAdder.flush(Transaction);
 
       std::shared_ptr<pstore::index::digest_index> const DigestsIndex =
-          pstore::index::get_digest_index(Db);
+          pstore::index::get_index<pstore::trailer::indices::digest>(Db);
       assert(DigestsIndex);
 
       SmallVector<std::shared_ptr<pstore::repo::fragment>, 4> RepoFragments;

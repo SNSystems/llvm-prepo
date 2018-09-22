@@ -101,7 +101,8 @@ bool RepoPruning::runOnModule(Module &M) {
   pstore::database &Repository = getRepoDatabase();
 
   std::shared_ptr<pstore::index::digest_index const> const Digests =
-      pstore::index::get_digest_index(Repository, false);
+      pstore::index::get_index<pstore::trailer::indices::digest>(Repository,
+                                                                 false);
   if (!Digests) {
     return false;
   }
