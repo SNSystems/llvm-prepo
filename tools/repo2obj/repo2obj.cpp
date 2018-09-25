@@ -349,8 +349,8 @@ int main(int argc, char *argv[]) {
     errs() << "Error: ticket index was not found.\n";
     return EXIT_FAILURE;
   }
-  std::shared_ptr<pstore::index::digest_index const> const FragmentIndex =
-      pstore::index::get_index<pstore::trailer::indices::digest>(Db);
+  std::shared_ptr<pstore::index::fragment_index const> const FragmentIndex =
+      pstore::index::get_index<pstore::trailer::indices::fragment>(Db);
   if (!FragmentIndex) {
     errs() << "Error: fragment index was not found.\n";
     return EXIT_FAILURE;

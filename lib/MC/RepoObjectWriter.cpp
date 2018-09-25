@@ -762,9 +762,9 @@ uint64_t RepoObjectWriter::writeObject(MCAssembler &Asm,
       // Flush the name bodies.
       NameAdder.flush(Transaction);
 
-      std::shared_ptr<pstore::index::digest_index> const DigestsIndex =
-          pstore::index::get_index<pstore::trailer::indices::digest>(Db);
-      assert(DigestsIndex);
+      std::shared_ptr<pstore::index::fragment_index> const FragmentsIndex =
+          pstore::index::get_index<pstore::trailer::indices::fragment>(Db);
+      assert(FragmentsIndex);
 
       SmallVector<std::shared_ptr<pstore::repo::fragment>, 4> RepoFragments;
 
@@ -811,8 +811,9 @@ uint64_t RepoObjectWriter::writeObject(MCAssembler &Asm,
                           << '\n');
 
         auto extent = pstore::repo::fragment::alloc(Transaction, Begin, End);
-        RepoFragments.emplace_back(pstore::repo::fragment::load(Transaction, extent));
-        DigestsIndex->insert(Transaction, std::make_pair(Key, extent));
+        RepoFragments.emplace_back(
+            pstore::repo::fragment::load(Transaction, extent));
+        FragmentsIndex->insert(Transaction, std::make_pair(Key, extent));
       }
 
       // Find the store address of the output file path.
@@ -826,7 +827,8 @@ uint64_t RepoObjectWriter::writeObject(MCAssembler &Asm,
         // Check that we have a fragment for this ticket member's digest value.
         // TODO: remove this check once we're completely confident in the
         // back-end implementation.
-        if (DigestsIndex->find(TicketMember.digest) == DigestsIndex->end()) {
+        if (FragmentsIndex->find(TicketMember.digest) ==
+            FragmentsIndex->end()) {
           report_fatal_error("The digest of missing repository fragment " +
                              TicketMember.digest.to_hex_string() +
                              " was found in a ticket member.");

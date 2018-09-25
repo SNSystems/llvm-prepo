@@ -100,15 +100,15 @@ bool RepoPruning::runOnModule(Module &M) {
 
   pstore::database &Repository = getRepoDatabase();
 
-  std::shared_ptr<pstore::index::digest_index const> const Digests =
-      pstore::index::get_index<pstore::trailer::indices::digest>(Repository,
-                                                                 false);
-  if (!Digests) {
+  std::shared_ptr<pstore::index::fragment_index const> const Fragments =
+      pstore::index::get_index<pstore::trailer::indices::fragment>(Repository,
+                                                                   false);
+  if (!Fragments) {
     return false;
   }
 
   // Erase the unchanged global objects.
-  auto EraseUnchangedGlobalObect = [&Digests, &Repository,
+  auto EraseUnchangedGlobalObect = [&Fragments, &Repository,
                                     &M](GlobalObject &GO,
                                         llvm::Statistic &NumGO) -> bool {
     if (GO.isDeclaration() || GO.hasAvailableExternallyLinkage())
@@ -119,8 +119,8 @@ bool RepoPruning::runOnModule(Module &M) {
 
     auto const Key =
         pstore::index::digest{Result.first.high(), Result.first.low()};
-    auto it = Digests->find(Key);
-    if (it == Digests->end())
+    auto it = Fragments->find(Key);
+    if (it == Fragments->end())
       return false;
 
     ++NumGO;
