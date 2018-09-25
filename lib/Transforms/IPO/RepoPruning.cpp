@@ -79,6 +79,7 @@ GlobalValue::LinkageTypes toGVLinkage(pstore::repo::linkage_type L) {
   case pstore::repo::linkage_type::append:
     return GlobalValue::AppendingLinkage;
   }
+  llvm_unreachable("Unsupported linkage type");
 }
 
 StringRef toStringRef(pstore::raw_sstring_view S) {
