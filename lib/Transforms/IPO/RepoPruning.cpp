@@ -31,7 +31,6 @@ using namespace llvm;
 
 #define DEBUG_TYPE "prepo-pruning"
 
-STATISTIC(NumAliases, "Number of global aliases removed");
 STATISTIC(NumFunctions, "Number of functions removed");
 STATISTIC(NumVariables, "Number of variables removed");
 
@@ -62,9 +61,6 @@ INITIALIZE_PASS(RepoPruning, "prepo-pruning",
                 "Program Repository Global Object Pruning", false, false)
 
 ModulePass *llvm::createRepoPruningPass() { return new RepoPruning(); }
-
-using GlobalObjectMap =
-    std::map<const GlobalObject *, const ticketmd::DigestType>;
 
 GlobalValue::LinkageTypes toGVLinkage(pstore::repo::linkage_type L) {
   switch (L) {
@@ -177,7 +173,6 @@ bool RepoPruning::runOnModule(Module &M) {
   LLVM_DEBUG(dbgs() << "size of module: " << M.size() << '\n');
   LLVM_DEBUG(dbgs() << "size of removed functions: " << NumFunctions << '\n');
   LLVM_DEBUG(dbgs() << "size of removed variables: " << NumVariables << '\n');
-  LLVM_DEBUG(dbgs() << "size of removed aliases: " << NumAliases << '\n');
 
   return Changed;
 }
