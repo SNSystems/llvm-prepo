@@ -25,6 +25,7 @@
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Transforms/IPO.h"
 #include "llvm/Transforms/Utils/GlobalStatus.h"
+#include <algorithm>
 #include <iostream>
 #include <set>
 using namespace llvm;
@@ -100,14 +101,17 @@ bool RepoPruning::runOnModule(Module &M) {
   std::shared_ptr<pstore::index::fragment_index const> const Fragments =
       pstore::index::get_index<pstore::trailer::indices::fragment>(Repository,
                                                                    false);
-  if (!Fragments) {
+
+  if (!Fragments && !M.getNamedMetadata("repo.tickets")) {
     return false;
   }
 
+  std::set<pstore::index::digest> ModuleFragments;
+
   // Erase the unchanged global objects.
-  auto EraseUnchangedGlobalObect = [&Fragments, &Repository,
-                                    &M](GlobalObject &GO,
-                                        llvm::Statistic &NumGO) -> bool {
+  auto EraseUnchangedGlobalObject = [&ModuleFragments, &Fragments, &Repository,
+                                     &M](GlobalObject &GO,
+                                         llvm::Statistic &NumGO) -> bool {
     if (GO.isDeclaration() || GO.hasAvailableExternallyLinkage())
       return false;
     auto const Result = ticketmd::get(&GO);
@@ -116,9 +120,41 @@ bool RepoPruning::runOnModule(Module &M) {
 
     auto const Key =
         pstore::index::digest{Result.first.high(), Result.first.low()};
-    auto it = Fragments->find(Key);
-    if (it == Fragments->end())
+
+    bool InRepository = true;
+    if (!Fragments) {
+      InRepository = false;
+    } else {
+      auto It = Fragments->find(Key);
+      if (It == Fragments->end()) {
+        InRepository = false;
+      } else {
+        // Create  the dependent fragments if existing in the repository.
+        auto Fragment = pstore::repo::fragment::load(Repository, It->second);
+        if (auto Dependents =
+                Fragment->atp<pstore::repo::section_kind::dependent>()) {
+          for (pstore::typed_address<pstore::repo::ticket_member> Dependent :
+               *Dependents) {
+            auto TM = pstore::repo::ticket_member::load(Repository, Dependent);
+            StringRef MDName = toStringRef(
+                pstore::get_sstring_view(Repository, TM->name).second);
+            auto DMD = TicketNode::get(M.getContext(), MDName,
+                                       toDigestType(TM->digest),
+                                       toGVLinkage(TM->linkage), true);
+            NamedMDNode *const NMD = M.getOrInsertNamedMetadata("repo.tickets");
+            assert(NMD && "NamedMDNode cannot be NULL!");
+            NMD->addOperand(DMD);
+          }
+        }
+      }
+    }
+
+    if (!InRepository &&
+        std::find(ModuleFragments.begin(), ModuleFragments.end(), Key) ==
+            ModuleFragments.end()) {
+      ModuleFragments.insert(Key);
       return false;
+    }
 
     ++NumGO;
     GO.setComdat(nullptr);
@@ -130,28 +166,12 @@ bool RepoPruning::runOnModule(Module &M) {
     GO.setMetadata(LLVMContext::MD_repo_ticket, MD);
     GO.setLinkage(GlobalValue::ExternalLinkage);
     GO.setDSOLocal(false);
-    // Create  the dependent fragments if existing.
-    auto Fragment = pstore::repo::fragment::load(Repository, it->second);
-    if (auto Dependents = Fragment->atp<pstore::repo::section_kind::dependent>()) {
-      for (pstore::typed_address<pstore::repo::ticket_member> Dependent :
-           *Dependents) {
-        auto TM = pstore::repo::ticket_member::load(Repository, Dependent);
-        StringRef MDName =
-            toStringRef(pstore::get_sstring_view(Repository, TM->name).second);
-        auto DMD =
-            TicketNode::get(M.getContext(), MDName, toDigestType(TM->digest),
-                            toGVLinkage(TM->linkage), true);
-        NamedMDNode *const NMD = M.getOrInsertNamedMetadata("repo.tickets");
-        assert(NMD && "NamedMDNode cannot be NULL!");
-        NMD->addOperand(DMD);
-      }
-    }
     return true;
   };
 
   bool Changed = false;
   for (GlobalVariable &GV : M.globals()) {
-    if (EraseUnchangedGlobalObect(GV, NumVariables)) {
+    if (EraseUnchangedGlobalObject(GV, NumVariables)) {
       // Removes the Global variable initializer.
       Constant *Init = GV.getInitializer();
       if (isSafeToDestroyConstant(Init))
@@ -162,7 +182,7 @@ bool RepoPruning::runOnModule(Module &M) {
   }
 
   for (Function &Func : M) {
-    if (EraseUnchangedGlobalObect(Func, NumFunctions)) {
+    if (EraseUnchangedGlobalObject(Func, NumFunctions)) {
       auto MD = Func.getMetadata(LLVMContext::MD_repo_ticket);
       Func.deleteBody();
       Func.setMetadata(LLVMContext::MD_repo_ticket, MD);
