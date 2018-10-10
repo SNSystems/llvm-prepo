@@ -659,7 +659,7 @@ pstore::index::digest RepoObjectWriter::buildTicketRecord(
 }
 
 /// Return true if this ticket is already existing in the database ticket index.
-static bool isExistingTicket(pstore::database &Db,
+static bool isExistingTicket(const pstore::database &Db,
                              const pstore::index::digest &TicketDigest) {
   if (auto TicketIndex =
           pstore::index::get_index<pstore::trailer::indices::ticket>(Db,

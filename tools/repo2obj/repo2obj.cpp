@@ -65,7 +65,7 @@ namespace {
 
 class SpecialNames {
 public:
-  void initialize(pstore::database &Db, GeneratedNames &Names);
+  void initialize(const pstore::database &Db, GeneratedNames &Names);
 
   pstore::typed_address<pstore::indirect_string> CtorName =
       pstore::typed_address<pstore::indirect_string>::null();
@@ -81,7 +81,7 @@ private:
 
 // initialize
 // ~~~~~~~~~~
-void SpecialNames::initialize(pstore::database &Db, GeneratedNames &Names) {
+void SpecialNames::initialize(const pstore::database &Db, GeneratedNames &Names) {
   std::shared_ptr<pstore::index::name_index const> const NameIndex =
       pstore::index::get_index<pstore::trailer::indices::name>(Db);
   if (!NameIndex) {
@@ -130,15 +130,15 @@ template <class ELFT> struct ELFState {
   SymbolTable<ELFT> Symbols;
   SpecialNames Magics;
 
-  explicit ELFState(pstore::database &Db)
+  explicit ELFState(const pstore::database &Db)
       : Generated{Db}, Strings{Generated}, Symbols{Strings} {}
-  void initialize(pstore::database &Db) { Magics.initialize(Db, Generated); }
+  void initialize(const pstore::database &Db) { Magics.initialize(Db, Generated); }
 
   void initELFHeader(Elf_Ehdr &Header);
   void initStandardSections();
   uint64_t writeSectionHeaders(raw_ostream &OS);
 
-  void buildGroupSection(pstore::database const &Db, GroupInfo<ELFT> &GI);
+  void buildGroupSection(const pstore::database &Db, GroupInfo<ELFT> &GI);
 
   /// Writes the group section data that was recorded by earlier calls to
   /// buildGroupSection(). The group section headers are updated to record the

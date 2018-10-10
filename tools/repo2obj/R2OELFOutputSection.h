@@ -76,7 +76,7 @@ template <typename ELFT> struct GroupInfo {
 
 template <typename ELFT> class OutputSection {
 public:
-  OutputSection(pstore::database &Db, SectionId Id)
+  OutputSection(const pstore::database &Db, SectionId Id)
       : Db_{Db}, Id_{std::move(Id)} {}
   OutputSection(OutputSection const &) = delete;
   OutputSection(OutputSection &&) noexcept = default;

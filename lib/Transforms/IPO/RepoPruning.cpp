@@ -96,9 +96,9 @@ bool RepoPruning::runOnModule(Module &M) {
 
   MDBuilder MDB(M.getContext());
 
-  pstore::database &Repository = getRepoDatabase();
+  const pstore::database &Repository = getRepoDatabase();
 
-  std::shared_ptr<pstore::index::fragment_index const> const Fragments =
+  std::shared_ptr<const pstore::index::fragment_index> const Fragments =
       pstore::index::get_index<pstore::trailer::indices::fragment>(Repository,
                                                                    false);
 
