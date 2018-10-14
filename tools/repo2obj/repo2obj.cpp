@@ -74,7 +74,8 @@ public:
 
 private:
   static pstore::typed_address<pstore::indirect_string>
-  findString(pstore::index::name_index const &NameIndex,
+  findString(pstore::database const &Db,
+             pstore::index::name_index const &NameIndex,
              pstore::indirect_string const &Str);
 };
 
@@ -89,19 +90,20 @@ void SpecialNames::initialize(pstore::database &Db, GeneratedNames &Names) {
     // Get the address of the global tors names from the names set. If the
     // string is missing, use null since we know that can't appear as a ticket's
     // name.
-    CtorName = findString(*NameIndex, Names.add("llvm.global_ctors"));
-    DtorName = findString(*NameIndex, Names.add("llvm.global_dtors"));
+    CtorName = findString(Db, *NameIndex, Names.add("llvm.global_ctors"));
+    DtorName = findString(Db, *NameIndex, Names.add("llvm.global_dtors"));
   }
 }
 
 // findString
 // ~~~~~~~~~~
 pstore::typed_address<pstore::indirect_string>
-SpecialNames::findString(pstore::index::name_index const &NameIndex,
+SpecialNames::findString(pstore::database const &Db,
+                         pstore::index::name_index const &NameIndex,
                          pstore::indirect_string const &Str) {
 
-  auto Pos = NameIndex.find(Str);
-  return (Pos != NameIndex.end())
+  auto Pos = NameIndex.find(Db, Str);
+  return (Pos != NameIndex.end(Db))
              ? pstore::typed_address<pstore::indirect_string>(Pos.get_address())
              : pstore::typed_address<pstore::indirect_string>::null();
 }
@@ -356,8 +358,8 @@ int main(int argc, char *argv[]) {
     return EXIT_FAILURE;
   }
 
-  auto TicketPos = TicketIndex->find(Digest);
-  if (TicketPos == TicketIndex->end()) {
+  auto TicketPos = TicketIndex->find(Db, Digest);
+  if (TicketPos == TicketIndex->end(Db)) {
     errs() << "Error: ticket " << Digest << " was not found.\n";
     return EXIT_FAILURE;
   }
@@ -376,8 +378,8 @@ int main(int argc, char *argv[]) {
       LLVM_DEBUG(dbgs() << "Processing: "
                         << pstore::indirect_string::read(Db, TM.name) << '\n');
 
-      auto const FragmentPos = FragmentIndex->find(TM.digest);
-      if (FragmentPos == FragmentIndex->end()) {
+      auto const FragmentPos = FragmentIndex->find(Db, TM.digest);
+      if (FragmentPos == FragmentIndex->end(Db)) {
         errs() << "Error: fragment " << TM.digest << " was not found.\n";
         return EXIT_FAILURE;
       }

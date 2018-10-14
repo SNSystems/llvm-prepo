@@ -125,8 +125,8 @@ bool RepoPruning::runOnModule(Module &M) {
     if (!Fragments) {
       InRepository = false;
     } else {
-      auto It = Fragments->find(Key);
-      if (It == Fragments->end()) {
+      auto It = Fragments->find(Repository, Key);
+      if (It == Fragments->end(Repository)) {
         InRepository = false;
       } else {
         // Create  the dependent fragments if existing in the repository.

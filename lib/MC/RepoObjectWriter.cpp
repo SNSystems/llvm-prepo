@@ -664,7 +664,7 @@ static bool isExistingTicket(pstore::database &Db,
   if (auto TicketIndex =
           pstore::index::get_index<pstore::trailer::indices::ticket>(Db,
                                                                      false)) {
-    if (TicketIndex->find(TicketDigest) != TicketIndex->end()) {
+    if (TicketIndex->find(Db, TicketDigest) != TicketIndex->end(Db)) {
       LLVM_DEBUG(dbgs() << "ticket " << TicketDigest << " exists. skipping\n");
       return true;
     }
@@ -827,8 +827,8 @@ uint64_t RepoObjectWriter::writeObject(MCAssembler &Asm,
         // Check that we have a fragment for this ticket member's digest value.
         // TODO: remove this check once we're completely confident in the
         // back-end implementation.
-        if (FragmentsIndex->find(TicketMember.digest) ==
-            FragmentsIndex->end()) {
+        if (FragmentsIndex->find(Db, TicketMember.digest) ==
+            FragmentsIndex->end(Db)) {
           report_fatal_error("The digest of missing repository fragment " +
                              TicketMember.digest.to_hex_string() +
                              " was found in a ticket member.");
