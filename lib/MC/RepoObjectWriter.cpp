@@ -844,7 +844,8 @@ uint64_t RepoObjectWriter::writeObject(MCAssembler &Asm,
 
       // Store the Ticket.
       auto TExtent = pstore::repo::ticket::alloc(Transaction, OutputPathAddr,
-                                                 TicketContents);
+                                                 TicketContents.begin(),
+                                                 TicketContents.end());
       TicketIndex->insert(Transaction,
                           std::make_pair(TicketDigest, TExtent));
 
