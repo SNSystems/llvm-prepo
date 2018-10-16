@@ -373,32 +373,25 @@ int main(int argc, char *argv[]) {
     OutputSections.resize(::pstore::repo::fragment::member_array::max_size());
 
     auto Ticket = pstore::repo::ticket::load(Db, TicketPos->second);
-    for (auto const &TM : *Ticket) {
-      assert(TM.name != pstore::typed_address<pstore::indirect_string>::null());
+    for (auto const &CM : *Ticket) {
+      assert(CM.name != pstore::typed_address<pstore::indirect_string>::null());
       LLVM_DEBUG(dbgs() << "Processing: "
-                        << pstore::indirect_string::read(Db, TM.name) << '\n');
-
-      auto const FragmentPos = FragmentIndex->find(Db, TM.digest);
-      if (FragmentPos == FragmentIndex->end(Db)) {
-        errs() << "Error: fragment " << TM.digest << " was not found.\n";
-        return EXIT_FAILURE;
-      }
+                        << pstore::indirect_string::read(Db, CM.name) << '\n');
 
       std::fill(std::begin(OutputSections), std::end(OutputSections),
                 OutputSection<ELFT>::SectionInfo{});
 
       auto const IsLinkOnce =
-          TM.linkage == pstore::repo::linkage_type::linkonce;
+          CM.linkage == pstore::repo::linkage_type::linkonce;
       // TODO: enable the name discriminator if "function/data sections mode" is
       // enabled.
       auto const Discriminator =
-          IsLinkOnce ? TM.name
+          IsLinkOnce ? CM.name
                      : pstore::typed_address<pstore::indirect_string>::null();
-      auto const Fragment =
-          pstore::repo::fragment::load(Db, FragmentPos->second);
+      auto const Fragment = pstore::repo::fragment::load(Db, CM.fext);
 
-      if (TM.linkage == pstore::repo::linkage_type::common) {
-        auto const Name = pstore::indirect_string::read(Db, TM.name);
+      if (CM.linkage == pstore::repo::linkage_type::common) {
+        auto const Name = pstore::indirect_string::read(Db, CM.name);
         assert(Name.is_in_store());
 
         if (!Fragment->has_section(pstore::repo::section_kind::bss)
@@ -413,7 +406,7 @@ int main(int argc, char *argv[]) {
         pstore::repo::generic_section const &S =
             Fragment->at<pstore::repo::section_kind::bss>();
         State.Symbols.insertSymbol(Name, nullptr /*no output section*/,
-                                   0 /*offset*/, S.data().size(), TM.linkage);
+                                   0 /*offset*/, S.data().size(), CM.linkage);
         continue;
       }
       // Go through the sections that this fragment contains creating the
@@ -428,8 +421,7 @@ int main(int argc, char *argv[]) {
         // The section type and "discriminator" together identify the ELF output
         // section to which this fragment's section data will be appended.
         auto const Id = std::make_tuple(
-            getELFSectionType(Section, TM.name, State.Magics),
-            Discriminator);
+            getELFSectionType(Section, CM.name, State.Magics), Discriminator);
 
         decltype(State.Sections)::iterator Pos;
         bool DidInsert;
@@ -444,11 +436,11 @@ int main(int argc, char *argv[]) {
         // section.
         if (DidInsert && IsLinkOnce) {
           decltype(State.Groups)::iterator GroupPos =
-              State.Groups.find(TM.name);
+              State.Groups.find(CM.name);
           if (GroupPos == State.Groups.end()) {
             bool _;
             std::tie(GroupPos, _) =
-                State.Groups.emplace(TM.name, GroupInfo<ELFT>(TM.name));
+                State.Groups.emplace(CM.name, GroupInfo<ELFT>(CM.name));
           }
 
           GroupPos->second.Members.push_back(OSection);
@@ -472,7 +464,7 @@ int main(int argc, char *argv[]) {
       // OutputSections array to be built first.
       for (pstore::repo::section_kind Section : SectionRange) {
         OutputSections[static_cast<unsigned>(Section)].section()->append(
-            TM, Fragment, Section, State.Symbols, State.Generated,
+            CM, Fragment, Section, State.Symbols, State.Generated,
             OutputSections);
       }
     }

@@ -119,8 +119,8 @@ public:
     typename SymbolTable<ELFT>::Value *Symbol_ = nullptr;
   };
 
-  void append(pstore::repo::ticket_member const &TM, FragmentPtr FragmentData,
-              pstore::repo::section_kind SectionKind,
+  void append(pstore::repo::compilation_member const &CM,
+              FragmentPtr FragmentData, pstore::repo::section_kind SectionKind,
               SymbolTable<ELFT> &Symbols, GeneratedNames &Generated,
               std::vector<SectionInfo> &OutputSections);
 
@@ -323,7 +323,7 @@ void OutputSection<ELFT>::writePadding(llvm::raw_ostream &OS,
 // append
 // ~~~~~~
 template <typename ELFT>
-void OutputSection<ELFT>::append(pstore::repo::ticket_member const &TM,
+void OutputSection<ELFT>::append(pstore::repo::compilation_member const &CM,
                                  FragmentPtr Fragment,
                                  pstore::repo::section_kind SectionKind,
                                  SymbolTable<ELFT> &Symbols,
@@ -336,7 +336,7 @@ void OutputSection<ELFT>::append(pstore::repo::ticket_member const &TM,
   auto const ObjectSize =
       pstore::repo::section_size(*Fragment, SectionKind);
   LLVM_DEBUG(dbgs() << "  generating relocations FROM '"
-                    << pstore::indirect_string::read(Db_, TM.name) << "'\n");
+                    << pstore::indirect_string::read(Db_, CM.name) << "'\n");
 
   std::uint8_t const DataAlign =
       pstore::repo::section_align(*Fragment, SectionKind);
@@ -356,9 +356,9 @@ void OutputSection<ELFT>::append(pstore::repo::ticket_member const &TM,
   // symbols are mapped to the .init_array/.fini_array sections and we don't
   // actually need a symbol which references the data.
 
-  if (TM.linkage != pstore::repo::linkage_type::append) {
-    Symbols.insertSymbol(pstore::indirect_string::read(Db_, TM.name), this,
-                         SectionSize_, ObjectSize, TM.linkage);
+  if (CM.linkage != pstore::repo::linkage_type::append) {
+    Symbols.insertSymbol(pstore::indirect_string::read(Db_, CM.name), this,
+                         SectionSize_, ObjectSize, CM.linkage);
   }
 
   for (pstore::repo::external_fixup const &XFixup :

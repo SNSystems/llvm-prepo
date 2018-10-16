@@ -133,14 +133,15 @@ bool RepoPruning::runOnModule(Module &M) {
         auto Fragment = pstore::repo::fragment::load(Repository, It->second);
         if (auto Dependents =
                 Fragment->atp<pstore::repo::section_kind::dependent>()) {
-          for (pstore::typed_address<pstore::repo::ticket_member> Dependent :
-               *Dependents) {
-            auto TM = pstore::repo::ticket_member::load(Repository, Dependent);
+          for (pstore::typed_address<pstore::repo::compilation_member>
+                   Dependent : *Dependents) {
+            auto CM =
+                pstore::repo::compilation_member::load(Repository, Dependent);
             StringRef MDName = toStringRef(
-                pstore::get_sstring_view(Repository, TM->name).second);
+                pstore::get_sstring_view(Repository, CM->name).second);
             auto DMD = TicketNode::get(M.getContext(), MDName,
-                                       toDigestType(TM->digest),
-                                       toGVLinkage(TM->linkage), true);
+                                       toDigestType(CM->digest),
+                                       toGVLinkage(CM->linkage), true);
             NamedMDNode *const NMD = M.getOrInsertNamedMetadata("repo.tickets");
             assert(NMD && "NamedMDNode cannot be NULL!");
             NMD->addOperand(DMD);
