@@ -131,7 +131,7 @@ template <class ELFT> struct ELFState {
   SpecialNames Magics;
 
   explicit ELFState(const pstore::database &Db)
-      : Generated{Db}, Strings{Generated}, Symbols{Strings} {}
+      : Generated{Db}, Symbols{Strings} {}
   void initialize(const pstore::database &Db) { Magics.initialize(Db, Generated); }
 
   void initELFHeader(Elf_Ehdr &Header);
@@ -299,6 +299,9 @@ getELFSectionType(pstore::repo::section_kind Kind,
     REPO_TO_ELF_SECTION(read_only)
     REPO_TO_ELF_SECTION(thread_bss)
     REPO_TO_ELF_SECTION(thread_data)
+    REPO_TO_ELF_SECTION(debug_line)
+    REPO_TO_ELF_SECTION(debug_string)
+    REPO_TO_ELF_SECTION(debug_ranges)
   case pstore::repo::section_kind::dependent:
   case pstore::repo::section_kind::last:
     break;

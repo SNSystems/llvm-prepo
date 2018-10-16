@@ -47,7 +47,10 @@ SectionMap const SectionAttributes{
     {ELFSectionType::thread_data,
      {".tdata", ELF::SHT_PROGBITS,
       ELF::SHF_ALLOC | ELF::SHF_WRITE | ELF::SHF_TLS}},
+
     // X (Metadata)
+    {ELFSectionType::debug_line, {".debug_line", ELF::SHT_PROGBITS, 0}},
+
     {ELFSectionType::init_array,
      {".init_array", ELF::SHT_INIT_ARRAY, ELF::SHF_ALLOC | ELF::SHF_WRITE}},
     {ELFSectionType::fini_array,

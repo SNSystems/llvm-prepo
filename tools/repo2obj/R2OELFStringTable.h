@@ -62,7 +62,6 @@ public:
   using iterator = typename container::const_iterator;
   using const_iterator = iterator;
 
-  explicit StringTable(GeneratedNames &Generated) : Generated_{Generated} {}
   static constexpr auto npos = std::numeric_limits<std::uint64_t>::max();
 
   const_iterator begin() const { return std::begin(Strings_); }
@@ -81,7 +80,6 @@ public:
 private:
   std::uint64_t position(pstore::indirect_string const &Name) const;
 
-  GeneratedNames &Generated_;
   container Strings_;
   std::list<pstore::indirect_string> Data_;
   std::uint64_t DataSize_ = 1U;

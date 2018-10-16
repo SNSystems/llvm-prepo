@@ -11,25 +11,30 @@
 
 #include "pstore/mcrepo/fragment.hpp"
 
-enum class ELFSectionType {
-  text,
-  bss,
-  data,
-  rel_ro,
-  mergeable_1_byte_c_string,
-  mergeable_2_byte_c_string,
-  mergeable_4_byte_c_string,
-  mergeable_const_4,
-  mergeable_const_8,
-  mergeable_const_16,
-  mergeable_const_32,
-  read_only,
-  thread_bss,
-  thread_data,
+#define LLVM_REPO2OBJ_ELF_SECTION_TYPE                                         \
+  X(text)                                                                      \
+  X(bss)                                                                       \
+  X(data)                                                                      \
+  X(rel_ro)                                                                    \
+  X(mergeable_1_byte_c_string)                                                 \
+  X(mergeable_2_byte_c_string)                                                 \
+  X(mergeable_4_byte_c_string)                                                 \
+  X(mergeable_const_4)                                                         \
+  X(mergeable_const_8)                                                         \
+  X(mergeable_const_16)                                                        \
+  X(mergeable_const_32)                                                        \
+  X(read_only)                                                                 \
+  X(thread_bss)                                                                \
+  X(thread_data)                                                               \
+  X(debug_line)                                                                \
+  X(debug_string)                                                              \
+  X(debug_ranges)                                                              \
+  X(init_array)                                                                \
+  X(fini_array)
 
-  init_array,
-  fini_array,
-};
+#define X(t) t,
+enum class ELFSectionType { LLVM_REPO2OBJ_ELF_SECTION_TYPE };
+#undef X
 
 namespace llvm {
 class raw_ostream;

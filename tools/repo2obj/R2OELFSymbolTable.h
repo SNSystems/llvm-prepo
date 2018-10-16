@@ -163,6 +163,10 @@ unsigned SymbolTable<ELFT>::sectionToSymbolType(ELFSectionType T) {
   case ELFSectionType::thread_bss:
   case ELFSectionType::thread_data:
     return llvm::ELF::STT_TLS;
+  case ELFSectionType::debug_line:
+  case ELFSectionType::debug_ranges:
+  case ELFSectionType::debug_string:
+    return llvm::ELF::STT_NOTYPE;
   }
   llvm_unreachable("invalid section type");
 }
