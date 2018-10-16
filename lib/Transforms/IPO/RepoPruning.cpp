@@ -27,7 +27,7 @@
 #include "llvm/Transforms/Utils/GlobalStatus.h"
 #include <algorithm>
 #include <iostream>
-#include <set>
+#include <map>
 using namespace llvm;
 
 #define DEBUG_TYPE "prepo-pruning"
@@ -106,7 +106,7 @@ bool RepoPruning::runOnModule(Module &M) {
     return false;
   }
 
-  std::set<pstore::index::digest> ModuleFragments;
+  std::map<pstore::index::digest, const GlobalObject *> ModuleFragments;
 
   // Erase the unchanged global objects.
   auto EraseUnchangedGlobalObject = [&ModuleFragments, &Fragments, &Repository,
@@ -150,11 +150,17 @@ bool RepoPruning::runOnModule(Module &M) {
       }
     }
 
-    if (!InRepository &&
-        std::find(ModuleFragments.begin(), ModuleFragments.end(), Key) ==
-            ModuleFragments.end()) {
-      ModuleFragments.insert(Key);
-      return false;
+    if (!InRepository) {
+      auto It = ModuleFragments.find(Key);
+      // The definition of some global objects may be discarded if not used. If
+      // a global has been pruned and its digest matches a discardable GO, a
+      // missing fragment error might be met during the assembler. To avoid this
+      // issue, this global object can't be pruned if the referenced global
+      // object is discardable.
+      if (It == ModuleFragments.end() || It->second->isDiscardableIfUnused()) {
+        ModuleFragments.emplace(Key, &GO);
+        return false;
+      }
     }
 
     ++NumGO;

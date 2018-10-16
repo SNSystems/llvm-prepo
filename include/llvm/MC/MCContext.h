@@ -276,9 +276,10 @@ namespace llvm {
     };
 
   private:
-    using RepoSectionKey = std::pair<ticketmd::DigestType, RepoSection>;
-    // Repo: "RepoSectionKey" (a pair of digest/section ID?)
+    using RepoSectionKey =
+        std::tuple<ticketmd::DigestType, RepoSection, StringRef>;
     std::map<RepoSectionKey, MCSectionRepo *> RepoUniquingMap;
+    std::map<ticketmd::DigestType, StringRef> RepoSymbolMap;
     std::map<WasmSectionKey, MCSectionWasm *> WasmUniquingMap;
     StringMap<bool> RelSecNames;
 
@@ -434,7 +435,7 @@ namespace llvm {
                              BeginSymName);
     }
 
-    MCSectionRepo *getRepoSection(RepoSection K,
+    MCSectionRepo *getRepoSection(RepoSection K, StringRef Name,
                                   ticketmd::DigestType const &Digest);
 
     MCSectionELF *getELFSection(const Twine &Section, unsigned Type,

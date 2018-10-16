@@ -28,5 +28,5 @@ entry:
 !0 = !TicketNode(name: "sum", digest: [16 x i8] c"qd\BD6r\8A=\BB\05\8B\D8.\AA\BA\04P", linkage: external, pruned: false)
 
 ;CHECK: path: {{.*}}test{{/|\\}}Feature{{/|\\}}Repo{{/|\\}}Output
-;CHECK: ticket name 'sum' digest '5004baaa2ed88b05bb3d8a7236bd6471' adding.
+;CHECK: compilation member name 'sum' digest '5004baaa2ed88b05bb3d8a7236bd6471' adding.
 

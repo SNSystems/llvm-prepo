@@ -692,6 +692,7 @@ MCSection *TargetLoweringObjectFileRepo::createXXtorsSection(MCContext &Ctx,
     return nullptr;
   }
   return Ctx.getRepoSection(MCContext::RepoSection::ReadOnlySection,
+                            (*CtorsPos)->getNameAsString(),
                             (*CtorsPos)->getDigest());
 }
 
@@ -753,7 +754,7 @@ static MCSectionRepo *selectRepoSectionForGlobal(MCContext &Ctx,
     llvm_unreachable("selectRepoSectionForGlobal: unknown section type");
   }
 
-  return Ctx.getRepoSection(K, Result.first);
+  return Ctx.getRepoSection(K, GO->getName(), Result.first);
 }
 
 MCSection *TargetLoweringObjectFileRepo::getExplicitSectionGlobal(

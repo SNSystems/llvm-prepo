@@ -455,14 +455,19 @@ MCSectionCOFF *MCContext::getCOFFSection(StringRef Section,
   return Result;
 }
 
-MCSectionRepo *MCContext::getRepoSection(RepoSection K,
+MCSectionRepo *MCContext::getRepoSection(RepoSection K, StringRef Name,
                                          ticketmd::DigestType const &Digest) {
+  // If the digest exists but the corresponding symbol's name is different from
+  // the given 'Name',  a new RepoSection is created and marked as dummy.
+  const bool IsMatchingName =
+      RepoSymbolMap.emplace(Digest, Name).first->second == Name;
 
-  // Do the lookup, if we have a hit, return it.
-  RepoSectionKey key = std::make_pair(Digest, K);
+  // Do the section lookup, if we have a hit and it belongs to the same global
+  // object, return it.
+  RepoSectionKey key = std::make_tuple(Digest, K, Name);
   auto IterBool = RepoUniquingMap.insert(std::make_pair(key, nullptr));
   auto Iter = IterBool.first;
-  if (!IterBool.second) {
+  if (!IterBool.second && IsMatchingName) {
     return Iter->second;
   }
 
@@ -513,6 +518,11 @@ MCSectionRepo *MCContext::getRepoSection(RepoSection K,
   }
 
   auto Result = new MCSectionRepo(Kind, nullptr /*symbol*/, Digest);
+  // If another symbol with the same digest already exists, mark this section as
+  // a dummy.
+  if (!IsMatchingName) {
+    Result->markAsDummy();
+  }
   Iter->second = Result;
   return Result;
 }

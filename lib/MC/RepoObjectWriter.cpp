@@ -421,6 +421,31 @@ void RepoObjectWriter::writeSectionData(ContentsType &Fragments,
                                         ModuleNamesContainer &Names) {
   auto &Section = static_cast<MCSectionRepo &>(Sec);
 
+  // A "dummy" section is created to provide a default for the assembler
+  // or an existing section therefore we don't write it to the repository.
+  if (Section.isDummy()) {
+    pstore::index::digest Digest{Section.hash().high(), Section.hash().low()};
+    LLVM_DEBUG(dbgs() << "A dummy section: section type '"
+                      << SectionKindToRepoType(Section.getKind())
+                      << "' and digest '" << Digest.to_hex_string() << "' \n");
+
+    // The default (dummy) section must have no data, no external/internal
+    // fixups.
+    if (Section.hash() == ticketmd::DigestType{{0}}) {
+      if (Section.getFragmentList().size() != 1 ||
+          Asm.computeFragmentSize(Layout, *Section.begin()) != 0) {
+        llvm_unreachable(
+            "The default (dummy) section must have no data payload");
+      }
+      if (Relocations[&Section].size() > 0) {
+        llvm_unreachable("The default (dummy) section must have no "
+                         "external/internal fixups");
+      }
+    }
+
+    return;
+  }
+
   pstore::repo::section_kind const St =
       SectionKindToRepoType(Section.getKind());
   assert(Sec.getAlignment() > 0);
@@ -486,22 +511,6 @@ void RepoObjectWriter::writeSectionData(ContentsType &Fragments,
 
   LLVM_DEBUG(dbgs() << "section type '" << Content->kind << "' and alignment "
                     << unsigned(Content->align) << '\n');
-
-  // A "dummy" section is created to provide a default for the assembler but we
-  // don't write it to the repository.
-  if (Section.isDummy()) {
-    if (Content->data.size() > 0) {
-      llvm_unreachable("The dummy section must have no data payload");
-    }
-    if (Content->xfixups.size() > 0) {
-      llvm_unreachable("The dummy section must have no external fixups");
-    }
-    if (Content->ifixups.size() > 0) {
-      llvm_unreachable("The dummy section must have no internal fixups");
-    }
-
-    return;
-  }
 
   Fragments[Section.hash()].Sections.push_back(std::move(Content));
 }
@@ -842,9 +851,9 @@ uint64_t RepoObjectWriter::writeObject(MCAssembler &Asm,
             CompilationMember.name.absolute());
         CompilationMember.fext = RepoFragments[CompilationMember.digest];
         CompilationMember.name = MNC->second;
-        LLVM_DEBUG(dbgs() << "ticket name '" << stringViewAsRef(MNC->first)
-                          << "' digest '" << CompilationMember.digest
-                          << "' adding." << '\n');
+        LLVM_DEBUG(dbgs() << " compilation member name '"
+                          << stringViewAsRef(MNC->first) << "' digest '"
+                          << CompilationMember.digest << "' adding." << '\n');
       }
 
       // Store the Ticket.
