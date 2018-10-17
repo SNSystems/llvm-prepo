@@ -165,13 +165,10 @@ bool RepoPruning::runOnModule(Module &M) {
 
     ++NumGO;
     GO.setComdat(nullptr);
-    // Remove all metadata except fragment.
     TicketNode *MD =
         dyn_cast<TicketNode>(GO.getMetadata(LLVMContext::MD_repo_ticket));
     MD->setPruned(true);
-    GO.clearMetadata();
-    GO.setMetadata(LLVMContext::MD_repo_ticket, MD);
-    GO.setLinkage(GlobalValue::ExternalLinkage);
+    GO.setLinkage(GlobalValue::AvailableExternallyLinkage);
     GO.setDSOLocal(false);
     return true;
   };
@@ -179,20 +176,12 @@ bool RepoPruning::runOnModule(Module &M) {
   bool Changed = false;
   for (GlobalVariable &GV : M.globals()) {
     if (EraseUnchangedGlobalObject(GV, NumVariables)) {
-      // Removes the Global variable initializer.
-      Constant *Init = GV.getInitializer();
-      if (isSafeToDestroyConstant(Init))
-        Init->destroyConstant();
-      GV.setInitializer(nullptr);
       Changed = true;
     }
   }
 
   for (Function &Func : M) {
     if (EraseUnchangedGlobalObject(Func, NumFunctions)) {
-      auto MD = Func.getMetadata(LLVMContext::MD_repo_ticket);
-      Func.deleteBody();
-      Func.setMetadata(LLVMContext::MD_repo_ticket, MD);
       Changed = true;
     }
   }
