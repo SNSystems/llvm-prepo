@@ -833,15 +833,41 @@ uint64_t RepoObjectWriter::writeObject(MCAssembler &Asm,
       assert(OutputFilePos != Names.end() && "Output file can't be found!");
       auto OutputPathAddr = OutputFilePos->second;
 
+      // Set the compilation member's grahment extent.
+      auto setFragmentExtent =
+          [&RepoFragments, &FragmentsIndex,
+           &Db](pstore::repo::compilation_member &CompilationMember)
+          -> llvm::Optional<pstore::index::fragment_index::const_iterator> {
+        if (RepoFragments.find(CompilationMember.digest) !=
+            RepoFragments.end()) {
+          CompilationMember.fext = RepoFragments[CompilationMember.digest];
+          return llvm::None;
+        }
+        auto It = FragmentsIndex->find(Db, CompilationMember.digest);
+        if (It != FragmentsIndex->end(Db)) {
+          CompilationMember.fext = It->second;
+        }
+        return It;
+      };
+
       // The name field of each of ticket_member is pointing into the 'Names'
       // map. Here we turn that into the pstore address of the string.
       for (pstore::repo::compilation_member &CompilationMember :
            CompilationMembers) {
-        // Check that we have a fragment for this ticket member's digest value.
+        auto FragmentIndexIt = setFragmentExtent(CompilationMember);
+
+#ifndef NDEBUG
+        // Check that we have a fragment for this ticket member's digest
+        // value.
         // TODO: remove this check once we're completely confident in the
         // back-end implementation.
-        if (FragmentsIndex->find(Db, CompilationMember.digest) ==
-            FragmentsIndex->end(Db)) {
+        if (!FragmentIndexIt) {
+          FragmentIndexIt = FragmentsIndex->find(Db, CompilationMember.digest);
+        }
+#endif // NDEBUG
+
+        if (FragmentIndexIt &&
+            FragmentIndexIt.getValue() == FragmentsIndex->end(Db)) {
           report_fatal_error("The digest of missing repository fragment " +
                              CompilationMember.digest.to_hex_string() +
                              " was found in a compilation member.");
@@ -849,7 +875,6 @@ uint64_t RepoObjectWriter::writeObject(MCAssembler &Asm,
 
         auto MNC = reinterpret_cast<ModuleNamesContainer::value_type const *>(
             CompilationMember.name.absolute());
-        CompilationMember.fext = RepoFragments[CompilationMember.digest];
         CompilationMember.name = MNC->second;
         LLVM_DEBUG(dbgs() << " compilation member name '"
                           << stringViewAsRef(MNC->first) << "' digest '"
@@ -860,16 +885,15 @@ uint64_t RepoObjectWriter::writeObject(MCAssembler &Asm,
       auto TExtent = pstore::repo::ticket::alloc(Transaction, OutputPathAddr,
                                                  CompilationMembers.begin(),
                                                  CompilationMembers.end());
-      TicketIndex->insert(Transaction,
-                          std::make_pair(TicketDigest, TExtent));
+      TicketIndex->insert(Transaction, std::make_pair(TicketDigest, TExtent));
 
       // Update the dependents for each fragment index->address
       for (auto &KV : RepoFragments) {
         std::shared_ptr<pstore::repo::fragment> Fragment =
             pstore::repo::fragment::load(Transaction, KV.second);
-        if (auto Dependent = Fragment->atp<pstore::repo::section_kind::dependent> ()) {
-          updateDependents(*Dependent,
-                           *pstore::repo::ticket::load(Db, TExtent),
+        if (auto Dependent =
+                Fragment->atp<pstore::repo::section_kind::dependent>()) {
+          updateDependents(*Dependent, *pstore::repo::ticket::load(Db, TExtent),
                            TExtent.addr);
         }
       }
