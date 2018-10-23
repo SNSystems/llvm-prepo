@@ -83,6 +83,21 @@ StringRef toStringRef(pstore::raw_sstring_view S) {
   return {S.data(), S.size()};
 }
 
+static bool isIntrinsicGV(const GlobalObject &GO) {
+  return GO.getName().startswith("llvm.");
+}
+
+static bool isSafeToPruneIntrinsicGV(const GlobalObject &GO) {
+  const llvm::StringRef Name = GO.getName();
+  bool Result = Name == "llvm.global_ctors" || Name == "llvm.global_dtors";
+  assert(!Result || isIntrinsicGV(GO));
+  return Result;
+}
+
+static bool isSafeToPrune(const GlobalObject &GO) {
+  return !isIntrinsicGV(GO) || isSafeToPruneIntrinsicGV(GO);
+}
+
 ticketmd::DigestType toDigestType(pstore::index::digest D) {
   ticketmd::DigestType Digest;
   support::endian::write64le(&Digest, D.low());
@@ -112,7 +127,8 @@ bool RepoPruning::runOnModule(Module &M) {
   auto EraseUnchangedGlobalObject = [&ModuleFragments, &Fragments, &Repository,
                                      &M](GlobalObject &GO,
                                          llvm::Statistic &NumGO) -> bool {
-    if (GO.isDeclaration() || GO.hasAvailableExternallyLinkage())
+    if (GO.isDeclaration() || GO.hasAvailableExternallyLinkage() ||
+        !isSafeToPrune(GO))
       return false;
     auto const Result = ticketmd::get(&GO);
     assert(!Result.second && "The repo_ticket metadata should be created by "
@@ -165,11 +181,25 @@ bool RepoPruning::runOnModule(Module &M) {
 
     ++NumGO;
     GO.setComdat(nullptr);
+    GO.setDSOLocal(false);
     TicketNode *MD =
         dyn_cast<TicketNode>(GO.getMetadata(LLVMContext::MD_repo_ticket));
     MD->setPruned(true);
+
+    if (isSafeToPruneIntrinsicGV(GO)) {
+      // Change Intrinsic GV from definition to declaration.
+      GO.clearMetadata();
+      GO.setMetadata(LLVMContext::MD_repo_ticket, MD);
+      GO.setLinkage(GlobalValue::ExternalLinkage);
+      GlobalVariable *const GV = dyn_cast<GlobalVariable>(&GO);
+      Constant *const Init = GV->getInitializer();
+      if (isSafeToDestroyConstant(Init))
+        Init->destroyConstant();
+      GV->setInitializer(nullptr);
+      return true;
+    }
+
     GO.setLinkage(GlobalValue::AvailableExternallyLinkage);
-    GO.setDSOLocal(false);
     return true;
   };
 
