@@ -27,7 +27,6 @@ static const std::array<char, MagicSize> BERepoMagic{
     {'R', 'e', 'p', 'o', 'T', 'c', 'k', 't'}};
 static const std::array<char, MagicSize> LERepoMagic{
     {'t', 'k', 'c', 'T', 'o', 'p', 'e', 'R'}};
-constexpr auto TicketFileSize = MagicSize + sizeof(pstore::index::digest);
 
 class TicketErrorCategoryType final : public std::error_category {
   const char *name() const noexcept override { return "llvm.repo.ticket"; }
@@ -41,6 +40,8 @@ class TicketErrorCategoryType final : public std::error_category {
   }
 };
 } // anonymous namespace
+
+const uint64_t llvm::repo::TicketFileSize = MagicSize + sizeof(pstore::index::digest);
 
 const std::error_category &llvm::repo::ticketErrorCategory() {
   static TicketErrorCategoryType Category;
@@ -64,6 +65,30 @@ void llvm::repo::writeTicketFile(support::endian::Writer &W,
 
   W.OS.write(Signature->data(), Signature->size());
   W.OS.write(reinterpret_cast<const char *>(Out), sizeof(Out));
+}
+
+ErrorOr<pstore::index::digest>
+llvm::repo::getTicketId(llvm::MemoryBufferRef const & Buffer) {
+  StringRef const Contents = Buffer.getBuffer();
+  if (Contents.size () != TicketFileSize) {
+    return std::error_code(TicketError::CorruptedTicket);
+  }
+
+  std::array<char, MagicSize> Signature;
+  std::copy_n(std::begin(Contents), MagicSize, std::begin(Signature));
+
+  if (Signature == LERepoMagic) {
+    auto const Low = Contents.data() + MagicSize;
+    auto const High = Low + sizeof(std::uint64_t);
+    return {pstore::index::digest{support::endian::read64le(High),
+                                  support::endian::read64le(Low)}};
+  } else if (Signature == BERepoMagic) {
+    auto const High = Contents.data() + MagicSize;
+    auto const Low = High + sizeof(std::uint64_t);
+    return {pstore::index::digest{support::endian::read64be(High),
+                                  support::endian::read64be(Low)}};
+  }
+  return std::error_code(TicketError::CorruptedTicket);
 }
 
 ErrorOr<pstore::index::digest>
@@ -92,22 +117,5 @@ llvm::repo::getTicketIdFromFile(StringRef TicketPath) {
     return Err;
   }
 
-  StringRef Contents = MemberBufferOrErr.get()->getBuffer();
-  assert(Contents.size() == TicketFileSize);
-
-  std::array<char, MagicSize> Signature;
-  std::copy_n(std::begin(Contents), MagicSize, std::begin(Signature));
-
-  if (Signature == LERepoMagic) {
-    auto const Low = Contents.data() + MagicSize;
-    auto const High = Low + sizeof(std::uint64_t);
-    return {pstore::index::digest{support::endian::read64le(High),
-                                  support::endian::read64le(Low)}};
-  } else if (Signature == BERepoMagic) {
-    auto const High = Contents.data() + MagicSize;
-    auto const Low = High + sizeof(std::uint64_t);
-    return {pstore::index::digest{support::endian::read64be(High),
-                                  support::endian::read64be(Low)}};
-  }
-  return std::error_code(TicketError::CorruptedTicket);
+  return getTicketId (**MemberBufferOrErr);
 }

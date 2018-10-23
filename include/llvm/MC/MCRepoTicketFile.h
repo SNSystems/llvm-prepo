@@ -24,8 +24,11 @@ using digest = uint128;
 
 namespace llvm {
 class raw_ostream;
+class MemoryBufferRef;
 
 namespace repo {
+
+extern const uint64_t TicketFileSize;
 
 const std::error_category &ticketErrorCategory();
 enum class TicketError { CorruptedTicket = 1 };
@@ -35,6 +38,8 @@ inline std::error_code make_error_code(TicketError E) {
 
 void writeTicketFile(support::endian::Writer &W,
                      pstore::index::digest const &Digest);
+
+ErrorOr<pstore::index::digest> getTicketId(llvm::MemoryBufferRef const & Buffer);
 ErrorOr<pstore::index::digest> getTicketIdFromFile(StringRef TicketPath);
 
 } // end namespace repo
