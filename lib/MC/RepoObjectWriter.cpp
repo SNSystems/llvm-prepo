@@ -26,6 +26,7 @@
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCFixupKindInfo.h"
+#include "llvm/MC/MCObjectFileInfo.h"
 #include "llvm/MC/MCObjectWriter.h"
 #include "llvm/MC/MCRepoTicketFile.h"
 #include "llvm/MC/MCSectionRepo.h"
@@ -157,11 +158,10 @@ public:
                 const ModuleNamesContainer &Names,
                 NamesWithPrefixContainer &Symbols);
 
-  pstore::index::digest
-  buildCompilationRecord(const pstore::database &Db, const MCAssembler &Asm,
-                         ModuleNamesContainer &Names,
-                         NamesWithPrefixContainer &Symbols,
-                         const ContentsType &Fragments, StringRef OutputFile);
+  pstore::index::digest buildCompilationRecord(
+      const pstore::database &Db, const MCAssembler &Asm,
+      ModuleNamesContainer &Names, NamesWithPrefixContainer &Symbols,
+      const ContentsType &Fragments, StringRef OutputFile, StringRef Triple);
 
   static pstore::repo::linkage_type
   toPstoreLinkage(GlobalValue::LinkageTypes L);
@@ -616,11 +616,14 @@ template <typename T> ArrayRef<std::uint8_t> makeByteArrayRef(T const &Value) {
 pstore::index::digest RepoObjectWriter::buildCompilationRecord(
     const pstore::database &Db, const MCAssembler &Asm,
     ModuleNamesContainer &Names, NamesWithPrefixContainer &Symbols,
-    const ContentsType &Fragments, StringRef OutputFile) {
+    const ContentsType &Fragments, StringRef OutputFile, StringRef Triple) {
   MD5 CompilationHash;
 
   CompilationHash.update(OutputFile.size());
   CompilationHash.update(OutputFile);
+
+  CompilationHash.update(Triple.size());
+  CompilationHash.update(Triple);
 
   auto Tickets = Asm.getContext().getTickets();
   CompilationMembers.reserve(Tickets.size());
@@ -726,7 +729,13 @@ uint64_t RepoObjectWriter::writeObject(MCAssembler &Asm,
   SmallString<64> ResultPath;
   StringRef OutputFile =
       streamPath(static_cast<raw_fd_ostream &>(W.OS), ResultPath);
+  llvm::Triple const Triple =
+      Asm.getContext().getObjectFileInfo()->getTargetTriple();
+  std::string const &TripleStr = Triple.str();
+
   Names.emplace(stringRefAsView(OutputFile),
+                pstore::typed_address<pstore::indirect_string>::null());
+  Names.emplace(stringRefAsView(TripleStr),
                 pstore::typed_address<pstore::indirect_string>::null());
 
   // Convert the Asm sections to repository fragment sections.
@@ -738,7 +747,7 @@ uint64_t RepoObjectWriter::writeObject(MCAssembler &Asm,
   pstore::database &Db = llvm::getRepoDatabase();
   NamesWithPrefixContainer PrefixedNames;
   pstore::index::digest TicketDigest = buildCompilationRecord(
-      Db, Asm, Names, PrefixedNames, Fragments, OutputFile);
+      Db, Asm, Names, PrefixedNames, Fragments, OutputFile, TripleStr);
 
   buildDependents(Fragments, CompilationMembers);
 
@@ -833,6 +842,11 @@ uint64_t RepoObjectWriter::writeObject(MCAssembler &Asm,
       assert(OutputFilePos != Names.end() && "Output file can't be found!");
       auto OutputPathAddr = OutputFilePos->second;
 
+      // Find the store address of the target triple.
+      auto const TriplePos = Names.find(stringRefAsView(TripleStr));
+      assert(TriplePos != Names.end() && "Triple can't be found!");
+      auto TripleAddr = TriplePos->second;
+
       // Set the compilation member's grahment extent.
       auto setFragmentExtent =
           [&RepoFragments, &FragmentsIndex,
@@ -882,9 +896,9 @@ uint64_t RepoObjectWriter::writeObject(MCAssembler &Asm,
       }
 
       // Store the Ticket.
-      auto TExtent = pstore::repo::ticket::alloc(Transaction, OutputPathAddr,
-                                                 CompilationMembers.begin(),
-                                                 CompilationMembers.end());
+      auto TExtent = pstore::repo::ticket::alloc(
+          Transaction, OutputPathAddr, TripleAddr, CompilationMembers.begin(),
+          CompilationMembers.end());
       TicketIndex->insert(Transaction, std::make_pair(TicketDigest, TExtent));
 
       // Update the dependents for each fragment index->address

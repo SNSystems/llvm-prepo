@@ -23,7 +23,7 @@ using namespace llvm;
 namespace {
 class X86RepoObjectWriter : public MCRepoObjectTargetWriter {
 public:
-  X86RepoObjectWriter(uint16_t EMachine);
+  X86RepoObjectWriter();
 
   ~X86RepoObjectWriter() override;
 
@@ -33,8 +33,7 @@ protected:
 };
 } // namespace
 
-X86RepoObjectWriter::X86RepoObjectWriter(uint16_t EMachine)
-    : MCRepoObjectTargetWriter(EMachine) {}
+X86RepoObjectWriter::X86RepoObjectWriter() : MCRepoObjectTargetWriter() {}
 
 X86RepoObjectWriter::~X86RepoObjectWriter() {}
 
@@ -193,110 +192,16 @@ static unsigned getRelocType64(MCContext &Ctx, SMLoc Loc,
   }
 }
 
-enum X86_32RelType { RT32_32, RT32_16, RT32_8 };
-
-static X86_32RelType getType32(X86_64RelType T) {
-  switch (T) {
-  case RT64_64:
-    llvm_unreachable("Unimplemented");
-  case RT64_32:
-  case RT64_32S:
-    return RT32_32;
-  case RT64_16:
-    return RT32_16;
-  case RT64_8:
-    return RT32_8;
-  }
-  llvm_unreachable("unexpected relocation type!");
-}
-
-static unsigned getRelocType32(MCContext &Ctx,
-                               MCSymbolRefExpr::VariantKind Modifier,
-                               X86_32RelType Type, bool IsPCRel,
-                               unsigned Kind) {
-  switch (Modifier) {
-  default:
-    llvm_unreachable("Unimplemented");
-  case MCSymbolRefExpr::VK_None:
-  case MCSymbolRefExpr::VK_X86_ABS8:
-    switch (Type) {
-    case RT32_32:
-      return IsPCRel ? ELF::R_386_PC32 : ELF::R_386_32;
-    case RT32_16:
-      return IsPCRel ? ELF::R_386_PC16 : ELF::R_386_16;
-    case RT32_8:
-      return IsPCRel ? ELF::R_386_PC8 : ELF::R_386_8;
-    }
-  case MCSymbolRefExpr::VK_GOT:
-    assert(Type == RT32_32);
-    if (IsPCRel)
-      return ELF::R_386_GOTPC;
-    // Older versions of ld.bfd/ld.gold/lld do not support R_386_GOT32X and we
-    // want to maintain compatibility.
-    if (!Ctx.getAsmInfo()->canRelaxRelocations())
-      return ELF::R_386_GOT32;
-
-    return Kind == X86::reloc_signed_4byte_relax ? ELF::R_386_GOT32X
-                                                 : ELF::R_386_GOT32;
-  case MCSymbolRefExpr::VK_GOTOFF:
-    assert(Type == RT32_32);
-    assert(!IsPCRel);
-    return ELF::R_386_GOTOFF;
-  case MCSymbolRefExpr::VK_TPOFF:
-    assert(Type == RT32_32);
-    assert(!IsPCRel);
-    return ELF::R_386_TLS_LE_32;
-  case MCSymbolRefExpr::VK_DTPOFF:
-    assert(Type == RT32_32);
-    assert(!IsPCRel);
-    return ELF::R_386_TLS_LDO_32;
-  case MCSymbolRefExpr::VK_TLSGD:
-    assert(Type == RT32_32);
-    assert(!IsPCRel);
-    return ELF::R_386_TLS_GD;
-  case MCSymbolRefExpr::VK_GOTTPOFF:
-    assert(Type == RT32_32);
-    assert(!IsPCRel);
-    return ELF::R_386_TLS_IE_32;
-  case MCSymbolRefExpr::VK_PLT:
-    assert(Type == RT32_32);
-    return ELF::R_386_PLT32;
-  case MCSymbolRefExpr::VK_INDNTPOFF:
-    assert(Type == RT32_32);
-    assert(!IsPCRel);
-    return ELF::R_386_TLS_IE;
-  case MCSymbolRefExpr::VK_NTPOFF:
-    assert(Type == RT32_32);
-    assert(!IsPCRel);
-    return ELF::R_386_TLS_LE;
-  case MCSymbolRefExpr::VK_GOTNTPOFF:
-    assert(Type == RT32_32);
-    assert(!IsPCRel);
-    return ELF::R_386_TLS_GOTIE;
-  case MCSymbolRefExpr::VK_TLSLDM:
-    assert(Type == RT32_32);
-    assert(!IsPCRel);
-    return ELF::R_386_TLS_LDM;
-  }
-}
-
 unsigned X86RepoObjectWriter::getRelocType(MCContext &Ctx,
                                            const MCValue &Target,
                                            const MCFixup &Fixup,
                                            bool IsPCRel) const {
   MCSymbolRefExpr::VariantKind Modifier = Target.getAccessVariant();
   unsigned Kind = Fixup.getKind();
-  X86_64RelType Type = getType64(Kind, Modifier, IsPCRel);
-  if (getEMachine() == ELF::EM_X86_64) {
-    return getRelocType64(Ctx, Fixup.getLoc(), Modifier, Type, IsPCRel, Kind);
-  }
-
-  assert((getEMachine() == ELF::EM_386 || getEMachine() == ELF::EM_IAMCU) &&
-         "Unsupported ELF machine type.");
-  return getRelocType32(Ctx, Modifier, getType32(Type), IsPCRel, Kind);
+  const X86_64RelType Type = getType64(Kind, Modifier, IsPCRel);
+  return getRelocType64(Ctx, Fixup.getLoc(), Modifier, Type, IsPCRel, Kind);
 }
 
-std::unique_ptr<MCObjectTargetWriter>
-llvm::createX86RepoObjectWriter(uint16_t EMachine) {
-  return llvm::make_unique<X86RepoObjectWriter>(EMachine);
+std::unique_ptr<MCObjectTargetWriter> llvm::createX86RepoObjectWriter() {
+  return llvm::make_unique<X86RepoObjectWriter>();
 }

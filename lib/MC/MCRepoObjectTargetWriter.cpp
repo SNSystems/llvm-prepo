@@ -13,8 +13,7 @@ using namespace llvm;
 
 void MCRepoObjectTargetWriter::anchor() {}
 
-MCRepoObjectTargetWriter::MCRepoObjectTargetWriter(uint16_t EM)
-    : EMachine(EM) {}
+MCRepoObjectTargetWriter::MCRepoObjectTargetWriter() {}
 
 bool MCRepoObjectTargetWriter::needsRelocateWithSymbol(const MCSymbol &Sym,
                                                        unsigned Type) const {

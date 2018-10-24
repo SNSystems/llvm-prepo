@@ -53,11 +53,10 @@ struct RepoRelocationEntry {
 };
 
 class MCRepoObjectTargetWriter : public MCObjectTargetWriter {
-  const uint16_t EMachine;
   virtual void anchor();
 
 protected:
-  MCRepoObjectTargetWriter(uint16_t EM);
+  MCRepoObjectTargetWriter();
 
 public:
   virtual ~MCRepoObjectTargetWriter() {}
@@ -75,11 +74,6 @@ public:
 
   virtual void sortRelocs(const MCAssembler &Asm,
                           std::vector<RepoRelocationEntry> &Relocs);
-
-  /// \name Accessors
-  /// @{
-  uint16_t getEMachine() const { return EMachine; }
-  /// @}
 };
 
 /// \brief Construct a new Repository writer instance.

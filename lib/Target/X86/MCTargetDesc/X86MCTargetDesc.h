@@ -106,8 +106,7 @@ std::unique_ptr<MCObjectTargetWriter>
 createX86MachObjectWriter(bool Is64Bit, uint32_t CPUType, uint32_t CPUSubtype);
 
 /// Construct an X86 Repository writer.
-std::unique_ptr<MCObjectTargetWriter>
-createX86RepoObjectWriter(uint16_t EMachine);
+std::unique_ptr<MCObjectTargetWriter> createX86RepoObjectWriter();
 
 /// Construct an X86 ELF object writer.
 std::unique_ptr<MCObjectTargetWriter>

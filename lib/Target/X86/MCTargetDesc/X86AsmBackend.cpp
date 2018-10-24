@@ -450,7 +450,7 @@ public:
 
   std::unique_ptr<MCObjectTargetWriter>
   createObjectTargetWriter() const override {
-    return createX86RepoObjectWriter(ELF::EM_X86_64);
+    return createX86RepoObjectWriter();
   }
 };
 
