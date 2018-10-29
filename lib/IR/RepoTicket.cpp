@@ -37,7 +37,10 @@ void set(GlobalObject *GO, ticketmd::DigestType const &D) {
   GO->setMetadata(LLVMContext::MD_repo_ticket, MD);
   NamedMDNode *NMD = M->getOrInsertNamedMetadata("repo.tickets");
   assert(NMD && "NamedMDNode cannot be NULL!");
-  NMD->addOperand(MD);
+  // Add GO's TicketNode metadata to the module's repo.tickets metadata if the
+  // GO will be emitted to the object file.
+  if (!GO->hasAvailableExternallyLinkage())
+    NMD->addOperand(MD);
 }
 
 auto get(const GlobalObject *GO) -> std::pair<ticketmd::DigestType, bool> {
@@ -63,11 +66,6 @@ const Constant *getAliasee(const GlobalAlias *GA) {
   // GlobalValue type.
   assert(isa<GlobalValue>(Target) && "Aliasee should be only GlobalValue");
   return Target;
-}
-
-// Return true if GO is a function is defined in this module.
-static bool isDefinition(const GlobalObject &GO) {
-  return !GO.isDeclaration() && !GO.hasAvailableExternallyLinkage();
 }
 
 static const DependenciesType &
@@ -122,7 +120,7 @@ static void
 updateDigestUseCallDependencies(const GlobalObject *GO, MD5 &GOHash,
                                 GOStateMap &Visited, GOInfoMap &GOIMap,
                                 Function UpdateDigestAndGetDependencies) {
-  if (!isDefinition(*GO))
+  if (GO->isDeclaration())
     return;
 
   bool Inserted;
@@ -153,7 +151,7 @@ std::tuple<bool, unsigned, unsigned> generateTicketMDs(Module &M) {
   GOStateMap Visited;
   GOInfoMap GOIMap;
   for (auto &GO : M.global_objects()) {
-    if (!isDefinition(GO))
+    if (GO.isDeclaration())
       continue;
     Visited.clear();
     MD5 Hash = MD5();
