@@ -441,9 +441,12 @@ OutputSection<ELFT>::write(llvm::raw_ostream &OS, StringTable &SectionNames,
     Pos = AlignedPos + Size;
   }
   assert(Pos == OS.tell());
-  assert(OS.tell() - StartPos == SectionSize_);
+  auto const SectionType = this->getType();
+  assert(OS.tell() - StartPos == (SectionType == ELFSectionType::bss)
+             ? 0
+             : SectionSize_);
 
-  auto const &Attrs = details::SectionAttributes.find(this->getType());
+  auto const &Attrs = details::SectionAttributes.find(SectionType);
   assert(Attrs != details::SectionAttributes.end());
   std::string const SectionName = this->dataSectionName(
       Attrs->second.Name, std::get<1>(Id_) /*Discriminator*/);

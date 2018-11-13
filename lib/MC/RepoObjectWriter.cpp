@@ -690,10 +690,24 @@ RepoObjectWriter::buildFragmentData(const FragmentContentsType &Contents) {
   DispatcherCollectionType Dispatchers;
 
   for (auto const &Content : Contents.Sections) {
-    Dispatchers.emplace_back(
-        new pstore::repo::generic_section_creation_dispatcher(
-            Content->kind,
-            Content.get()));
+    std::unique_ptr<pstore::repo::section_creation_dispatcher> Dispatcher;
+    switch (Content->kind) {
+    case pstore::repo::section_kind::bss:
+      Dispatcher =
+          std::make_unique<pstore::repo::bss_section_creation_dispatcher>(
+              Content.get());
+      break;
+    case pstore::repo::section_kind::debug_line:
+      llvm_unreachable("Not supported yet!");
+    case pstore::repo::section_kind::dependent:
+      llvm_unreachable("Invalid section content!");
+      break;
+    default:
+      Dispatcher =
+          std::make_unique<pstore::repo::generic_section_creation_dispatcher>(
+              Content->kind, Content.get());
+    }
+    Dispatchers.emplace_back(std::move(Dispatcher));
   }
 
   if (!Contents.Dependents.empty()) {

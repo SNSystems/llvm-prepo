@@ -406,10 +406,10 @@ int main(int argc, char *argv[]) {
                 "\" did not contain a sole BSS section");
         }
 
-        pstore::repo::generic_section const &S =
+        pstore::repo::bss_section const &S =
             Fragment->at<pstore::repo::section_kind::bss>();
         State.Symbols.insertSymbol(Name, nullptr /*no output section*/,
-                                   0 /*offset*/, S.data().size(), CM.linkage);
+                                   0 /*offset*/, S.size(), CM.linkage);
         continue;
       }
       // Go through the sections that this fragment contains creating the
