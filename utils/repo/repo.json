@@ -1,0 +1,5 @@
+{
+  "ar": "/usr/bin/ar",
+  "link": "/usr/bin/clang++",
+  "repo2obj": "/point/to/the/repo2obj/tool/in/llvm-pstore/build/directory"
+}
