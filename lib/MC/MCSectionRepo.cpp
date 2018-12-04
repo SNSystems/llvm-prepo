@@ -22,17 +22,10 @@ unsigned idx = 0;
 }
 
 MCSectionRepo::MCSectionRepo(SectionKind K, DebugSectionKind DK,
-                             MCSymbol *Begin)
-    : MCSection(SV_Repo, K, Begin), DebugKind{DK}, Index{++idx} {
-
-  assert((K.isMetadata() && DK != DebugSectionKind::None) ||
-         (!K.isMetadata() && DK == DebugSectionKind::None));
-}
-
-MCSectionRepo::MCSectionRepo(SectionKind K, DebugSectionKind DK,
-                             MCSymbol *Begin, ticketmd::DigestType Digest)
-    : MCSection(SV_Repo, K, Begin), DebugKind{DK}, Digest{std::move(Digest)},
-      Index{++idx} {
+                             MCSymbol *Begin, StringRef N,
+                             ticketmd::DigestType Digest)
+    : MCSection(SV_Repo, K, Begin), DebugKind{DK}, Name{N},
+      Digest{std::move(Digest)}, Index{++idx} {
 
   assert((K.isMetadata() && DK != DebugSectionKind::None) ||
          (!K.isMetadata() && DK == DebugSectionKind::None));
@@ -41,5 +34,5 @@ MCSectionRepo::MCSectionRepo(SectionKind K, DebugSectionKind DK,
 MCSectionRepo::~MCSectionRepo() {}
 
 MCSection *MCSectionRepo::associatedDebugLineSection(MCContext &Ctx) {
-  return Ctx.getRepoSection(MCContext::RepoSection::DebugLine, Digest);
+  return Ctx.getRepoSection(MCContext::RepoSection::DebugLine, Name, Digest);
 }

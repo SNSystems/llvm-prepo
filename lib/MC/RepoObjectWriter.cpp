@@ -453,7 +453,10 @@ void RepoObjectWriter::writeSectionData(ContentsType &Fragments,
 
     // The default (dummy) section must have no data, no external/internal
     // fixups.
-    if (Section.hash() == ticketmd::DigestType{{0}}) {
+    // FIXME: repo only supports the debug_line section.
+    if (Section.hash() == ticketmd::DigestType{{0}} &&
+        (Section.getDebugKind() == MCSectionRepo::DebugSectionKind::Line ||
+         Section.getKind().isText())) {
       if (Section.getFragmentList().size() != 1 ||
           Asm.computeFragmentSize(Layout, *Section.begin()) != 0) {
         llvm_unreachable(
@@ -721,9 +724,9 @@ DispatcherCollectionType RepoObjectWriter::buildFragmentData(
     case pstore::repo::section_kind::debug_line:
       // TODO: record the CU's debug line header first, then point this section
       // to it.
-      Dispatchers.emplace_back(
-          new pstore::repo::debug_line_section_creation_dispatcher(
-              DebugLineHeaderExtent, Content.get()));
+      Dispatcher = std::make_unique<
+          pstore::repo::debug_line_section_creation_dispatcher>(
+          DebugLineHeaderExtent, Content.get());
       break;
     case pstore::repo::section_kind::dependent:
       llvm_unreachable("Invalid section content!");
@@ -793,13 +796,14 @@ RepoObjectWriter::writeDebugLineHeader(TransactionType &Transaction,
       // TODO: doing this index search whilst the transaction is open is bad. Do
       // it before the transaction is created and, if not found, add the data
       // and update the index here.
+      pstore::database &Db = Transaction.db();
       pstore::uint128 const Key = get_hash_key(
           ArrayRef<uint8_t>(DebugLine.data.begin(), DebugLine.data.end()));
       std::shared_ptr<pstore::index::debug_line_header_index> Index =
-          pstore::index::get_debug_line_header_index(Transaction.db(),
-                                                     true /*create*/);
-      auto const Pos = Index->find(Key);
-      if (Pos != Index->end()) {
+          pstore::index::get_index<pstore::trailer::indices::debug_line_header>(
+              Db, true /*create*/);
+      auto const Pos = Index->find(Db, Key);
+      if (Pos != Index->end(Db)) {
         return Pos->second;
       }
 

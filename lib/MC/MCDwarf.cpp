@@ -1,4 +1,3 @@
-#include <iostream>
 //===- lib/MC/MCDwarf.cpp - MCDwarf implementation ------------------------===//
 //
 //                     The LLVM Compiler Infrastructure

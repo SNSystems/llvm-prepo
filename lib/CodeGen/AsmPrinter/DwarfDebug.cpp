@@ -867,21 +867,25 @@ void DwarfDebug::endModule() {
     // Emit info into a debug loc section.
     emitDebugLoc();
 
-  // Corresponding abbreviations into a abbrev section.
-  //  emitAbbreviations();
+  // FIXME: Since repo doesn't yet support the following debug sections,
+  // temporarily disable the code that emits these sections.
+  if (!Asm->TM.getTargetTriple().isOSBinFormatRepo()) {
+    // Corresponding abbreviations into a abbrev section.
+    emitAbbreviations();
 
-  // Emit all the DIEs into a debug info section.
-  //  emitDebugInfo();
+    // Emit all the DIEs into a debug info section.
+    emitDebugInfo();
 
-  // Emit info into a debug aranges section.
-  //  if (GenerateARangeSection)
-  //    emitDebugARanges();
+    // Emit info into a debug aranges section.
+    if (GenerateARangeSection)
+      emitDebugARanges();
 
-  // Emit info into a debug ranges section.
-  //  emitDebugRanges();
+    // Emit info into a debug ranges section.
+    emitDebugRanges();
 
-  // Emit info into a debug macinfo section.
-  //  emitDebugMacinfo();
+    // Emit info into a debug macinfo section.
+    emitDebugMacinfo();
+  }
 
   if (useSplitDwarf()) {
     emitDebugStrDWO();
@@ -908,8 +912,12 @@ void DwarfDebug::endModule() {
     llvm_unreachable("Default should have already been resolved.");
   }
 
-  // Emit the pubnames and pubtypes sections if requested.
-  //  emitDebugPubSections();
+  // FIXME: Since repo doesn't yet support the following debug sections,
+  // temporarily disable the code that emits these sections.
+  if (!Asm->TM.getTargetTriple().isOSBinFormatRepo()) {
+    // Emit the pubnames and pubtypes sections if requested.
+    emitDebugPubSections();
+  }
 
   // clean up.
   // FIXME: AbstractVariables.clear();

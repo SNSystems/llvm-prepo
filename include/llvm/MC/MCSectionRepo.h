@@ -31,6 +31,7 @@ public:
 
 private:
   DebugSectionKind DebugKind;
+  StringRef Name;
   ticketmd::DigestType Digest;
   /// Monotonically increases for each section.
   unsigned const Index;
@@ -39,9 +40,8 @@ private:
   bool IsDummy = false;
 
   friend class MCContext;
-  MCSectionRepo(SectionKind K, DebugSectionKind DK, MCSymbol *Begin);
   MCSectionRepo(SectionKind K, DebugSectionKind DK, MCSymbol *Begin,
-                ticketmd::DigestType digest);
+                StringRef N, ticketmd::DigestType digest);
 
   void PrintSwitchToSection(const MCAsmInfo &MAI, const Triple &T,
                             raw_ostream &OS,

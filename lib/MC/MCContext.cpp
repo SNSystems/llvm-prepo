@@ -530,7 +530,8 @@ MCSectionRepo *MCContext::getRepoSection(RepoSection K, StringRef Name,
     break;
   }
 
-  auto Result = new MCSectionRepo(Kind, DebugKind, nullptr /*symbol*/, Digest);
+  auto Result =
+      new MCSectionRepo(Kind, DebugKind, nullptr /*symbol*/, Name, Digest);
   // If another symbol with the same digest already exists, mark this section as
   // a dummy.
   if (!IsMatchingName) {
@@ -538,6 +539,11 @@ MCSectionRepo *MCContext::getRepoSection(RepoSection K, StringRef Name,
   }
   Iter->second = Result;
   return Result;
+}
+
+MCSectionRepo *MCContext::getRepoSection(RepoSection K) {
+  return getRepoSection(K, StringRef(),
+                        ticketmd::DigestType{std::array<uint8_t, 16>{{0}}});
 }
 
 MCSectionCOFF *MCContext::getCOFFSection(StringRef Section,
