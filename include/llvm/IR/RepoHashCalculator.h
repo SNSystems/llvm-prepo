@@ -80,6 +80,19 @@ enum HashKind {
   TAG_GVDLLStorageClassType,
   TAG_Datalayout,
   TAG_Triple,
+  TAG_DILocation,
+  TAG_DILocation_InlinedAt,
+  TAG_DILocation_Line,
+};
+
+/// A structure of Dwarf DIFiles for a function.
+struct DIFileRecord {
+  /// Map from file or directory to unique id. File and directory from DIFile
+  /// are stored in FileDirMap, which is used for the function hash calculator.
+  llvm::DenseMap<StringRef, unsigned> FileDirMap;
+
+  /// Store the current instruction scope.
+  const DIFile *CurDIFile = nullptr;
 };
 
 class HashCalculator {
@@ -236,7 +249,7 @@ protected:
   void hashSignature(const Function *Fn);
 
   /// Accumulate the hash for the basic block.
-  void hashBasicBlock(const BasicBlock *BB);
+  void hashBasicBlock(const BasicBlock *BB, DIFileRecord &DIF);
 
   /// Accumulate the hash for the function Fn.
   void hashFunction();
@@ -251,6 +264,9 @@ protected:
     FnHash.hashRangeMetadata(Instruction->getMetadata(LLVMContext::MD_range));
   }
 
+  /// Accumulate the hash for a DIlocation.
+  void hashDILocation(const DILocation *DL, DIFileRecord &DIF);
+
   /// Calculate the Instruction hash.
   ///
   /// Stages:
@@ -260,16 +276,17 @@ protected:
   /// 4. Calculate operation subclass optional data as stream of bytes:
   /// just convert it to integers and call numberHash.
   /// 5. Calculate in operation operand types with typeHash.
-  /// 6. Last stage. Calculate operations for some specific attributes.
+  /// 6. If the debug line information is enabled, calculate the debug location.
+  /// 7. Last stage. Calculate operations for some specific attributes.
   /// For example, for Load it would be:
-  /// 6.1.Load: volatile (as boolean flag)
-  /// 6.2.Load: alignment (as integer numbers)
-  /// 6.3.Load: ordering (as underlying enum class value)
-  /// 6.4.Load: synch-scope (as integer numbers)
-  /// 6.5.Load: range metadata (as integer ranges)
+  /// 7.1.Load: volatile (as boolean flag)
+  /// 7.2.Load: alignment (as integer numbers)
+  /// 7.3.Load: ordering (as underlying enum class value)
+  /// 7.4.Load: synch-scope (as integer numbers)
+  /// 7.5.Load: range metadata (as integer ranges)
   /// On this stage its better to see the code, since its not more than 10-15
   /// strings for particular instruction, and could change sometimes.
-  void hashInstruction(const Instruction *V);
+  void hashInstruction(const Instruction *V, DIFileRecord &DIF);
 
 private:
   // The function undergoing calculation.

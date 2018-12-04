@@ -14,6 +14,7 @@
 
 #include "llvm/IR/RepoHashCalculator.h"
 #include "llvm/IR/CallSite.h"
+#include "llvm/IR/DebugInfoMetadata.h"
 #include "llvm/IR/GetElementPtrTypeIterator.h"
 #include "llvm/IR/InlineAsm.h"
 #include "llvm/IR/RepoTicket.h"
@@ -378,9 +379,56 @@ void FunctionHashCalculator::hashOperandBundles(const Instruction *V) {
   }
 }
 
+// Update the Fnhash value by adding the DIFile's FileName or Directory.
+static void hashDIFileString(HashCalculator &Hash, DIFileRecord &DIF,
+                             StringRef Str) {
+  bool Inserted;
+  typename decltype(DIF.FileDirMap)::const_iterator StateIt;
+  std::tie(StateIt, Inserted) =
+      DIF.FileDirMap.try_emplace(Str, DIF.FileDirMap.size());
+  if (!Inserted) {
+    // If Dir is visited, use the letter 'R' as the marker and use its
+    // state as the value.
+    Hash.update(makeArrayRef('R'));
+    Hash.hashNumber(StateIt->second);
+    return;
+  }
+  Hash.update(makeArrayRef('T'));
+  Hash.hashMem(StateIt->first);
+}
+
+void FunctionHashCalculator::hashDILocation(const DILocation *DL,
+                                            DIFileRecord &DIF) {
+  // Currently the abosolute line number is saved in the debug line section
+  // and is stored in the repository. Therefore, the abosolute line number
+  // is hashed.
+  // TODO: Hash the relative line to the begining of this function.
+  FnHash.hashNumber(DL->getLine());
+  FnHash.hashNumber(DL->getColumn());
+  // Hash the file name and directory, which contribute to the line number
+  // program header for both inlined and non-inlined instructions.
+  const DISubprogram *Scope = DL->getScope()->getSubprogram();
+  const DIFile *File = Scope->getFile();
+  if (File != DIF.CurDIFile) {
+    // If the DIFile is changed, remember the current DIFile and hash the
+    // filename and directory.
+    DIF.CurDIFile = File;
+    hashDIFileString(FnHash, DIF, Scope->getDirectory());
+    hashDIFileString(FnHash, DIF, Scope->getFilename());
+  }
+  const DILocation *SiteLoc = DL->getInlinedAt();
+  update(SiteLoc ? HashKind::TAG_DILocation_InlinedAt
+                 : HashKind::TAG_DILocation_Line);
+  /// Walk through getInlinedAt() and hash all the DILocation from all levels.
+  if (SiteLoc) {
+    hashDILocation(SiteLoc, DIF);
+  }
+}
+
 /// Accumulate the instruction hash. The opcodes, type, operand types, operands
 /// value and any other factors affecting the operation must be considered.
-void FunctionHashCalculator::hashInstruction(const Instruction *V) {
+void FunctionHashCalculator::hashInstruction(const Instruction *V,
+                                             DIFileRecord &DIF) {
   update(HashKind::TAG_Instruction);
   // Accumulate the hash of the instruction opcode.
   FnHash.hashNumber(V->getOpcode());
@@ -392,6 +440,11 @@ void FunctionHashCalculator::hashInstruction(const Instruction *V) {
     const auto *Operand = V->getOperand(I);
     FnHash.hashType(Operand->getType());
     FnHash.hashValue(Operand);
+  }
+
+  update(HashKind::TAG_DILocation);
+  if (auto DbgLoc = V->getDebugLoc()) {
+    hashDILocation(DbgLoc, DIF);
   }
 
   if (const CallInst *CI = dyn_cast<CallInst>(V)) {
@@ -490,11 +543,12 @@ void FunctionHashCalculator::hashInstruction(const Instruction *V) {
   }
 }
 
-void FunctionHashCalculator::hashBasicBlock(const BasicBlock *BB) {
+void FunctionHashCalculator::hashBasicBlock(const BasicBlock *BB,
+                                            DIFileRecord &DIF) {
   update(HashKind::TAG_BasicBlock);
   BasicBlock::const_iterator Inst = BB->begin(), InstE = BB->end();
   do {
-    hashInstruction(&*Inst);
+    hashInstruction(&*Inst, DIF);
     ++Inst;
   } while (Inst != InstE);
 }
@@ -509,6 +563,7 @@ void FunctionHashCalculator::hashFunction() {
   // artifact, this also means that unreachable blocks are ignored.
   SmallVector<const BasicBlock *, 8> FnBBs;
   SmallPtrSet<const BasicBlock *, 32> VisitedBBs; // in terms of F1.
+  DIFileRecord DIFMap;
 
   FnBBs.push_back(&Fn->getEntryBlock());
 
@@ -516,7 +571,7 @@ void FunctionHashCalculator::hashFunction() {
   while (!FnBBs.empty()) {
     const BasicBlock *BB = FnBBs.pop_back_val();
     FnHash.hashValue(BB);
-    hashBasicBlock(BB);
+    hashBasicBlock(BB, DIFMap);
 
     const TerminatorInst *Term = BB->getTerminator();
     for (unsigned I = 0, E = Term->getNumSuccessors(); I != E; ++I) {

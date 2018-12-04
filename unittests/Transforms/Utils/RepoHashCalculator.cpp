@@ -66,7 +66,8 @@ public:
 
   ticketmd::DigestType testHashBasicBlock(const BasicBlock *BB) {
     hasher().beginCalculate(*function()->getParent());
-    hashBasicBlock(BB);
+    DIFileRecord DIFMap;
+    hashBasicBlock(BB, DIFMap);
     return getHash();
   }
 
@@ -90,7 +91,8 @@ public:
 
   ticketmd::DigestType testHashInstruction(const Instruction *V) {
     hasher().beginCalculate(*function()->getParent());
-    hashInstruction(V);
+    DIFileRecord DIFMap;
+    hashInstruction(V, DIFMap);
     return getHash();
   }
 
