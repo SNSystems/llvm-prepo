@@ -24,8 +24,8 @@
 #include "pstore/core/hamt_set.hpp"
 #include "pstore/core/index_types.hpp"
 #include "pstore/core/sstring_view_archive.hpp"
+#include "pstore/mcrepo/compilation.hpp"
 #include "pstore/mcrepo/fragment.hpp"
-#include "pstore/mcrepo/ticket.hpp"
 #include "pstore/support/array_elements.hpp"
 
 #include "R2OELFOutputSection.h"
@@ -348,10 +348,10 @@ int main(int argc, char *argv[]) {
   LLVM_DEBUG(dbgs() << "'" << TicketPath << "' : " << Digest << '\n');
 
   pstore::database Db(getRepoPath(), pstore::database::access_mode::read_only);
-  std::shared_ptr<pstore::index::ticket_index const> const TicketIndex =
-      pstore::index::get_index<pstore::trailer::indices::ticket>(Db);
-  if (!TicketIndex) {
-    errs() << "Error: ticket index was not found.\n";
+  std::shared_ptr<pstore::index::compilation_index const> const CompilationIndex =
+      pstore::index::get_index<pstore::trailer::indices::compilation>(Db);
+  if (!CompilationIndex) {
+    errs() << "Error: compilation index was not found.\n";
     return EXIT_FAILURE;
   }
   std::shared_ptr<pstore::index::fragment_index const> const FragmentIndex =
@@ -361,9 +361,9 @@ int main(int argc, char *argv[]) {
     return EXIT_FAILURE;
   }
 
-  auto TicketPos = TicketIndex->find(Db, Digest);
-  if (TicketPos == TicketIndex->end(Db)) {
-    errs() << "Error: ticket " << Digest << " was not found.\n";
+  auto CompilationPos = CompilationIndex->find(Db, Digest);
+  if (CompilationPos == CompilationIndex->end(Db)) {
+    errs() << "Error: compilation " << Digest << " was not found.\n";
     return EXIT_FAILURE;
   }
 
@@ -379,8 +379,8 @@ int main(int argc, char *argv[]) {
     OutputSections.resize(::pstore::repo::fragment::member_array::max_size());
 
     llvm::Optional<pstore::extent<std::uint8_t>> DebugLineHeaderExtent;
+    auto Ticket = pstore::repo::compilation::load(Db, CompilationPos->second);
 
-    auto Ticket = pstore::repo::ticket::load(Db, TicketPos->second);
     for (auto const &CM : *Ticket) {
       assert(CM.name != pstore::typed_address<pstore::indirect_string>::null());
       LLVM_DEBUG(dbgs() << "Processing: "

@@ -13,7 +13,7 @@
 #include "llvm/Object/ELF.h"
 
 #include "pstore/core/sstring_view_archive.hpp"
-#include "pstore/mcrepo/ticket.hpp"
+#include "pstore/mcrepo/compilation.hpp"
 #include "pstore/support/sstring_view.hpp"
 
 #include "R2OELFSectionType.h"

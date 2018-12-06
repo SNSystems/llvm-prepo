@@ -51,8 +51,8 @@
 #include "pstore/core/index_types.hpp"
 #include "pstore/core/sstring_view_archive.hpp"
 #include "pstore/core/transaction.hpp"
+#include "pstore/mcrepo/compilation.hpp"
 #include "pstore/mcrepo/fragment.hpp"
-#include "pstore/mcrepo/ticket.hpp"
 #include "pstore/support/pointee_adaptor.hpp"
 #include "pstore/support/sstring_view.hpp"
 
@@ -184,8 +184,8 @@ public:
 
   static void
   updateDependents(pstore::repo::dependents &Dependent,
-                   const pstore::repo::ticket &Ticket,
-                   pstore::typed_address<pstore::repo::ticket> addr);
+                   const pstore::repo::compilation &Compilation,
+                   pstore::typed_address<pstore::repo::compilation> addr);
 
   uint64_t writeObject(MCAssembler &Asm, const MCAsmLayout &Layout) override;
 };
@@ -694,12 +694,12 @@ pstore::index::digest RepoObjectWriter::buildCompilationRecord(
 
 /// Return true if this ticket is already existing in the database ticket index.
 static bool isExistingTicket(const pstore::database &Db,
-                             const pstore::index::digest &TicketDigest) {
+                             const pstore::index::digest &CompilationDigest) {
   if (auto TicketIndex =
-          pstore::index::get_index<pstore::trailer::indices::ticket>(Db,
+          pstore::index::get_index<pstore::trailer::indices::compilation>(Db,
                                                                      false)) {
-    if (TicketIndex->find(Db, TicketDigest) != TicketIndex->end(Db)) {
-      LLVM_DEBUG(dbgs() << "ticket " << TicketDigest << " exists. skipping\n");
+    if (TicketIndex->find(Db, CompilationDigest) != TicketIndex->end(Db)) {
+      LLVM_DEBUG(dbgs() << "compilation " << CompilationDigest << " exists. skipping\n");
       return true;
     }
   }
@@ -748,14 +748,14 @@ DispatcherCollectionType RepoObjectWriter::buildFragmentData(
 }
 
 void RepoObjectWriter::updateDependents(
-    pstore::repo::dependents &Dependent, const pstore::repo::ticket &Ticket,
-    pstore::typed_address<pstore::repo::ticket> addr) {
+    pstore::repo::dependents &Dependent, const pstore::repo::compilation &Compilation,
+    pstore::typed_address<pstore::repo::compilation> addr) {
   for (auto &member : Dependent) {
     // Currently, dependent member value is the index in the Ticket.
     auto index = member.absolute();
-    assert(index < Ticket.size());
-    auto offset = reinterpret_cast<std::uintptr_t>(&Ticket[index]) -
-                  reinterpret_cast<std::uintptr_t>(&Ticket);
+    assert(index < Compilation.size());
+    auto offset = reinterpret_cast<std::uintptr_t>(&Compilation[index]) -
+                  reinterpret_cast<std::uintptr_t>(&Compilation);
 	// Update the dependent member to record the ticket address.
     member = pstore::typed_address<pstore::repo::compilation_member>::make(
         addr.absolute() + offset);
@@ -861,9 +861,9 @@ uint64_t RepoObjectWriter::writeObject(MCAssembler &Asm,
   if (!isExistingTicket(Db, TicketDigest)) {
     TransactionType &Transaction = getRepoTransaction();
     {
-      std::shared_ptr<pstore::index::ticket_index> const TicketIndex =
-          pstore::index::get_index<pstore::trailer::indices::ticket>(Db);
-      assert(TicketIndex);
+      std::shared_ptr<pstore::index::compilation_index> const CompilationIndex =
+          pstore::index::get_index<pstore::trailer::indices::compilation>(Db);
+      assert(CompilationIndex);
 
       std::shared_ptr<pstore::index::name_index> const NamesIndex =
           pstore::index::get_index<pstore::trailer::indices::name>(Db);
@@ -1003,11 +1003,11 @@ uint64_t RepoObjectWriter::writeObject(MCAssembler &Asm,
                           << CompilationMember.digest << "' adding." << '\n');
       }
 
-      // Store the Ticket.
-      auto TExtent = pstore::repo::ticket::alloc(
+      // Store the Compilation.
+      auto CExtent = pstore::repo::compilation::alloc(
           Transaction, OutputPathAddr, TripleAddr, CompilationMembers.begin(),
           CompilationMembers.end());
-      TicketIndex->insert(Transaction, std::make_pair(TicketDigest, TExtent));
+      CompilationIndex->insert(Transaction, std::make_pair(TicketDigest, CExtent));
 
       // Update the dependents for each fragment index->address
       for (auto &KV : RepoFragments) {
@@ -1015,8 +1015,8 @@ uint64_t RepoObjectWriter::writeObject(MCAssembler &Asm,
             pstore::repo::fragment::load(Transaction, KV.second);
         if (auto Dependent =
                 Fragment->atp<pstore::repo::section_kind::dependent>()) {
-          updateDependents(*Dependent, *pstore::repo::ticket::load(Db, TExtent),
-                           TExtent.addr);
+          updateDependents(*Dependent, *pstore::repo::compilation::load(Db, CExtent),
+                           CExtent.addr);
         }
       }
     }
