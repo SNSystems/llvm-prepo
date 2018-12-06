@@ -119,8 +119,7 @@ private:
   }
 
   pstore::extent<std::uint8_t>
-  writeDebugLineHeader(TransactionType &Transaction,
-                       ContentsType const &Fragments);
+  writeDebugLineHeader(TransactionType &Transaction, ContentsType &Fragments);
 
 public:
   RepoObjectWriter(std::unique_ptr<MCRepoObjectTargetWriter> MOTW,
@@ -776,7 +775,7 @@ pstore::uint128 get_hash_key(ArrayRef<uint8_t> const &arr) {
 
 pstore::extent<std::uint8_t>
 RepoObjectWriter::writeDebugLineHeader(TransactionType &Transaction,
-                                       ContentsType const &Fragments) {
+                                       ContentsType &Fragments) {
 
   static ticketmd::DigestType const NullDigest{std::array<uint8_t, 16>{{0}}};
 
@@ -817,6 +816,7 @@ RepoObjectWriter::writeDebugLineHeader(TransactionType &Transaction,
       auto const Extent = pstore::make_extent(
           pstore::typed_address<std::uint8_t>(Dest.second), DataSize);
       Index->insert(Transaction, std::make_pair(Key, Extent));
+      Fragments.erase(NullFragmentPos);
       return Extent;
     }
   }

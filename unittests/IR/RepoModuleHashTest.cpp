@@ -83,9 +83,8 @@ TEST_F(TestModuleHash, DiffPasses) {
   M0->setTargetTriple("x86_64-unknown-linux-gnu-repo");
   M1->setTargetTriple("x86_64-unknown-linux-gnu-repo");
   legacy::PassManager PM;
-  PM.add(createRepoTicketGenerationPass());
   PM.run(*M0);
-  PM.add(createRepoPruningPass());
+  PM.add(createRepoTicketGenerationPass());
   PM.run(*M1);
   EXPECT_NE(M0->getModuleHash().getValue().Bytes,
             M1->getModuleHash().getValue().Bytes);
