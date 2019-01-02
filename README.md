@@ -34,7 +34,7 @@ The process to follow is similar to that for a conventional build of Clang+LLVM,
 ### Compiling
 The program-repository is implemented as a new object-file format (“repo”) in LLVM. To use it, you need to request it explicitly in the target triple:
 
-    $ clang -target x86_64-pc-linux-gnu-repo -o test.o test.c
+    $ clang -target x86_64-pc-linux-gnu-repo -c -o test.o test.c
 
 Note that this is the only triple that we’re currently supporting (i.e. targeting X86-64 Linux).
 
