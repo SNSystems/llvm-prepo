@@ -138,9 +138,14 @@ updateDigestUseCallDependencies(const GlobalObject *GO, MD5 &GOHash,
   auto Dependencies = UpdateDigestAndGetDependencies(GO, GOHash, GOIMap);
 
   // Recursively for all the dependent global objects.
-  for (const GlobalObject *D : Dependencies)
+  for (const GlobalObject *D : Dependencies) {
+    const llvm::Function *Fn = dyn_cast<const llvm::Function>(D);
+    // if function will not be inlined, skip it
+    if (Fn && Fn->hasFnAttribute(Attribute::NoInline))
+      continue;
     updateDigestUseCallDependencies(D, GOHash, Visited, GOIMap,
                                     UpdateDigestAndGetDependencies);
+  }
 }
 
 std::tuple<bool, unsigned, unsigned> generateTicketMDs(Module &M) {
