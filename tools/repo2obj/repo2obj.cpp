@@ -391,11 +391,7 @@ int main(int argc, char *argv[]) {
 
       auto const IsLinkOnce =
           CM.linkage == pstore::repo::linkage_type::linkonce;
-      // TODO: enable the name discriminator if "function/data sections mode" is
-      // enabled.
-      auto const Discriminator =
-          IsLinkOnce ? CM.name
-                     : pstore::typed_address<pstore::indirect_string>::null();
+
       auto const Fragment = pstore::repo::fragment::load(Db, CM.fext);
 
       if (pstore::repo::debug_line_section const *const DebugLine =
@@ -452,7 +448,12 @@ int main(int argc, char *argv[]) {
 
       for (pstore::repo::section_kind const Section : SectionRange) {
         assert (pstore::repo::is_target_section (Section));
-
+        // TODO: enable the name discriminator if "function/data sections mode"
+        // is enabled.
+        auto const Discriminator =
+            IsLinkOnce && Section != pstore::repo::section_kind::debug_line
+                ? CM.name
+                : pstore::typed_address<pstore::indirect_string>::null();
         // The section type and "discriminator" together identify the ELF output
         // section to which this fragment's section data will be appended.
         auto const Id = std::make_tuple(
