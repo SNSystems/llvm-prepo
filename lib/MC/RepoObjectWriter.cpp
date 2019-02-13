@@ -562,6 +562,7 @@ RepoObjectWriter::toPstoreLinkage(GlobalValue::LinkageTypes L) {
     return pstore::repo::linkage_type::external;
   case GlobalValue::LinkOnceAnyLinkage:
   case GlobalValue::LinkOnceODRLinkage:
+  case GlobalValue::WeakAnyLinkage:
   case GlobalValue::WeakODRLinkage:
     return pstore::repo::linkage_type::linkonce;
   case GlobalValue::PrivateLinkage:
